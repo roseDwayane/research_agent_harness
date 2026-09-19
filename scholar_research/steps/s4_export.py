@@ -272,8 +272,11 @@ def validate(entries: list[Entry]) -> list[str]:
             problems.append(f"lone suffixed key {ks[0]}")
     for e in entries:
         n = len([a for a in e.paper.authors if a.strip()])
-        if n >= 2 and e.apa.count("&") != 1:
-            problems.append(f"{e.key}: ampersand count {e.apa.count('&')} for {n} authors")
+        # count only in the author list (titles/venues may contain "&"); APA 7 uses "..." and no "&" beyond 20 authors
+        amps = apa_authors(e.paper.authors).count("&")
+        expected = 1 if 2 <= n <= 20 else 0
+        if amps != expected:
+            problems.append(f"{e.key}: ampersand count {amps} for {n} authors")
         if "doi:" in e.apa or re.search(r"\b10\.\d{4,}/\S+", e.apa) and "https://doi.org/" not in e.apa:
             problems.append(f"{e.key}: DOI not in https://doi.org/ form")
     return problems
