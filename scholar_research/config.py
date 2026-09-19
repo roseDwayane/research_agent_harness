@@ -24,6 +24,12 @@ CacheMode = Literal["read-write", "read-only", "refresh", "off"]
 
 class LLMConfig(BaseModel):
     model: str = "claude-sonnet-5"
+    # "anthropic" (Messages API) or "ollama" (local server, e.g. model = "qwen3.8")
+    provider: Literal["anthropic", "ollama"] = "anthropic"
+    base_url: str = "http://127.0.0.1:11434"  # ollama only
+    num_ctx: int = 32768  # ollama only: context window to allocate
+    think: bool = False  # ollama only: let thinking models reason before the JSON (slower)
+    request_timeout: float = 1800.0  # ollama only: local generation can take minutes
     temperature: float = 0.0
     max_tokens: int = 8192
     max_retries: int = 3
@@ -120,6 +126,10 @@ class Config(BaseModel):
             self.paths.research_root = env["SCHOLAR_RESEARCH_ROOT"]
         if env.get("SCHOLAR_LLM_MODEL"):
             self.llm.model = env["SCHOLAR_LLM_MODEL"]
+        if env.get("SCHOLAR_LLM_PROVIDER"):
+            self.llm.provider = env["SCHOLAR_LLM_PROVIDER"]  # type: ignore[assignment]
+        if env.get("SCHOLAR_LLM_BASE_URL"):
+            self.llm.base_url = env["SCHOLAR_LLM_BASE_URL"]
 
     def public_dict(self) -> dict[str, Any]:
         """Config without secrets — safe to embed in the run manifest."""

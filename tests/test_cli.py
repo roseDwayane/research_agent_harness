@@ -19,7 +19,7 @@ def test_cli_status_checkpoint_and_prompts(tmp_path: Path):
     assert out.exit_code == 0 and "20260101_topic-x" in out.output and "Pending" in out.output
     out = r.invoke(main, ["checkpoint", "1", "--root", str(root), "--session", "topic-x", "--note", "looks good"])
     assert out.exit_code == 0, out.output
-    assert json.loads((s.dir / "checkpoints.json").read_text())["decisions"]["1"]["decision"]["approved"] is True
+    assert json.loads((s.dir / "checkpoints.json").read_text(encoding="utf-8"))["decisions"]["1"]["decision"]["approved"] is True
     out = r.invoke(main, ["prompts"])
     assert out.exit_code == 0 and "s3_score" in out.output
     out = r.invoke(main, ["new", "T", "--root", str(root), "--no-run", "--session-id", "20260102"])

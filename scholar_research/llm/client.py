@@ -62,6 +62,78 @@ class AnthropicBackend:
         return {"input": tool_input, "usage": usage, "stop_reason": resp.stop_reason, "model": resp.model}
 
 
+class OllamaBackend:
+    """Local models via Ollama's native ``/api/chat``.
+
+    Instead of a forced tool call, the tool's ``input_schema`` is passed as
+    ``format`` so decoding is grammar-constrained to schema-valid JSON — far
+    more reliable for local models than tool calling.
+    """
+
+    def __init__(self, cfg: LLMConfig):
+        import httpx
+
+        self._cfg = cfg
+        self._client = httpx.Client(base_url=cfg.base_url.rstrip("/"), timeout=httpx.Timeout(cfg.request_timeout, connect=10.0))
+
+    def __call__(self, *, model, system, messages, tool, temperature, max_tokens):
+        import httpx
+
+        schema = tool["input_schema"]
+        sys_prompt = (
+            f"{system}\n\n"
+            f"You cannot call tools here. Wherever the instructions mention the `{tool['name']}` tool ({tool['description']}), "
+            "reply instead with ONE JSON object holding that tool's input — no prose, no markdown fences. JSON schema:\n"
+            f"{json.dumps(schema, ensure_ascii=False)}"
+        )
+        body = {
+            "model": model,
+            "messages": [{"role": "system", "content": sys_prompt}] + [_flatten_message(m) for m in messages],
+            "format": schema,
+            "stream": False,
+            "think": self._cfg.think,
+            "options": {"temperature": temperature, "num_predict": max_tokens, "num_ctx": self._cfg.num_ctx, "seed": 0},
+        }
+        last_err: Exception | None = None
+        for attempt in range(self._cfg.max_retries + 1):
+            try:
+                resp = self._client.post("/api/chat", json=body)
+                break
+            except httpx.TransportError as e:
+                last_err = e
+                time.sleep(2 * (attempt + 1))
+        else:
+            raise RuntimeError(f"cannot reach Ollama at {self._cfg.base_url} (is `ollama serve` running?): {last_err}")
+        if resp.status_code != 200:
+            raise RuntimeError(f"Ollama error {resp.status_code}: {resp.text[:500]}")
+        data = resp.json()
+        content = (data.get("message") or {}).get("content", "")
+        done_reason = data.get("done_reason")
+        try:
+            tool_input = json.loads(content)
+        except json.JSONDecodeError as e:
+            hint = " — output hit max_tokens; raise [llm].max_tokens" if done_reason == "length" else ""
+            raise RuntimeError(f"Ollama returned invalid JSON (done_reason={done_reason}){hint}: {e}; tail={content[-200:]!r}")
+        usage = {"input_tokens": data.get("prompt_eval_count", 0), "output_tokens": data.get("eval_count", 0)}
+        return {"input": tool_input, "usage": usage, "stop_reason": done_reason, "model": data.get("model", model)}
+
+
+def _flatten_message(msg: dict[str, Any]) -> dict[str, str]:
+    """Anthropic content blocks (validation-retry turns) → plain text for Ollama."""
+    content = msg["content"]
+    if isinstance(content, str):
+        return {"role": msg["role"], "content": content}
+    parts: list[str] = []
+    for block in content:
+        if block.get("type") == "tool_use":
+            parts.append(json.dumps(block["input"], ensure_ascii=False))
+        elif block.get("type") == "tool_result":
+            parts.append(str(block["content"]).replace("call the tool again", "reply with the corrected JSON object"))
+        else:
+            parts.append(str(block.get("text", "")))
+    return {"role": msg["role"], "content": "\n".join(parts)}
+
+
 class LLMError(RuntimeError):
     pass
 
@@ -78,7 +150,12 @@ class LLMClient:
     @property
     def backend(self) -> Backend:
         if self._backend is None:
-            self._backend = AnthropicBackend(self._api_key, self.cfg.max_retries)
+            if self.cfg.provider == "ollama":
+                self._backend = OllamaBackend(self.cfg)
+            elif self.cfg.provider == "anthropic":
+                self._backend = AnthropicBackend(self._api_key, self.cfg.max_retries)
+            else:
+                raise RuntimeError(f"unknown llm.provider {self.cfg.provider!r} (expected 'anthropic' or 'ollama')")
         return self._backend
 
     # ------------------------------------------------------------------ #

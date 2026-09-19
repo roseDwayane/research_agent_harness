@@ -25,6 +25,18 @@ scholar-research diff --session 20260919_eeg              # why did two runs dif
 
 Unattended: `run --auto` (default rules: no borderline rescue, lock the top gap, approve) or `run --decisions decisions.toml` (see `decisions.example.toml`). In an interactive terminal the checkpoints prompt on stdin; without a TTY the run pauses and tells you which `checkpoint` command to issue.
 
+## Local models (Ollama)
+
+The LLM steps can run against a local Ollama server instead of the Anthropic API — no key needed. Set in `research.toml`:
+
+```toml
+[llm]
+model = "qwen3.8"
+provider = "ollama"
+```
+
+or `SCHOLAR_LLM_PROVIDER=ollama SCHOLAR_LLM_MODEL=qwen3.8` (`SCHOLAR_LLM_BASE_URL` if the server is not on `127.0.0.1:11434`). The forced tool call is replaced by Ollama's `format` = JSON schema (grammar-constrained decoding), so outputs go through the same pydantic validation, cache and ledger. On Windows set `PYTHONUTF8=1` so the bilingual console output prints under a non-UTF-8 code page.
+
 ## What each step is made of
 
 | Step | Skill | Nature | How reproducibility is guaranteed |

@@ -11,6 +11,12 @@ research_root = "10_Research"      # sessions live here as {YYYYMMDD}_{topic-slu
 
 [llm]
 model = "claude-sonnet-5"          # pinned into step0_session_config.json at `new` time
+# Local model via Ollama instead (no API key; structured output via JSON-schema constrained decoding):
+# model = "qwen3.8"
+# provider = "ollama"              # anthropic (default) | ollama
+# base_url = "http://127.0.0.1:11434"
+# num_ctx = 32768                  # context window Ollama allocates
+# think = false                    # true: thinking models reason first (slower)
 temperature = 0.0
 max_tokens = 8192
 context_strategy = "summary"       # summary: per-paper digests → synthesis (cheaper, cached); full: raw texts
