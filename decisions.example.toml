@@ -1,0 +1,19 @@
+# Pre-recorded checkpoint decisions for unattended / reproducible runs:
+#   scholar-research run --session 20260919_eeg-nf-mci --decisions decisions.toml
+# Every decision is copied into the session's checkpoints.json, so `replay` re-applies it.
+
+[checkpoint1]            # 初始定向核准 — after Step 1 (edit step0_session_config.json first if needed)
+approved = true
+note = "PICO and queries reviewed"
+
+[checkpoint2]            # 邊緣打撈 — after Step 3: borderline papers to rescue into the shortlist
+include = ["paper_012", "paper_027"]
+
+[checkpoint3]            # 戰場選擇 — after Step 7
+lock = "GAP_001"
+drop = ["GAP_002", "GAP_003"]
+constraint = ""          # e.g. "12-month observational follow-up, no new RCT"
+
+[checkpoint4]            # 護城河確認 — after Step 8
+approved = true
+# journal = "NeuroImage"  # override the top recommendation for Step 9

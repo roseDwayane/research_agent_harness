@@ -1,0 +1,51 @@
+# scholar-research configuration — copy to research.toml and edit.
+# Precedence: CLI flags > environment variables > this file > built-in defaults.
+# Secrets are best kept in the environment:
+#   ANTHROPIC_API_KEY, S2_API_KEY, NCBI_API_KEY, OPENALEX_MAILTO, UNPAYWALL_EMAIL
+
+cache_mode = "read-write"          # read-write | read-only (replay) | refresh | off
+
+[paths]
+research_root = "10_Research"      # sessions live here as {YYYYMMDD}_{topic-slug}/
+# vault_root = "/Users/me/Obsidian Vault"   # makes canvas file paths vault-relative
+
+[llm]
+model = "claude-sonnet-5"          # pinned into step0_session_config.json at `new` time
+temperature = 0.0
+max_tokens = 8192
+context_strategy = "summary"       # summary: per-paper digests → synthesis (cheaper, cached); full: raw texts
+per_paper_char_budget = 12000
+
+[search]
+sources = ["semantic_scholar", "openalex", "pubmed", "arxiv"]   # pubmed auto-dropped for cs_engineering topics
+results_per_query = 30
+snowball_seeds = 5
+snowball_refs_per_seed = 50
+snowball_min_overlap = 0.15        # PICO-term overlap needed to keep a snowball reference
+title_match_threshold = 0.85       # fuzzy-title dedup
+hub_in_degree = 3
+
+[screening]
+threshold_include = 3.5
+threshold_borderline = 3.0
+small_collection_size = 20         # below this, threshold drops to small_collection_threshold
+small_collection_threshold = 3.0
+weights = { relevance = 0.50, quality = 0.30, recency_impact = 0.20 }
+tier_bounds = [4.5, 4.0]
+batch_size = 12                    # papers per scoring call
+
+[gaps]
+weights = { severity = 0.40, novelty = 0.30, feasibility = 0.30 }
+max_gaps = 3
+
+[fulltext]
+translate = false                  # bilingual {key}_zh.md via LLM (token-heavy) — opt in
+min_chars_full = 8000              # below → flagged in _access_log.md
+min_sections_full = 4
+prefer_published = true            # try OA publisher version before arXiv when both exist
+
+[api]
+# semantic_scholar_key = ""
+# ncbi_api_key = ""
+# openalex_mailto = "you@example.org"
+# unpaywall_email = "you@example.org"
