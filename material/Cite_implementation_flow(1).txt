@@ -1,0 +1,132 @@
+ScholarQABench Cite 接到 Step 6
+
+先把綜述切成「一句主張 + 引用」，再逐筆打分，最後平均成 Cite-p / Cite-r / F1。
+
+
+====================
+輸入／輸出
+====================
+
+輸入
+- step6_sota_review.md
+- step4_citation_keys.md 或 step4_references.bib（合法鍵集合 K）
+- step5_full_text/{key}.md（證據；abstract-only 標 weak）
+- 可選：PICO（只給 relevance 用，不算進 Cite）
+
+輸出（例）
+{
+  "n_claims": 120,
+  "n_citable": 95,
+  "integrity_fail": false,
+  "cite_p": 0.84,
+  "cite_r": 0.79,
+  "cite_f1": 0.81,
+  "numeric_attestation": 0.92,
+  "errors": []
+}
+
+幽靈鍵 → integrity_fail: true，Cite 三個分數視為 0。
+
+====================
+Step 1 — 切成評分單位
+====================
+
+一個單位 = {claim_text, keys[], source}
+
+- 正文：按句號／分號切；括號裡的 (Yamada et al., 2025) 或 `YamadaEtAl2025` 掛在同一句。
+- Key Results 表：一列一筆。Result 是主張，Study 是引用。
+- Papers: 名單、Paper–Theme Mapping、主題標題、方法學圖例、限制章節 → 不進 Cite（可另算 80% coverage）。
+
+正規化：(Yamada et al., 2025) → YamadaEtAl2025（對 step4 表）。
+
+
+====================
+Step 2 — Citation integrity（硬閘）
+====================
+
+所有抽出的鍵必須 ⊆ K。
+出現 FakeEtAl2024 或不在 bib 的名字 → 整份 hard fail，不必再跑模型。
+
+
+====================
+Step 3 — 這句要不要進 Cite？（citable）
+====================
+
+規則或小分類器皆可：
+
+要進 Cite（citable = 1）
+- 數字、百分比、p 值、相關
+- 「X 做了／發現／報告」
+- 對立結果、因果（「因為…所以…」）
+
+不進
+- 標題、圖例、目錄
+- 「本綜述限制…」
+- 純過渡句
+
+citable = 0 的句子：不算漏引，也不算精準。
+
+
+====================
+Step 4 — 逐筆打 r_i、p_i
+====================
+
+對第 i 筆 citable claim：
+
+
+Cite-r（召回）— 程式就能算
+
+r_i = 1  若 keys 至少 1 個且都在 K
+r_i = 0  若 keys 為空
+
+「該主題 hub／對立證據有沒有被引」是 recall 的加強版：
+ex: 可另備一份必引清單（例如 Theme 1 Debates 應出現 Yamada 且 Ravideshik）。沒出現 → 那一筆或該主題 r=0。
+
+
+Cite-p（精準）— 要讀全文，用 LLM-as-judge
+
+只把這句的 keys 對應 md 塞進 prompt（abstract-only 不能拿來撐細節數字 → 該鍵 p=0）。
+
+每個鍵問兩個 yes/no：
+
+1. Support：全文是否真的主張／報告了這句？
+   （80% 造假掛在 Gaddipati 上 → no）
+2. Necessary：拿掉這個鍵，這句是否無法核對或明顯變弱？
+   （同主題隨便塞的第五個作者 → no）
+
+p_i = 0  若 r_i=0（沒引就沒有精準可言；或約定不計入 p 的分母）
+p_i = 1  若每個鍵都 support=yes 且 necessary=yes
+p_i = 0  若任一鍵失敗
+
+較細可改成該筆的鍵平均（3 個鍵 2 個過 → p_i=2/3）。
+
+
+數字子檢查（對應舊的 90% gate）
+
+若 claim 含數字：該數字的字面（或四捨五入等價）必須出現在所列鍵的 md 裡。找不到 → 這筆 attestation 失敗，且通常 p_i=0。
+
+搜尋範圍必須是 cited keys，禁止全庫掃描。
+
+
+====================
+Step 5 — 聚合成總分
+====================
+
+設 citable 句子有 N 筆：
+
+Cite-r = (1/N) * sum(r_i)
+
+Cite-p = (1/N+) * sum(p_i)   其中只對 r_i=1 的句子平均
+         N+ = 有引用的 citable 筆數
+
+沒引的句子：recall 已扣，不要再放進 precision 分母（否則沒引會同時打低 p 和 r，重複懲罰）。
+
+Cite-F1 = 2 * Cite-p * Cite-r / (Cite-p + Cite-r)
+         若任一方為 0，F1 = 0
+
+數字 attestation =
+  （數字對得回 cited 全文的筆數） / （含數字的 citable 筆數）
+
+沿用 >= 0.90 為過關。
+
+Prometheus 的 organization / coverage / relevance 另開一支，不要和 Cite 混在同一個平均裡

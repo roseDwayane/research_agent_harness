@@ -1,0 +1,131 @@
+2026.09.17 星期四
+20:21 張功逸🐾Cary 張功逸🐾Cary已新增張維凱 Justin Chang, 林志芸至群組。
+20:22 張功逸🐾Cary 張功逸🐾Cary已新增Joanna Chen 👉蘋👈至群組。
+20:22 張功逸🐾Cary 貼圖
+20:23 張維凱 Justin Chang 貼圖
+2026.09.18 星期五
+11:21 Joanna Chen 👉蘋👈 For Retrieval evaluation我有找到一篇benchmark LitSearch 597個query 有兩類： inline- citation questions 和 author-written questions  所有問題都有人類verified過 指標是recall @k Mean Reciprocal rank 有客觀已知gold papers
+11:21 Joanna Chen 👉蘋👈 直接用這個eval怎樣
+11:22 Joanna Chen 👉蘋👈 感覺很直接
+11:25 Joanna Chen 👉蘋👈 但你research agent的 query不是直接從某個論文出發，就是不想這邊的問題都是論文段落改寫或是論文作者發想跟該論文有關query 
+12:35 張功逸🐾Cary 聽起來很不錯喔！！
+12:35 張功逸🐾Cary 方便來個全文網址嗎？
+12:36 張功逸🐾Cary 我可以思考 怎麼修改或調整 我們的 research agent
+13:09 Joanna Chen 👉蘋👈 https://arxiv.org/abs/2407.18940
+13:10 Joanna Chen 👉蘋👈 Step6 做 synthesize 我也有找到一篇很可以的
+13:10 Joanna Chen 👉蘋👈 Benchmark 
+13:11 Joanna Chen 👉蘋👈 我晚點整理好再丟上來因爲我還要想一下我們的workflow 可以怎麼用
+13:22 Joanna Chen 👉蘋👈 目前想法就是把這些query 餵給agent 取回took 對照gold paper ID計算recall@5 or recall@20 MRR and then也可以跟他們的baseline GritLM-7B比較
+2026.09.19 星期六
+16:25 張功逸🐾Cary 太神啦！！
+16:25 張功逸🐾Cary https://github.com/roseDwayane/research_agent_harness
+16:25 張功逸🐾Cary 我 harness 也寫完了 測試過能接 ollama qwen 3.8 跑起來
+16:31 張功逸🐾Cary 圖片
+17:54 Joanna Chen 👉蘋👈 synthesis
+17:54 Joanna Chen 👉蘋👈 OPENSCHOLAR_ SYNTHESIZING SCIENTIFIC LITERATURE WITH RETRIEVAL-AUGMENTED LMS-note (1).md
+17:55 Joanna Chen 👉蘋👈 用 Prometheus 打結構
+
+ScholarQABench 的 prometheus_eval.py 打 organization / coverage / relevance。對 Step 6 可改成：
+
+organization：6 個主題是否都有 Consensus / Debates / Methods / Key results
+coverage：≥80% 全文至少進一題（你們已有 contract）；再加「對立證據有沒有進 Debates」
+relevance：有沒有把自駕實驗室、SWE-agent 寫成主軸（離 PICO）
+17:56 Joanna Chen 👉蘋👈 輸入 = PICO + 49 篇全文，輸出 = step6_sota_review.md，然後評：
+
+每個 \cite{Key} / (Author et al., year) 是否在 step4_references.bib
+抽樣數字（6.33、80% 造假、r=+0.29、≥90% discriminator）是否出現在對應 markdown
+Cite-p：這篇是否真的支持這句（例如不要把 SWE-bench 的數字安在 v2 頭上）
+Cite-r：該主題的 hub／對立證據有沒有被引（Yamada vs Ravideshik、ChenEtAl2024 負面結果）
+17:56 林志芸 那這樣是我可以跑跑看 SCHOLARQABENCH 起來？
+17:56 林志芸 還是這個是你接下來要做的 我可以看看別的benchmark 
+17:59 Joanna Chen 👉蘋👈 可以之前跑起來看看
+17:59 Joanna Chen 👉蘋👈 直接
+18:00 Joanna Chen 👉蘋👈 假設之後也會用這個的話
+18:00 Joanna Chen 👉蘋👈 先跑是好事
+18:10 林志芸已收回訊息
+18:13 林志芸 喔虧
+2026.09.20 星期日
+15:02 林志芸 @張功逸🐾Cary 嗨嗨 我想問問有沒有 GPU 的資源可以使用
+因為 ScholarQABench 的 prometheus_eval.py 需要 
+15:04 張功逸🐾Cary 我有一張5090 應該可以跑得起來
+15:05 林志芸 我目前可以先做個大概的 rubric for step 6 以及喬安娜提到的 structure／80%／BibTeX 的 deterministic checker 也可以先做做看 以上都不需要資源
+但是 organization / coverage / relevance 的部分就會需要 
+15:05 張功逸🐾Cary 你習慣怎麼樣呢？我覺得用vscode SSH可能會最方便？
+15:06 張功逸🐾Cary 了解！可能需要約個時間部署一下（？
+15:07 林志芸 可以
+15:09 張功逸🐾Cary 看妳什麼時間方便 我應該都可以
+15:09 林志芸 我也都可以
+15:10 張功逸🐾Cary 今天晚上9:00呢？
+15:11 林志芸 好
+16:12 林志芸 @Joanna Chen 👉蘋👈 我可以跟你確認這邊的 ≥80% 全文至少進一題 是什麼意思嗎
+16:13 林志芸 citation?
+16:24 林志芸 還有定義的部分 
+列在 Key Results 表格的引用論文算嗎 還是必須真的出現在論述句裡面
+16:50 Joanna Chen 👉蘋👈 我回去整理一下
+16:50 Joanna Chen 👉蘋👈 寫的明確一點
+18:17 林志芸 @張功逸🐾Cary 抱歉我晚點突然有事
+還是明天你喔虧嗎～
+18:26 張功逸🐾Cary 沒問題！
+18:27 張功逸🐾Cary 明天一樣晚上9:00後方便嗎？或是5:00前
+18:45 林志芸 好哇 九點可以
+19:06 張功逸🐾Cary 好👌
+20:32 Joanna Chen 👉蘋👈 算。 表格裡的和寫在段落裡的引用，對「assigned」是同等的
+20:34 Joanna Chen 👉蘋👈 「≥ 80% 的已取得全文至少被分進一個主題」。已取得全文只計算 Step 5 標為 full-text-pdf 的論文 論文僅有摘要或濃縮版的不進入分母計算。分進主題是指該篇被標為屬於 Theme 1–N 中至少一個。同一篇若跨兩個主題，分子仍只加一次。計算有哪些論文全文有被分到哪個主題。
+21:00 Joanna Chen 👉蘋👈 Cite_implementation_flow.txt
+2026.09.21 星期一
+10:45 Joanna Chen 👉蘋👈 有人2024年就發了一篇跟你機會一模壹樣的東西
+10:45 Joanna Chen 👉蘋👈 https://arxiv.org/abs/2404.07738
+10:45 張功逸🐾Cary 貼圖
+10:46 Joanna Chen 👉蘋👈 我本來只是想參考人家evaluate hypothesis 的rubric 
+10:48 Joanna Chen 👉蘋👈 他們開發一個系統利用LLM自動定義問題開發研究方法及設計實驗，
+10:49 張功逸🐾Cary 有點酷誒 而且他沒有真的發表到 journal 上
+10:49 張功逸🐾Cary 好神奇
+10:49 Joanna Chen 👉蘋👈 那你就賺到了
+10:49 Joanna Chen 👉蘋👈 他們沒有release source code怕
+10:49 Joanna Chen 👉蘋👈 嗎
+10:50 張功逸🐾Cary 而且我覺得他的文章架構很好，有模板抄了 哈哈哈
+10:50 Joanna Chen 👉蘋👈 是不是
+10:50 張功逸🐾Cary 有！https://github.com/JinheonBaek/ResearchAgent
+10:50 Joanna Chen 👉蘋👈 他們被引用400多次
+10:51 Joanna Chen 👉蘋👈 但沒發出去
+10:51 Joanna Chen 👉蘋👈 很怪欸
+10:52 張功逸🐾Cary 我覺得可能是 Microsoft 不在乎有沒有真的發出去
+10:53 張功逸🐾Cary 能好奇一下 你是怎麼找的嗎？
+10:54 張功逸🐾Cary 我想知道 我怎麼會漏搜
+11:11 Joanna Chen 👉蘋👈 您的prompt engineering 技術不夠好
+11:12 Joanna Chen 👉蘋👈 我是叫Cursor根據step8給我解釋step8的邏輯
+11:13 Joanna Chen 👉蘋👈 這個output我再餵給Gemini幫我找這個evaluate 這個agent能力相關的 rubrics or index 
+11:15 Joanna Chen 👉蘋👈 https://gist.github.com/ping0521/2294e4a535341e3e5a3285ec7489baaa
+11:15 Joanna Chen 👉蘋👈 Summary 
+11:16 Joanna Chen 👉蘋👈 針對研究問題他提出五個指標 研究方法也是提出五個指標
+11:16 Joanna Chen 👉蘋👈 Agent的prompt中有加入相對應的
+11:17 Joanna Chen 👉蘋👈 五分制的Likert量表評分
+11:17 Joanna Chen 👉蘋👈 但這篇也是用LLM as judge
+11:18 Joanna Chen 👉蘋👈 只是讓research agent iteratively 迭代根據reviewing agent評分
+11:25 Joanna Chen 👉蘋👈 我覺得2024年用LLM as judge應該算新想法
+11:34 張功逸🐾Cary 太酷了！！有料！！
+11:34 張功逸🐾Cary 給我一點時間 通盤消化理解一下
+11:34 Joanna Chen 👉蘋👈 我還在看其他篇
+11:34 Joanna Chen 👉蘋👈 嗯嗯
+12:21 林志芸 @張功逸🐾Cary 九點那個是線上還是實體啊
+12:24 張功逸🐾Cary 線上線上
+12:25 張功逸🐾Cary 用螢幕分享的方式 比較方便
+14:09 Joanna Chen 👉蘋👈 Hypothesis evaluation 我感覺這篇benchmark提出的score 計算可用，用相對排名
+14:11 Joanna Chen 👉蘋👈 https://gist.github.com/ping0521/0f8b0dfea4a249d98ef4ad65f43eb479
+14:12 Joanna Chen 👉蘋👈 https://arxiv.org/abs/2411.02429
+14:12 Joanna Chen 👉蘋👈 新穎性和可行性評估
+20:45 林志芸 @Joanna Chen 👉蘋👈 確認一下這個 for step2?
+20:45 林志芸 for step8?
+20:46 林志芸 要不要整理成一個文件來放 todo 啊
+20:47 林志芸 @張功逸🐾Cary https://meet.google.com/bek-wryf-qni
+20:48 林志芸 有空隨時進來～
+21:05 Joanna Chen 👉蘋👈 Step8
+21:05 Joanna Chen 👉蘋👈 後面的都是for step8
+21:05 Joanna Chen 👉蘋👈 但要等 @張功逸🐾Cary 思考一下
+21:06 Joanna Chen 👉蘋👈 Step2 
+21:06 Joanna Chen 👉蘋👈 Step2我可以自己跑看看
+21:06 Joanna Chen 👉蘋👈 目前應該就是這幾個step要verification 
+23:44 張功逸🐾Cary 好！我這兩天 統整 Joanna 給出來的資訊，同時決策成一份todo list
+23:46 張功逸🐾Cary 然後我們週四對一次，達成共識
+2026.09.22 星期二
+07:27 Joanna Chen 👉蘋👈 我也覺得這樣比較好
