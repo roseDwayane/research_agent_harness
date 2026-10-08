@@ -113,8 +113,13 @@ def test_full_pipeline_then_replay_is_byte_identical(tmp_path: Path, offline):
 
     manifest = json.loads(s.path("run_manifest.json").read_text(encoding="utf-8"))
     assert manifest["config"]["api"]["anthropic_api_key"] in (None, "<set>")
-    assert manifest["steps"][2]["prompt_versions"]["s3_score"] == "1.0.0"
+    assert manifest["steps"][2]["prompt_versions"]["s3_score"] == "1.1.0"
     assert manifest["totals"]["llm"]["calls"] > 0
+
+    # every generated file is English-only: no CJK characters anywhere in the session folder
+    cjk = re.compile(r"[\u2e80-\u303f\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff00-\uffef]")
+    offenders = [str(f.relative_to(s.dir)) for f in sorted(s.dir.rglob("*")) if f.is_file() and f.suffix in (".md", ".json", ".bib", ".tex", ".canvas") and cjk.search(f.read_text(encoding="utf-8"))]
+    assert not offenders, offenders
 
     # ---------------- replay: read-only cache, no network, no LLM ---------------- #
     before = snapshot(s, list(range(1, 10)))

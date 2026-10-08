@@ -1,5 +1,5 @@
 ---
-version: 1.0.0
+version: 1.1.0
 tool_name: emit_paper_digest
 tool_description: Emit a structured digest of one paper - problem, method, key quantitative results, limitations, future work, methodology category.
 ---
@@ -13,6 +13,7 @@ You are preparing per-paper structured notes for a state-of-the-art synthesis (S
 - sample_or_dataset: N / dataset names
 
 If the note says the paper is abstract-only, extract what you can and mark limitations with "abstract-only: unverified".
+Write every output field in English only — no other language anywhere in the output, even if the topic or a source paper is not in English.
 ===USER===
 Citation key: {{citation_key}}
 Access level: {{access_level}}

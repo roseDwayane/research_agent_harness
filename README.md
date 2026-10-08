@@ -35,7 +35,7 @@ model = "qwen3.8"
 provider = "ollama"
 ```
 
-or `SCHOLAR_LLM_PROVIDER=ollama SCHOLAR_LLM_MODEL=qwen3.8` (`SCHOLAR_LLM_BASE_URL` if the server is not on `127.0.0.1:11434`). The forced tool call is replaced by Ollama's `format` = JSON schema (grammar-constrained decoding), so outputs go through the same pydantic validation, cache and ledger. On Windows set `PYTHONUTF8=1` so the bilingual console output prints under a non-UTF-8 code page.
+or `SCHOLAR_LLM_PROVIDER=ollama SCHOLAR_LLM_MODEL=qwen3.8` (`SCHOLAR_LLM_BASE_URL` if the server is not on `127.0.0.1:11434`). The forced tool call is replaced by Ollama's `format` = JSON schema (grammar-constrained decoding), so outputs go through the same pydantic validation, cache and ledger. On Windows set `PYTHONUTF8=1` so the console output (emoji, typographic punctuation) prints under a non-UTF-8 code page.
 
 ## What each step is made of
 
@@ -94,6 +94,5 @@ python -m pytest tests -q
 ## Known limits
 
 * arXiv LaTeX-source extraction and GROBID/OCR for scanned PDFs are not implemented (PyMuPDF text extraction is used; `pdftotext` is the fallback).
-* `fulltext.translate` (bilingual `_zh.md` notes) is off by default because it is token-heavy.
 * Journal impact factors in Step 8 come from the model's knowledge, not a live lookup; they are labelled with `~` when uncertain.
 * arXiv throttles aggressively (HTTP 406/429); the engine spaces requests ~3 s apart and retries with backoff.

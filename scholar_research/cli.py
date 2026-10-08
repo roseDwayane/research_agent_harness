@@ -139,19 +139,19 @@ def status(needle, as_json, config_path, root, model, cache_mode, refresh):
     if as_json:
         click.echo(json.dumps(st, indent=2, ensure_ascii=False))
         return
-    click.echo("## Research Pipeline Status / 研究流程狀態\n")
-    click.echo(f"**Session / 工作階段**: {st['session']}")
-    click.echo(f"**Topic / 研究主題**: {st['topic']}")
+    click.echo("## Research Pipeline Status\n")
+    click.echo(f"**Session**: {st['session']}")
+    click.echo(f"**Topic**: {st['topic']}")
     cur = st["last_completed"]
-    click.echo(f"**Current Step / 目前步驟**: {cur} — {STEP_NAMES.get(cur, 'not started')}")
+    click.echo(f"**Current Step**: {cur} — {STEP_NAMES.get(cur, 'not started')}")
     click.echo(f"**Cache mode**: {st['cache_mode']}\n")
     click.echo("| Step | Name | Status | Files |\n|------|------|--------|-------|")
     for r in st["steps"]:
         click.echo(f"| {r['step']} | {r['name']} | {'Done' if r['done'] else 'Pending'} | {', '.join(r['files']) or '—'} |")
     nxt = cur + 1
-    click.echo(f"\n**Next action / 下一步**: {'pipeline complete' if nxt > 9 else f'run step {nxt} ({STEP_NAMES[nxt]})'}")
+    click.echo(f"\n**Next action**: {'pipeline complete' if nxt > 9 else f'run step {nxt} ({STEP_NAMES[nxt]})'}")
     cp = st["pending_checkpoint"]
-    click.echo(f"**Checkpoint status / 檢查點狀態**: {'Checkpoint ' + str(cp) + ' pending' if cp else 'none pending'}")
+    click.echo(f"**Checkpoint status**: {'Checkpoint ' + str(cp) + ' pending' if cp else 'none pending'}")
 
 
 @main.command()

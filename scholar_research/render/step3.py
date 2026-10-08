@@ -25,30 +25,30 @@ def render_screening_results(sc: SessionConfig, record: ScreeningRecord, sl: Sho
     lines = [
         frontmatter({"session_id": sc.session_id, "topic": sc.topic, "date": date, "step": 3, "threshold": threshold, "weights": f"relevance={weights['relevance']:.2f}, quality={weights['quality']:.2f}, recency_impact={weights['recency_impact']:.2f}"}),
         "",
-        "# Screening Results / 篩選結果",
+        "# Screening Results",
         "",
-        f"> Topic / 研究主題: {sc.topic}",
-        f"> Papers screened / 篩選論文數: {n}",
-        f"> Date / 篩選日期: {date}",
-        f"> Threshold / 門檻: composite >= {threshold}",
+        f"> Topic: {sc.topic}",
+        f"> Papers screened: {n}",
+        f"> Date: {date}",
+        f"> Threshold: composite >= {threshold}",
     ]
     if small:
-        lines.append(f"> ⚠️ Small collection — threshold lowered to {threshold} to preserve enough papers. / 集合較小，門檻降至 {threshold}。")
-    lines += ["", "## Screening Criteria / 篩選標準", "", "### Inclusion / 納入條件"]
-    lines += [f"- {c['en']} / {c['zh']}" for c in record.criteria_inclusion]
-    lines += ["", "### Exclusion / 排除條件"]
-    lines += [f"- {c['en']} / {c['zh']}" for c in record.criteria_exclusion]
+        lines.append(f"> ⚠️ Small collection — threshold lowered to {threshold} to preserve enough papers.")
+    lines += ["", "## Screening Criteria", "", "### Inclusion"]
+    lines += [f"- {c['en']}" for c in record.criteria_inclusion]
+    lines += ["", "### Exclusion"]
+    lines += [f"- {c['en']}" for c in record.criteria_exclusion]
     lines += [
         "",
-        "## Summary / 摘要",
+        "## Summary",
         "",
-        "| Category / 分類 | Count / 數量 | Percentage / 百分比 |",
+        "| Category | Count | Percentage |",
         "|-----------------|-------------|-------------------|",
-        f"| **Included / 納入** | **{len(inc)}** | **{pct(len(inc))}** |",
-        f"| Borderline / 邊緣 | {len(bord)} | {pct(len(bord))} |",
-        f"| Excluded / 排除 | {len(exc)} | {pct(len(exc))} |",
+        f"| **Included** | **{len(inc)}** | **{pct(len(inc))}** |",
+        f"| Borderline | {len(bord)} | {pct(len(bord))} |",
+        f"| Excluded | {len(exc)} | {pct(len(exc))} |",
         "",
-        f"Composite formula / 綜合分公式: `composite = relevance × {weights['relevance']:.2f} + quality × {weights['quality']:.2f} + recency_impact × {weights['recency_impact']:.2f}` (computed by code, rounded half-up to 2 dp).",
+        f"Composite formula: `composite = relevance × {weights['relevance']:.2f} + quality × {weights['quality']:.2f} + recency_impact × {weights['recency_impact']:.2f}` (computed by code, rounded half-up to 2 dp).",
     ]
     header = "| ID | Title | Authors | Year | Rel | Qual | Rec | **Composite** | Rationale |\n|----|-------|---------|------|-----|------|-----|---------------|-----------|"
     ranges = []
@@ -58,20 +58,19 @@ def render_screening_results(sc: SessionConfig, record: ScreeningRecord, sl: Sho
         hi = None if i == 0 else bounds[i - 1]
         ranges.append((i + 1, b, hi))
     for tier, b, hi in ranges:
-        name = tn.get(tier, {"en": f"Tier {tier}", "zh": f"第 {tier} 層"})
+        name = tn.get(tier, {"en": f"Tier {tier}"})
         rng = f"Score >= {b}" if hi is None else f"Score {b}–{round(hi - 0.01, 2)}"
         rows = [x for x in inc if x.screening.tier == tier]
-        lines += ["", f"## Tier {tier}: {name['en']} / {name['zh']} ({rng})", "", header]
+        lines += ["", f"## Tier {tier}: {name['en']} ({rng})", "", header]
         lines += [_row(x) for x in rows] or ["| — | (none) | | | | | | | |"]
     lines += [
         "",
         "---",
         "",
-        f"## Borderline Papers / 邊緣論文 (Score {borderline_t}–{round(threshold - 0.01, 2)})",
+        f"## Borderline Papers (Score {borderline_t}–{round(threshold - 0.01, 2)})",
         "",
-        "> **⛳ Checkpoint 2: 邊緣打撈**",
+        "> **⛳ Checkpoint 2: Borderline Rescue**",
         "> Review the papers below. These scored close to the threshold and may contain relevant work that the scoring missed — especially cross-disciplinary papers using non-standard terminology.",
-        "> 請審核以下邊緣論文。這些論文分數接近門檻，可能包含評分遺漏的相關研究——特別是使用非標準術語的跨領域論文。",
         ">",
         "> Mark any paper you want to include with `include` and I'll add it to the shortlist.",
         "",
@@ -83,9 +82,9 @@ def render_screening_results(sc: SessionConfig, record: ScreeningRecord, sl: Sho
         "",
         "---",
         "",
-        f"## Excluded Papers / 排除論文 (Score < {borderline_t})",
+        f"## Excluded Papers (Score < {borderline_t})",
         "",
-        "| ID | Title | Year | Rel | Qual | Rec | **Composite** | Exclusion Reason / 排除原因 |",
+        "| ID | Title | Year | Rel | Qual | Rec | **Composite** | Exclusion Reason |",
         "|----|-------|------|-----|------|-----|---------------|---------------------------|",
     ]
     for x in exc:
@@ -94,7 +93,7 @@ def render_screening_results(sc: SessionConfig, record: ScreeningRecord, sl: Sho
     if not exc:
         lines.append("| — | (none) | | | | | | |")
     hubs = [x for x in papers if x.citation_network.is_hub]
-    lines += ["", "---", "", "## Hub Paper Summary / 核心引用論文摘要", "", "| ID | Title | In-Degree | Cluster | Status | Note |", "|----|-------|-----------|---------|--------|------|"]
+    lines += ["", "---", "", "## Hub Paper Summary", "", "| ID | Title | In-Degree | Cluster | Status | Note |", "|----|-------|-----------|---------|--------|------|"]
     for x in hubs:
         st = x.screening.category.capitalize()
         note = f"Hub paper: cited by {x.citation_network.in_degree} papers in this collection"
@@ -106,6 +105,6 @@ def render_screening_results(sc: SessionConfig, record: ScreeningRecord, sl: Sho
     if not hubs:
         lines.append("| — | (no hub papers) | | | | |")
     if sl.summary.manually_included:
-        lines += ["", f"Manually included at Checkpoint 2 / 檢查點 2 人工納入: {sl.summary.manually_included}"]
-    lines += ["", "---", "", "Files / 檔案: `step3_screening_results.md`, `step3_shortlist.json`", "Next step / 下一步: `/research-export`"]
+        lines += ["", f"Manually included at Checkpoint 2: {sl.summary.manually_included}"]
+    lines += ["", "---", "", "Files: `step3_screening_results.md`, `step3_shortlist.json`", "Next step: `/research-export`"]
     return "\n".join(lines)

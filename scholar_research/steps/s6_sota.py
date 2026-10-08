@@ -138,7 +138,7 @@ def build_canvas(sota: S6Sota, all_keys: list[str], session_name: str, has_files
             y += row_h + 200
             row_h = 0
         gx = x0 + col * (gw + 200)
-        nodes.append({"id": f"theme-{t.number}", "type": "group", "x": gx, "y": y, "width": gw, "height": gh, "label": f"{t.title_en} / {t.title_zh}", "color": "0"})
+        nodes.append({"id": f"theme-{t.number}", "type": "group", "x": gx, "y": y, "width": gw, "height": gh, "label": f"{t.title_en}", "color": "0"})
         for j, k in enumerate(keys):
             node = {"id": k, "x": gx + PAD, "y": y + PAD + 40 + j * (H + GAP), "width": W, "height": H, "color": METHOD_COLOR.get(meth.get(k, "computational"), "2")}
             if has_files:

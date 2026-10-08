@@ -15,21 +15,11 @@ class PICO(BaseModel):
     timeframe: str = ""
 
 
-class PICOZh(BaseModel):
-    population: str
-    intervention: str
-    comparison: str
-    outcome: str
-    setting: str = ""
-
-
 class Query(BaseModel):
     id: str
     strategy: str
     query: str
     rationale: str
-    rationale_zh: str = ""
-    strategy_zh: str = ""
 
 
 class EngineInfo(BaseModel):
@@ -48,7 +38,6 @@ class SessionConfig(BaseModel):
     timestamp: str
     current_step: int = 0
     pico: PICO
-    pico_zh: PICOZh | None = None
     source_urls: list[str] = Field(default_factory=list)
     queries: list[Query] = Field(default_factory=list)
     field_type: str = "biomedical"  # biomedical | cs_engineering | other  (drives PubMed on/off)

@@ -1,5 +1,5 @@
 ---
-version: 1.0.0
+version: 1.1.0
 tool_name: emit_paper_scores
 tool_description: Emit integer 1–5 scores on three axes plus a one-line rationale for every paper in the batch. Do NOT compute composites — Python does the arithmetic.
 ---
@@ -20,6 +20,7 @@ Hub papers (marked) are structurally important; note that in the rationale but d
 
 exclusion_reason: only when the paper is clearly off-target; make it specific ("Population mismatch: studies rats, not humans"), never "not relevant". Otherwise null.
 Return exactly one score object per paper_id given, no extra ids.
+Write every output field in English only — no other language anywhere in the output, even if the topic or a source paper is not in English.
 ===USER===
 Topic: {{topic}}
 

@@ -72,7 +72,6 @@ class GapsConfig(BaseModel):
 
 
 class FulltextConfig(BaseModel):
-    translate: bool = False  # bilingual _zh.md via LLM (expensive); off by default
     min_chars_full: int = 8000  # below this a "full text" is flagged suspicious
     min_sections_full: int = 4
     prefer_published: bool = True

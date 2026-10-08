@@ -63,7 +63,7 @@ STEP_INPUTS: dict[int, list[str]] = {
 
 # Checkpoint that must be resolved *after* step N before N+1 may run.
 CHECKPOINT_AFTER = {1: 1, 3: 2, 7: 3, 8: 4}
-CHECKPOINT_NAMES = {1: "初始定向核准", 2: "邊緣打撈", 3: "戰場選擇", 4: "護城河確認"}
+CHECKPOINT_NAMES = {1: "Initial direction approval", 2: "Borderline rescue", 3: "Gap selection", 4: "Scope confirmation"}
 
 
 def now_iso() -> str:

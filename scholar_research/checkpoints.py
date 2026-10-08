@@ -114,33 +114,33 @@ def render_material(ctx: Context, n: int) -> str:
     s = ctx.session
     if n == 1:
         cfg = s.load_config()
-        p, z = cfg.pico, cfg.pico_zh
-        lines = [f"\n⛳ Checkpoint 1: 初始定向核准 — {cfg.topic}", "", "| PICO | English | 繁體中文 |", "|---|---|---|"]
+        p = cfg.pico
+        lines = [f"\n⛳ Checkpoint 1: Initial direction approval — {cfg.topic}", "", "| PICO | Description |", "|---|---|"]
         for k in ("population", "intervention", "comparison", "outcome", "setting"):
-            lines.append(f"| {k} | {getattr(p, k)} | {getattr(z, k) if z else ''} |")
-        lines += [f"| timeframe | {p.timeframe} | |", ""]
+            lines.append(f"| {k} | {getattr(p, k)} |")
+        lines += [f"| timeframe | {p.timeframe} |", ""]
         lines += [f"{q.id} [{q.strategy}] {q.query}\n    ↳ {q.rationale}" for q in cfg.queries]
-        lines += ["", "Edit step0_session_config.json to adjust PICO/queries, then approve. / 可先編輯 step0_session_config.json 再核准。"]
+        lines += ["", "Edit step0_session_config.json to adjust PICO/queries, then approve."]
         return "\n".join(lines)
     if n == 2:
         rec = load_json(s.path("step3_screening_all.json"))
         bord = [p for p in rec["papers"] if p["screening"]["category"] == "borderline"]
-        lines = [f"\n⛳ Checkpoint 2: 邊緣打撈 — {len(bord)} borderline papers", "", "| ID | Composite | Hub | Title | Rationale |", "|---|---|---|---|---|"]
+        lines = [f"\n⛳ Checkpoint 2: Borderline rescue — {len(bord)} borderline papers", "", "| ID | Composite | Hub | Title | Rationale |", "|---|---|---|---|---|"]
         for p in bord:
             lines.append(f"| {p['id']} | {p['screening']['composite']:.2f} | {'Yes' if p['citation_network']['is_hub'] else '—'} | {truncate(p['title'], 70)} | {truncate(p['screening']['rationale'], 80)} |")
-        lines += ["", "Enter paper IDs to include (comma-separated) or leave blank. / 輸入要納入的論文 ID，或直接 Enter。"]
+        lines += ["", "Enter paper IDs to include (comma-separated) or leave blank."]
         return "\n".join(lines)
     if n == 3:
         gaps = load_json(s.path("step7_gaps.json"))["gaps"]
-        lines = ["\n⛳ Checkpoint 3: 戰場選擇", "", "| Rank | Gap | Type | Sev | Nov | Fea | Composite | Title |", "|---|---|---|---|---|---|---|---|"]
+        lines = ["\n⛳ Checkpoint 3: Gap selection", "", "| Rank | Gap | Type | Sev | Nov | Fea | Composite | Title |", "|---|---|---|---|---|---|---|---|"]
         for g in gaps:
             x = g["gap"]
-            lines.append(f"| {g['rank']} | {g['id']} | {x['gap_type']} | {x['severity']} | {x['novelty']} | {x['feasibility']} | {g['composite']:.2f} | {x['title_en']} / {x['title_zh']} |")
-        lines += ["", "Say e.g. `Lock GAP_001, drop GAP_002` (optionally `; constraint: observational only`). / 例：「鎖定 GAP_001，放棄 GAP_002」"]
+            lines.append(f"| {g['rank']} | {g['id']} | {x['gap_type']} | {x['severity']} | {x['novelty']} | {x['feasibility']} | {g['composite']:.2f} | {x['title_en']} |")
+        lines += ["", "Say e.g. `Lock GAP_001, drop GAP_002` (optionally `; constraint: observational only`)."]
         return "\n".join(lines)
     if n == 4:
         spec = load_json(s.path("step8_hypothesis.json"))["spec"]
-        lines = ["\n⛳ Checkpoint 4: 護城河確認", "", "IN scope:"] + [f"  - {x['dimension_en']}: {x['spec_en']}" for x in spec["scope_in"]] + ["", "OUT scope:"] + [f"  - {x['exclusion_en']} — {x['rationale_en']}" for x in spec["scope_out"]] + ["", f"H1: {spec['hypotheses'][0]['h1_en']}", f"Top journal: {spec['journals'][0]['name']}", "", "Type `approve` (optionally `approve; journal: <name>`) or `reject`. / 輸入「核准」或「拒絕」。"]
+        lines = ["\n⛳ Checkpoint 4: Scope confirmation", "", "IN scope:"] + [f"  - {x['dimension_en']}: {x['spec_en']}" for x in spec["scope_in"]] + ["", "OUT scope:"] + [f"  - {x['exclusion_en']} — {x['rationale_en']}" for x in spec["scope_out"]] + ["", f"H1: {spec['hypotheses'][0]['h1_en']}", f"Top journal: {spec['journals'][0]['name']}", "", "Type `approve` (optionally `approve; journal: <name>`) or `reject`."]
         return "\n".join(lines)
     raise ValueError(n)
 

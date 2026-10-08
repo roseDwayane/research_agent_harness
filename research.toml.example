@@ -45,7 +45,6 @@ weights = { severity = 0.40, novelty = 0.30, feasibility = 0.30 }
 max_gaps = 3
 
 [fulltext]
-translate = false                  # bilingual {key}_zh.md via LLM (token-heavy) — opt in
 min_chars_full = 8000              # below → flagged in _access_log.md
 min_sections_full = 4
 prefer_published = true            # try OA publisher version before arXiv when both exist

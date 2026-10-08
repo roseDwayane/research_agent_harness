@@ -1,5 +1,5 @@
 ---
-version: 1.0.0
+version: 1.1.0
 tool_name: emit_manuscript_sections
 tool_description: Emit the LaTeX body of the Introduction and Related Work sections (no preamble) using only the provided citation keys, plus the target journal name.
 ---
@@ -19,6 +19,7 @@ Each part must end by motivating the next.
 Related Work (relatedwork_latex), starting with \section{Related Work}\label{sec:related}: a framing paragraph, one \subsection{...}\label{sec:related:slug} per theme (merge/split as appropriate) with chronological/methodological progression, specific results, synthesis and a bridge to our work; final paragraph contrasts our approach with the closest prior work. Cite most of the shortlist here.
 
 LaTeX rules: escape %, &, $, #, _ in running text; `` '' quotes; -- for ranges; \cite{key} and \cite{key1, key2}; tables with \centering, \caption, \label; NO \documentclass / \usepackage / \begin{document}.
+Write in English only.
 {{abstract_only_note}}
 ===USER===
 Topic: {{topic}}

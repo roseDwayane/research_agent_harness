@@ -50,7 +50,7 @@ def run(ctx: Context) -> StepOutput:
     # rank: composite desc, then severity desc, then title (stable)
     scored.sort(key=lambda gc: (-gc[1], -gc[0].severity, gc[0].title_en))
     ranked = [{"id": f"GAP_{i:03d}", "rank": i, "composite": c, "gap": g.model_dump()} for i, (g, c) in enumerate(scored, 1)]
-    dump_json(s.path("step7_gaps.json"), {"session_id": sc.session_id, "weights": gcfg.weights, "gaps": ranked, "summary": {"executive_en": out.executive_summary_en, "executive_zh": out.executive_summary_zh, "coverage_en": out.coverage_strength_en, "coverage_zh": out.coverage_strength_zh, "methodology_en": out.methodology_distribution_en, "methodology_zh": out.methodology_distribution_zh, "patterns_en": out.cross_gap_patterns_en, "patterns_zh": out.cross_gap_patterns_zh}})
+    dump_json(s.path("step7_gaps.json"), {"session_id": sc.session_id, "weights": gcfg.weights, "gaps": ranked, "summary": {"executive_en": out.executive_summary_en, "coverage_en": out.coverage_strength_en, "methodology_en": out.methodology_distribution_en, "patterns_en": out.cross_gap_patterns_en}})
     md = render_gap_analysis(sc, out, ranked, gcfg.weights, date, len(keys), abstract_only, fm.get("topic") if topic_mismatch else None)
     write_text(s.path("step7_gap_analysis.md"), md)
     notes = []
