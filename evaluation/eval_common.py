@@ -7,7 +7,7 @@ Batch layout (everything a batch produces lives under one folder)::
     ├── runs.jsonl            one line per topic, appended as soon as the topic finishes (incl. failures)
     ├── sessions/             fresh harness sessions, one per topic (never edited by hand)
     ├── logs/{topic_id}.log   pipeline console output
-    └── eval/{topic_id}/      step6_manifest.json, contract_results.json, numeric_results.json,
+    └── eval/{topic_id}/      step05/, step06/ (manifest, contract, numeric, summary), step07/, ...;
                               autosurvey/, metasyn/, controls/
 """
 from __future__ import annotations

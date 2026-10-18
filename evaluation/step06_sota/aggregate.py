@@ -9,6 +9,9 @@ Every topic in runs.jsonl is counted, failures included. Each metric is reported
 The Prometheus columns this summary used to have were removed with the Prometheus judge
 (see README "History").
 
+Deterministic values come from eval/{id}/step06/summary.json (step06_sota/run_checks.py, run it first);
+batches made before that script existed carry them in runs.jsonl ("deterministic"), which is read instead.
+
     python evaluation/step06_sota/aggregate.py --batch evaluation/runs/<batch_id>
 """
 from __future__ import annotations
@@ -92,10 +95,11 @@ def rate(flags: list[bool | None]) -> dict[str, Any]:
     return both_ways([None if f is None else float(f) for f in flags], 0.0)
 
 
-def build_rows(runs: list[dict]) -> list[dict]:
+def build_rows(runs: list[dict], batch_dir: Path) -> list[dict]:
     rows = []
     for r in runs:
-        det = r.get("deterministic", {})
+        summary = batch_paths(batch_dir)["eval"] / r["id"] / "step06" / "summary.json"
+        det = read_json(summary) if summary.exists() else r.get("deterministic", {})
         contract = det.get("contract", {}) if det.get("contract", {}).get("status") != "checker_error" else {}
         numeric = det.get("numeric", {}) if det.get("numeric", {}).get("status") != "checker_error" else {}
         rows.append({
@@ -176,7 +180,7 @@ def main() -> int:
     paths = batch_paths(batch_dir)
     batch, runs = read_json(paths["batch"]), read_runs(batch_dir)
 
-    rows = build_rows(runs)
+    rows = build_rows(runs, batch_dir)
     protocol = protocol_checks(batch, runs, batch_dir)
     m = metrics(rows)
     write_json(paths["eval"] / "summary.json", {"batch_id": batch["batch_id"], "protocol": protocol,

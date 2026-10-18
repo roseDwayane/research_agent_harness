@@ -1,4 +1,4 @@
-"""Offline run of the Step 6 evaluation flow (evaluation/): batch → deterministic checks → aggregate.
+"""Offline run of the evaluation flow: run_batch (batch only) → step06_sota/run_checks → aggregate.
 
 Uses the same fake LLM / fake HTTP as test_e2e_replay. The second topic's Step 6 is made to
 fail so the failure-case bookkeeping is exercised too.
@@ -22,6 +22,7 @@ sys.path.insert(0, str(EVAL_DIR / "step06_sota"))
 
 import aggregate  # noqa: E402
 import run_batch  # noqa: E402
+import run_checks  # noqa: E402
 from eval_common import batch_paths, read_json, read_runs, write_json  # noqa: E402
 
 
@@ -63,17 +64,21 @@ def test_batch_collects_successes_and_failures(tmp_path: Path, offline):
     ok = runs["ok_topic"]
     assert ok["pipeline_status"] == "ok" and ok["step6_present"]
     assert [s["status"] for s in ok["steps"]] == ["ok"] * 6
-    det = ok["deterministic"]
+    assert "deterministic" not in ok  # run_batch only produces the batch
+
+    assert run_checks.main(["--batch", str(batch_dir)]) == 0
+    det = read_json(batch_paths(batch_dir)["eval"] / "ok_topic" / "step06" / "summary.json")
     assert det["status"] == "ok", det
     assert det["contract"]["integrity_fail"] is False
     assert "numeric_attestation" in det["numeric"]
-    manifest = read_json(batch_paths(batch_dir)["eval"] / "ok_topic" / "step6_manifest.json")
+    assert not (batch_paths(batch_dir)["eval"] / "failing_topic").exists()
+    manifest = read_json(batch_paths(batch_dir)["eval"] / "ok_topic" / "step06" / "manifest.json")
     assert manifest["sources"] and manifest["coverage_denominator"] == ["full-text-pdf", "full-text-html"]
 
     failed = runs["failing_topic"]
     assert failed["pipeline_status"] == "failed" and failed["failed_step"] == 6
     assert "simulated Step 6 failure" in failed["error"]
-    assert not failed["step6_present"] and "deterministic" not in failed
+    assert not failed["step6_present"]
 
     # a batch is never silently reused
     with pytest.raises(SystemExit):

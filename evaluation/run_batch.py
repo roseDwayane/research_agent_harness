@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
-"""Phase A — run Steps 1–6 for every topic in a fresh session and collect evaluation data.
+"""Phase A — run Steps 1–N (default 6) for every topic in a fresh session; produces a batch, evaluates nothing.
 
 Per topic, in order:
   1. create a brand-new session under runs/{batch_id}/sessions/ (refuses to reuse a folder);
   2. run the harness pipeline with the batch's single Config and auto checkpoints
      (CP1 approve, CP2 no borderline rescue) — nobody edits anything in between;
-  3. record the outcome in runs.jsonl, failures included (failed step, error, timing, tokens);
-  4. if step6_sota_review.md exists, run the deterministic checks right away
-     (make_manifest → check_step6_contract → check_numeric_claims).
+  3. record the outcome in runs.jsonl, failures included (failed step, error, timing, tokens).
 
-LLM-judge scoring (autosurvey_eval.py, metasyn_eval.py) is a separate phase so the judge
-model and the pipeline model never compete for the GPU.
+Each step's evaluation runs afterwards from that step's folder, e.g.
+step06_sota/run_checks.py (deterministic) or step05_fulltext/check_step5_contract.py;
+LLM-judge scoring stays separate so the judge and the pipeline model never compete for the GPU.
 
     python evaluation/run_batch.py --topics evaluation/topics.toml
     python evaluation/run_batch.py --topics evaluation/topics.toml --batch-id smoke1 --resume
@@ -19,7 +18,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import json
 import platform
 import sys
 import time
@@ -38,8 +36,7 @@ from scholar_research.steps.base import Context  # noqa: E402
 from scholar_research.utils import slugify  # noqa: E402
 
 from eval_common import (  # noqa: E402
-    RUNS_ROOT, append_run, batch_paths, git_info, ollama_digest, read_json, read_runs, run_script,
-    sha256_file, tail, write_json,
+    RUNS_ROOT, append_run, batch_paths, git_info, ollama_digest, read_json, read_runs, sha256_file, write_json,
 )
 
 
@@ -147,60 +144,7 @@ def run_topic(topic: dict[str, str], cfg: Config, batch_dir: Path, session_id: s
     review = session_dir / "step6_sota_review.md"
     record["step6_present"] = review.exists()
     record["step6_sha256_at_run_end"] = sha256_file(review)
-    if review.exists():
-        record["deterministic"] = deterministic_checks(topic["id"], session_dir, batch_dir)
     return _finish(record)
-
-
-def deterministic_checks(topic_id: str, session_dir: Path, batch_dir: Path) -> dict[str, Any]:
-    out_dir = batch_paths(batch_dir)["eval"] / topic_id
-    log = batch_paths(batch_dir)["logs"] / f"{topic_id}.eval.log"
-    manifest = out_dir / "step6_manifest.json"
-    contract = out_dir / "contract_results.json"
-    numeric = out_dir / "numeric_results.json"
-    result: dict[str, Any] = {}
-
-    proc = run_script("step06_sota/make_manifest.py", ["--session", str(session_dir), "--output", str(manifest)], log)
-    if proc.returncode != 0:
-        return {"status": "checker_error", "stage": "make_manifest", "stderr": tail(proc.stderr)}
-    # Exit 1 means "checks ran and something failed" — that is a result, not an error.
-    for name, script, output in (("contract", "step06_sota/check_step6_contract.py", contract),
-                                 ("numeric", "step06_sota/check_numeric_claims.py", numeric)):
-        proc = run_script(script, ["--manifest", str(manifest), "--output", str(output)], log)
-        if proc.returncode not in (0, 1) or not output.exists():
-            result[name] = {"status": "checker_error", "stderr": tail(proc.stderr)}
-            continue
-        result[name] = summarize_contract(read_json(output)) if name == "contract" else summarize_numeric(read_json(output))
-    result["status"] = "ok" if all(r.get("status") != "checker_error" for r in result.values()) else "checker_error"
-    return result
-
-
-def summarize_contract(c: dict[str, Any]) -> dict[str, Any]:
-    s, cov = c["structure"], c["coverage"]["primary"]
-    return {
-        "integrity_fail": c["citation_integrity"]["integrity_fail"],
-        "invalid_keys": c["citation_integrity"]["invalid_keys"],
-        "structure_pass": s["pass"],
-        "theme_count": s["found_themes"],
-        "theme_count_range": s["theme_count_range"],
-        "failing_themes": [t["theme"] for t in s["themes"] if not t["pass"]],
-        "cross_theme_pass": c["cross_theme_analysis"]["pass"],
-        "coverage_rate": cov["rate"],
-        "coverage": f"{cov['numerator']}/{cov['denominator']}",
-        "coverage_pass": c["coverage"]["pass"],
-        "source_integrity_pass": c["source_integrity"]["pass"],
-        "overall_pass": c["overall_pass"],
-    }
-
-
-def summarize_numeric(n: dict[str, Any]) -> dict[str, Any]:
-    s6 = n["step6"]
-    return {
-        "numeric_attestation": s6["numeric_attestation"],
-        "claims": f"{s6['attested_claims']}/{s6['numeric_citable_claims']}",
-        "pass": s6["pass"],
-        "numeric_sentences_without_citation": s6["numeric_sentences_without_citation"],
-    }
 
 
 def _now() -> str:
@@ -243,10 +187,9 @@ def run_batch(topics: list[dict[str, str]], cfg: Config, batch_dir: Path, until:
         record = run_topic(topic, cfg, batch_dir, session_id, until, backend=backend, echo=echo)
         append_run(batch_dir, record)
         records.append(record)
-        det = record.get("deterministic", {})
         print(f"→ {record['pipeline_status']}"
-              + (f" at step {record.get('failed_step')}: {record.get('error')}" if record["pipeline_status"] != "ok" else "")
-              + (f" | contract: {json.dumps(det.get('contract'), ensure_ascii=False)}" if det else ""), flush=True)
+              + (f" at step {record.get('failed_step')}: {record.get('error')}" if record["pipeline_status"] != "ok" else ""),
+              flush=True)
     return records
 
 
@@ -272,7 +215,8 @@ def main() -> int:
     runs = read_runs(batch_dir)
     ok = sum(r["pipeline_status"] == "ok" for r in runs)
     print(f"\nbatch {batch_dir}: {ok}/{len(runs)} topics completed Steps 1–{until}")
-    print(f"next: python evaluation/step06_sota/autosurvey_eval.py --batch {batch_dir}")
+    print(f"next: python evaluation/step06_sota/run_checks.py --batch {batch_dir}\n"
+          f"      then the LLM-judge evaluations, e.g. python evaluation/step06_sota/autosurvey_eval.py --batch {batch_dir}")
     return 0
 
 

@@ -17,8 +17,8 @@ evaluation/
 **Working together.** Each `stepNN_<name>/` folder has one owner (Steps 5–7: Chih-Yun Lin). Code that only one
 step uses stays in that step's folder; something moves to the top level only when two steps really need it and
 both owners agree. Results go under `runs/{batch}/eval/{session}/stepNN/` so steps never overwrite each other (Step 6's existing
-outputs — `contract_results.json`, `autosurvey/`, `metasyn/` directly under `eval/{session}/` — predate this and
-stay where they are, since `aggregate.py` and earlier batches read them there).
+LLM-judge outputs — `autosurvey/`, `metasyn/` directly under `eval/{session}/` — predate this and stay where
+they are; batches made before 2026-10-18 also keep `contract_results.json` etc. there).
 Branch from `eval/main` as `eval/<step>-<topic>` and open PRs back into it.
 
 Scripts run from the repo root as `python evaluation/<step folder>/<script>.py`; each adds `evaluation/` to
@@ -64,8 +64,12 @@ Papers that cannot enter Step 6 (title only, or no authors after a PubMed lookup
 ```powershell
 $env:PYTHONUTF8 = "1"
 
-# topic batch: Steps 1–6 + deterministic checks (contract, citation coverage, numeric claims)
+# topic batch: Steps 1–6 only (produces sessions, evaluates nothing)
 python evaluation/run_batch.py --topics evaluation/topics.toml --batch-id smoke1 [--resume]
+
+# Step 6 deterministic checks (manifest, contract, citation coverage, numeric claims) → eval/{id}/step06/
+python evaluation/step06_sota/run_checks.py --batch evaluation/runs/<batch>
+python evaluation/step06_sota/aggregate.py  --batch evaluation/runs/<batch>   # protocol checks + averages
 
 # MetaSyn batch: one review at a time, then register the batch
 python evaluation/step06_sota/metasyn_prepare.py --data-dir <dir with test.parquet and corpus/> --review-id 255 --batch-id metasyn_v2
@@ -266,7 +270,7 @@ and for MetaSyn re-check the frozen prompts on the 6 dev reviews and redo `insig
 | File | Role |
 |---|---|
 | `eval_common.py` | shared paths and helpers (batch layout, runs.jsonl, run_script) |
-| `run_batch.py`, `topics.toml` | topic batch: Steps 1–6 + Step 6 deterministic checks; topics + pipeline model settings |
+| `run_batch.py`, `topics.toml` | topic batch: runs Steps 1–N per topic and records the run; topics + pipeline model settings |
 | **`step05_fulltext/`** | |
 | `check_step5_contract.py` | Step 5 contract: files ↔ shortlist, frontmatter, access-level rules, truncation / duplicates, access log |
 | **`step06_sota/`** | |
@@ -277,6 +281,7 @@ and for MetaSyn re-check the frozen prompts on the 6 dev reviews and redo `insig
 | `fulltext_retrieval.py` | full-text evidence windows for the citation NLI (frozen v2) |
 | `autosurvey_controls.py` | AutoSurvey discrimination controls (whole survey; `--level section`) |
 | `naive_baseline.py` | one-prompt survey from the same papers |
+| `run_checks.py` | runs make_manifest → check_step6_contract → check_numeric_claims for a batch → `eval/{id}/step06/` |
 | `make_manifest.py` | Step 6 manifest from `step5_full_text/*.md` frontmatter and the `.bib` |
 | `check_step6_contract.py`, `check_numeric_claims.py`, `step6_common.py` | deterministic checks (copied unchanged from the top-level `evaluation/`) |
 | `aggregate.py` | batch protocol checks (same config / prompts, auto checkpoints, Step 6 untouched) + deterministic averages → `eval/summary.{json,md}` |
