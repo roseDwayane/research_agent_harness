@@ -22,7 +22,7 @@ def render_gap_analysis(sc, out, ranked, w, date, n_papers, abstract_only, sota_
                 y = f" ({e['year']})" if e.get("year") else ""
                 lines += [f"- **{e['citation_key']}{y}**: {e['explanation_en']}", ""]
         else:
-            lines += ["> No papers in the collection address this gap, even partially. This suggests a highly novel direction but also warrants caution — the absence may indicate practical barriers not captured in the literature.", ""]
+            lines += ["> No counter-evidence was identified in the collection for this gap.", ""]
         sev, nov, fea = g["severity"], g["novelty"], g["feasibility"]
         a, b, c = round(sev * w["severity"], 2), round(nov * w["novelty"], 2), round(fea * w["feasibility"], 2)
         lines += ["### Why It Matters", "", g["why_it_matters_en"], "", "### Priority Score", "", "| Axis | Score | Rationale |", "|--------------|-------------|-----------------|", f"| Severity | {sev} | {md_cell(g['severity_rationale_en'])} |", f"| Novelty | {nov} | {md_cell(g['novelty_rationale_en'])} |", f"| Feasibility | {fea} | {md_cell(g['feasibility_rationale_en'])} |", "", f"**Composite:** {sev} × {w['severity']:.2f} + {nov} × {w['novelty']:.2f} + {fea} × {w['feasibility']:.2f} = {a:.2f} + {b:.2f} + {c:.2f} = **{r['composite']:.2f}**", "", "---"]

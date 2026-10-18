@@ -128,7 +128,7 @@ class S7Gap(BaseModel):
     secondary_type: GapType | None = None
     description_en: str
     supporting_evidence: list[S7Evidence] = Field(min_length=2)
-    counter_evidence: list[S7Evidence] = Field(default_factory=list)
+    counter_evidence: list[S7Evidence] = Field(description="papers that partially address the gap; [] only if none in the collection do")
     why_it_matters_en: str
     severity: Score
     novelty: Score
