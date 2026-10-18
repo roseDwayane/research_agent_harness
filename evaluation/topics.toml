@@ -1,0 +1,32 @@
+# Step 6 evaluation batch — 5 topics = smoke test only (does the flow run end to end?).
+# Every topic runs with exactly the settings below; run_batch.py refuses to resume a
+# batch whose settings differ from the ones recorded in its batch.json.
+
+[pipeline]
+until = 6                 # run Steps 1–6
+# Any [llm] key from research.toml.example can be set here; it overrides research.toml/env.
+provider = "ollama"
+model = "qwen3.8"
+num_ctx = 32768
+think = false
+temperature = 0.0
+
+[[topics]]
+id = "t01_eeg_nf_mci"
+topic = "EEG neurofeedback training for cognitive function in mild cognitive impairment"
+
+[[topics]]
+id = "t02_dl_eeg_source"
+topic = "Deep learning methods for EEG source localization"
+
+[[topics]]
+id = "t03_llm_sci_agents"
+topic = "Large language model agents for autonomous scientific discovery"
+
+[[topics]]
+id = "t04_rtms_trd"
+topic = "Repetitive transcranial magnetic stimulation for treatment-resistant depression"
+
+[[topics]]
+id = "t05_rag_clinical_qa"
+topic = "Retrieval-augmented generation for clinical question answering"

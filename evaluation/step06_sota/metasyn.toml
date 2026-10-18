@@ -1,0 +1,11 @@
+# Pipeline settings for MetaSyn fixed-input Step 6 runs (metasyn_prepare.py --pipeline-toml).
+# Same model as topics.toml; MetaSyn reviews pass ~2x more papers to Step 6 than smoke1 (27 vs 14 for
+# review 255), and the bilingual synthesis JSON overran max_tokens = 8192, so both limits are raised.
+
+[pipeline]
+provider = "ollama"
+model = "qwen3.8"
+num_ctx = 49152           # ~20k-token digest prompt + 16k output
+max_tokens = 16384
+think = false
+temperature = 0.0
