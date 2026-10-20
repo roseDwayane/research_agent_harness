@@ -10,19 +10,64 @@ from .records import Hit
 BASE = "https://export.arxiv.org/api/query"
 NS = {"a": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
 SAFE = ':()[]"'  # characters arXiv wants literal in search_query
+_EDGE_PUNCT = re.compile(r"^[^A-Za-z0-9]+|[^A-Za-z0-9]+$")
+_NL_STOP = frozenset(
+    """
+    a an the of for and or not in on with to from by via using based towards toward
+    into at as is are be was were been being its their this that these those it i we
+    you me my our your any some could would should can may might please point
+    recommend looking explore find there have has had do does did about over than
+    then so such also more most other between which who whom what where when how
+    why particularly especially specifically including include work works paper
+    papers study studies research field whether within among across per each both
+    am will shall need needs like want know if but they them he she his her
+    """.split()
+)
+_NL_MAX_TERMS = 16
 
 
-def to_arxiv_query(q: str) -> str:
+def _is_distinctive(bare: str) -> bool:
+    bare = bare.strip('"')
+    if len(bare) >= 12 or any(ch.isdigit() for ch in bare):
+        return True
+    return any(ch.isupper() for ch in bare[1:])
+
+
+def to_arxiv_query(q: str, *, require_distinctive: bool = True) -> str:
     """Turn a free-text/Boolean query into arXiv `all:` syntax (deterministic)."""
     q = re.sub(r"\[MeSH[^\]]*\]", "", q, flags=re.I)
     q = re.sub(r"\"([^\"]+)\"", lambda m: '"' + m.group(1) + '"', q)
     tokens = re.findall(r'"[^"]+"|\(|\)|\bAND\b|\bOR\b|\bNOT\b|[^\s()]+', q)
+    boolean = bool(re.search(r"\b(?:AND|OR|NOT)\b", q))
     out: list[str] = []
     for t in tokens:
         if t in ("(", ")", "AND", "OR", "NOT"):
-            out.append("ANDNOT" if t == "NOT" else t)
-        else:
-            out.append(f"all:{t}")
+            if boolean:
+                out.append("ANDNOT" if t == "NOT" else t)
+            continue
+        if t.startswith('"') and t.endswith('"'):
+            inner = t[1:-1].strip()
+            if inner:
+                out.append(f'all:"{inner}"')
+            continue
+        bare = _EDGE_PUNCT.sub("", t)
+        if not bare:
+            continue
+        if not boolean and bare.lower() in _NL_STOP:
+            continue
+        out.append(f"all:{bare}")
+    if not out:
+        out = [f"all:{_EDGE_PUNCT.sub('', t)}" for t in q.split() if _EDGE_PUNCT.sub("", t)]
+        if not boolean:
+            out = out[:_NL_MAX_TERMS]
+            cores = [t for t in out if t.startswith("all:") and _is_distinctive(t[4:])]
+            rest = [t for t in out if t not in cores]
+            if cores and require_distinctive:
+                head = " AND ".join(cores[:4])
+                if rest:
+                    return f"({head}) AND ({' OR '.join(rest)})"
+                return head
+            return " OR ".join(out)
     # implicit AND between bare terms
     joined: list[str] = []
     for i, t in enumerate(out):
@@ -40,7 +85,16 @@ class ArXiv:
         http.limiter.intervals["export.arxiv.org"] = 3.1
 
     def search(self, query: str, query_id: str, year_from: int, year_to: int, limit: int = 30) -> list[Hit]:
-        sq = f"({to_arxiv_query(query)}) AND submittedDate:[{year_from}01010000 TO {year_to}12312359]"
+        hits = self._search_q(to_arxiv_query(query), query_id, year_from, year_to, limit)
+        if hits:
+            return hits
+        loose = to_arxiv_query(query, require_distinctive=False)
+        if loose != to_arxiv_query(query):
+            return self._search_q(loose, query_id, year_from, year_to, limit)
+        return hits
+
+    def _search_q(self, arxiv_query: str, query_id: str, year_from: int, year_to: int, limit: int) -> list[Hit]:
+        sq = f"({arxiv_query}) AND submittedDate:[{year_from}01010000 TO {year_to}12312359]"
         # arXiv's parser wants ':' '(' ')' '[' ']' literal and spaces as '+', exactly as in its docs —
         # a fully percent-encoded query (httpx default) is answered with HTTP 406.
         url = f"{BASE}?search_query={quote(sq, safe=SAFE)}&start=0&max_results={limit}&sortBy=relevance&sortOrder=descending".replace("%20", "+")

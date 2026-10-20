@@ -63,15 +63,27 @@ class Cache:
     def _path(self, ns: str, key: str, ext: str = ".json") -> Path:
         return self.root / ns / f"{key}{ext}"
 
-    def get_or_fetch(self, ns: str, descriptor: Any, fetch: Callable[[], dict[str, Any]]) -> dict[str, Any]:
-        """Generic JSON-record cache. ``descriptor`` must be JSON-serialisable."""
+    def get_or_fetch(
+        self,
+        ns: str,
+        descriptor: Any,
+        fetch: Callable[[], dict[str, Any]],
+        persist: Callable[[dict[str, Any]], bool] | None = None,
+    ) -> dict[str, Any]:
+        """Generic JSON-record cache. ``descriptor`` must be JSON-serialisable.
+
+        ``persist(rec)`` returning False skips the write (used so HTTP 429/5xx
+        are not replayed as if they were real responses).
+        """
         key = self.key_for(descriptor)
         path = self._path(ns, key)
         if self.mode in ("read-write", "read-only") and path.exists():
-            self.stats.bump(ns, "hits")
             rec = load_json(path)
-            rec["_cache"] = {"hit": True, "key": key}
-            return rec
+            if persist is None or persist(rec):
+                self.stats.bump(ns, "hits")
+                rec["_cache"] = {"hit": True, "key": key}
+                return rec
+            # cached 429/5xx etc. — ignore and refetch
         if self.mode == "read-only":
             self.stats.bump(ns, "misses")
             raise CacheMissError(ns, key, descriptor)
@@ -79,7 +91,7 @@ class Cache:
         rec = fetch()
         rec = dict(rec)
         rec["_descriptor"] = descriptor
-        if self.mode != "off":
+        if self.mode != "off" and (persist is None or persist(rec)):
             dump_json(path, rec)
             self.stats.bump(ns, "writes")
         rec["_cache"] = {"hit": False, "key": key}

@@ -8,9 +8,11 @@ alone, which drift between API snapshots).
 from __future__ import annotations
 
 import re
+import time
 from collections import Counter, defaultdict
 from typing import Any
 
+from evaluation.step02.match import as_match_record, match_gold
 from ..providers.arxiv import ArXiv
 from ..providers.openalex import OpenAlex
 from ..providers.pubmed import PubMed
@@ -30,7 +32,7 @@ def plain_query(q: str) -> str:
     """Boolean/MeSH query → plain keyword string for S2 / OpenAlex."""
     q = re.sub(r"\[[^\]]*\]", " ", q)
     q = re.sub(r"\b(AND|OR|NOT)\b", " ", q)
-    q = re.sub(r"[\"()]", " ", q)
+    q = re.sub(r"[\"()?*]", " ", q)
     return " ".join(q.split())
 
 
@@ -153,6 +155,64 @@ class Collection:
         p["refs_openalex"] = sorted(set(p["refs_openalex"]) | set(h.refs_openalex))
 
 
+class GoldWatch:
+    """Per-gold first-gate log for LitSearch eval. No-op when ``eval_gold`` is empty."""
+
+    def __init__(self, golds: list[dict[str, Any]]):
+        self.golds = golds
+        self.rows: list[dict[str, Any]] = [
+            {
+                "corpusId": g.get("corpusId"),
+                "provider_raw": {},
+                "year_filtered_raw": False,
+                "after_dedup": False,
+                "snowball_seen": False,
+                "snowball_drop_reason": None,
+                "snowball_added": False,
+                "in_final": False,
+            }
+            for g in golds
+        ]
+
+    def _hits(self, rec: Any) -> list[int]:
+        rec = as_match_record(rec)
+        found: list[int] = []
+        for i, g in enumerate(self.golds):
+            p, _ = match_gold(g, [rec])
+            if p is not None:
+                found.append(i)
+        return found
+
+    def note_provider_hit(self, source: str, rec: Any, *, year_ok: bool) -> None:
+        for i in self._hits(rec):
+            self.rows[i]["provider_raw"][source] = True
+            if not year_ok:
+                self.rows[i]["year_filtered_raw"] = True
+
+    def mark_after_dedup(self, papers: list[dict[str, Any]]) -> None:
+        for i, g in enumerate(self.golds):
+            p, _ = match_gold(g, papers)
+            self.rows[i]["after_dedup"] = p is not None
+
+    def note_snowball(self, rec: Any, reason: str | None, added: bool) -> None:
+        for i in self._hits(rec):
+            self.rows[i]["snowball_seen"] = True
+            if added:
+                self.rows[i]["snowball_added"] = True
+                self.rows[i]["snowball_drop_reason"] = None
+            elif self.rows[i]["snowball_drop_reason"] is None:
+                self.rows[i]["snowball_drop_reason"] = reason
+
+    def mark_final(self, papers: list[Any]) -> None:
+        recs = [p.model_dump() if hasattr(p, "model_dump") else p for p in papers]
+        for i, g in enumerate(self.golds):
+            p, _ = match_gold(g, recs)
+            self.rows[i]["in_final"] = p is not None
+
+    def dump(self) -> dict[str, Any]:
+        return {"golds": self.rows}
+
+
 # --------------------------------------------------------------------------- #
 def run(ctx: Context) -> StepOutput:
     s, cfg = ctx.session, ctx.config.search
@@ -168,34 +228,53 @@ def run(ctx: Context) -> StepOutput:
     providers: dict[str, Any] = {}
     s2 = SemanticScholar(http, api.semantic_scholar_key)
     for name in sources:
-        providers[name] = {"semantic_scholar": s2, "openalex": OpenAlex(http, api.openalex_mailto), "pubmed": PubMed(http, api.ncbi_api_key), "arxiv": ArXiv(http)}[name]
+        providers[name] = {"semantic_scholar": s2, "openalex": OpenAlex(http, api.openalex_mailto, api.openalex_api_key), "pubmed": PubMed(http, api.ncbi_api_key), "arxiv": ArXiv(http)}[name]
 
     # ---------------- Phase 1: multi-source search ---------------- #
     col = Collection(cfg.title_match_threshold)
+    watch = GoldWatch(list(s.state.get("eval_gold") or []))
     failures: list[str] = []
     per_query_raw: Counter[str] = Counter()
+    provider_queries: list[dict[str, Any]] = []
+    n_q = len(sc.queries)
     for name in sources:
         prov = providers[name]
-        ctx.say(f"  [{name}] searching {len(sc.queries)} queries …")
-        for q in sc.queries:
+        ctx.say(f"  [{name}] searching {n_q} queries")
+        for i, q in enumerate(sc.queries, 1):
             qs = q.query if name == "pubmed" else (q.query if name == "arxiv" else plain_query(q.query))
+            ctx.say(f"  [{name}] {q.id} ({i}/{n_q}) …")
+            tq = time.time()
             try:
                 hits = prov.search(qs, q.id, y0, y1, cfg.results_per_query)
             except Exception as e:  # noqa: BLE001 — one flaky source must not block the search
+                provider_queries.append({"provider": name, "query_id": q.id, "success": False, "error": type(e).__name__})
                 failures.append(f"{name}/{q.id}: {type(e).__name__}: {str(e)[:120]}")
+                ctx.say(f"  [{name}] {q.id} FAIL {type(e).__name__}: {str(e)[:80]}  {time.time() - tq:.0f}s")
                 continue
             per_query_raw[q.id] += len(hits)
+            provider_queries.append({"provider": name, "query_id": q.id, "success": True, "returned_hits": len(hits)})
             for h in hits:
-                if h.year is not None and not (y0 <= h.year <= y1):
+                year_ok = h.year is None or (y0 <= h.year <= y1)
+                watch.note_provider_hit(name, h, year_ok=year_ok)
+                if not year_ok:
                     continue
                 col.add(h)
+            ctx.say(f"  [{name}] {q.id} ok n={len(hits)} unique={len(col.papers)}  {time.time() - tq:.0f}s")
     after_dedup = len(col.papers)
+    watch.mark_after_dedup(col.papers)
+    ctx.say(f"  raw unique={after_dedup}  (DOI recovery…)")
 
     # ---------------- Phase 2b: DOI recovery ---------------- #
     recovered = 0
+    doi_lookups = 0
+    max_doi_lookups = 40
     for p in col.papers:
         if p["doi"]:
             continue
+        if doi_lookups >= max_doi_lookups:
+            break
+        doi_lookups += 1
+        ctx.say(f"  doi-recovery {doi_lookups}/{max_doi_lookups}  {p['title'][:50]}")
         rec = None
         try:
             if p["arxiv_id"]:
@@ -232,30 +311,46 @@ def run(ctx: Context) -> StepOutput:
         if ext.get("PubMed") and not p["pubmed_id"]:
             p["pubmed_id"] = str(ext["PubMed"])
 
+    ctx.say(f"  doi recovered={recovered}  (snowball…)")
+
     # ---------------- Phase 3: snowball ---------------- #
+    direct_papers = [dict(p) for p in col.papers]
+    for g, t in zip(watch.golds, watch.rows):
+        t["direct_before_snowball"] = match_gold(g, direct_papers)[0] is not None
     pico_terms = _pico_terms(sc)
     ranked = sorted(range(len(col.papers)), key=lambda i: (-(col.papers[i]["citation_count"] or 0), normalize_title(col.papers[i]["title"])))
     seeds = [i for i in ranked if col.papers[i]["semantic_scholar_id"] or col.papers[i]["doi"]][: cfg.snowball_seeds]
     snowball_added = 0
-    for i in seeds:
+    for si, i in enumerate(seeds, 1):
         p = col.papers[i]
         p["is_seed_paper"] = True
         ident = p["semantic_scholar_id"] or f"DOI:{p['doi']}"
+        ctx.say(f"  snowball seed {si}/{len(seeds)} {ident[:40]}")
         try:
             refs = s2.references(ident, cfg.snowball_refs_per_seed)
         except Exception as e:  # noqa: BLE001
             failures.append(f"snowball/{ident}: {type(e).__name__}")
+            ctx.say(f"  snowball seed {si} FAIL {type(e).__name__}")
             continue
         p["refs_s2"] = sorted(set(p["refs_s2"]) | {r.semantic_scholar_id for r in refs if r.semantic_scholar_id})
         for r in refs:
-            if r.year is None or not (y0 <= r.year <= y1) or not r.abstract:
+            if r.year is None or not (y0 <= r.year <= y1):
+                watch.note_snowball(r, "year", False)
+                continue
+            if not r.abstract:
+                watch.note_snowball(r, "no_abstract", False)
                 continue
             if _overlap(pico_terms, r.title, r.abstract) < cfg.snowball_min_overlap:
+                watch.note_snowball(r, "overlap", False)
                 continue
             if col.find(r) is not None:
+                watch.note_snowball(r, "already_in_set", False)
                 continue
             col.add(r, count_raw=False)
+            watch.note_snowball(r, None, True)
             snowball_added += 1
+
+    ctx.say(f"  snowball +{snowball_added}  (citation network…)")
 
     # ---------------- assign stable ids ---------------- #
     order = sorted(range(len(col.papers)), key=lambda i: (_qrank(col.papers[i]["found_via"]), normalize_title(col.papers[i]["title"])))
@@ -264,16 +359,24 @@ def run(ctx: Context) -> StepOutput:
         p = col.papers[i]
         papers.append(Paper(id=f"paper_{n:03d}", **{k: v for k, v in p.items() if k in Paper.model_fields and k not in ("id", "references", "cited_by", "citation_network", "is_seed_paper")}, is_seed_paper=bool(p.get("is_seed_paper"))))
         papers[-1].external_refs = {"s2": p["refs_s2"], "openalex": p["refs_openalex"]}
+    watch.mark_final(papers)
 
     # ---------------- Phase 4: citation network ---------------- #
     by_s2 = {p.semantic_scholar_id: p.id for p in papers if p.semantic_scholar_id}
     by_oa = {p.openalex_id: p.id for p in papers if p.openalex_id}
+    # Extra S2 /references on every non-seed paper is 1 rps × |S|. Mode B |S|~400 + 429 backoff hung ls_009 for hours.
+    extra_ref = 0
+    extra_ref_cap = 8 if len(papers) > 60 else len(papers)
     for p in papers:
+        if extra_ref >= extra_ref_cap:
+            break
         if not p.external_refs.get("openalex") and not p.is_seed_paper and p.semantic_scholar_id and cfg.snowball_refs_per_seed:
             try:
+                ctx.say(f"  ref-lookup {extra_ref + 1}/{extra_ref_cap} {p.semantic_scholar_id[:12]}")
                 p.external_refs["s2"] = sorted(set(p.external_refs.get("s2", [])) | set(s2.reference_ids(p.semantic_scholar_id)))
+                extra_ref += 1
             except Exception:  # noqa: BLE001
-                pass
+                extra_ref += 1
     pid = {p.id: p for p in papers}
     for p in papers:
         targets = set()
@@ -308,11 +411,15 @@ def run(ctx: Context) -> StepOutput:
     )
     raw = RawPapers(session_id=sc.session_id, topic=sc.topic, search_timestamp=ts, search_summary=summary, papers=papers)
     dump_json(s.path("step2_raw_papers.json"), raw.model_dump())
+    dump_json(s.path("step2_gold_trace.json"), {**watch.dump(), "direct_papers": direct_papers, "provider_queries": provider_queries, "schema_version": 2})
     overlap = sum(1 for p in papers if len(p.sources_found_in) > 1)
     md = render_search_summary(sc, raw, ts[:10], sources, per_query_raw, overlap, recovered)
     write_text(s.path("step2_search_summary.md"), md)
     notes = [f"DOI recovered for {recovered} papers"] + [f"source failure: {f}" for f in failures]
-    return StepOutput(files=[s.path("step2_raw_papers.json"), s.path("step2_search_summary.md")], notes=notes, summary={"raw": col.raw_count, "unique": after_dedup, "snowball": snowball_added, "final": len(papers), "doi_coverage": summary.doi_coverage, "hubs": len(hubs), "clusters": len(clusters), "failures": failures})
+    for g in watch.rows:
+        src = ",".join(k for k, v in (g.get("provider_raw") or {}).items() if v) or "none"
+        ctx.say(f"  gold {g.get('corpusId')} providers={src} after_dedup={g.get('after_dedup')} snowball={g.get('snowball_drop_reason') or ('added' if g.get('snowball_added') else '-')} final={g.get('in_final')}")
+    return StepOutput(files=[s.path("step2_raw_papers.json"), s.path("step2_search_summary.md"), s.path("step2_gold_trace.json")], notes=notes, summary={"raw": col.raw_count, "unique": after_dedup, "snowball": snowball_added, "final": len(papers), "doi_coverage": summary.doi_coverage, "hubs": len(hubs), "clusters": len(clusters), "failures": failures})
 
 
 # --------------------------------------------------------------------------- #

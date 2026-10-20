@@ -10,7 +10,7 @@ import pytest
 
 from scholar_research.cache import Cache, CacheMissError
 from scholar_research.providers.arxiv import ArXiv, to_arxiv_query
-from scholar_research.providers.openalex import reconstruct_abstract
+from scholar_research.providers.openalex import compact_search, reconstruct_abstract, sanitize_search
 from scholar_research.providers.pubmed import PubMed
 from scholar_research.providers.records import Hit
 from scholar_research.schemas.paper import ScreenedPaper, Screening
@@ -86,6 +86,22 @@ def test_cache_modes(tmp_path: Path):
     assert len(calls) == 2 and Cache(tmp_path, "read-only").get_or_fetch("http", {"u": 1}, lambda: {})["status"] == 201
 
 
+def test_cache_does_not_persist_when_predicate_false(tmp_path: Path):
+    c = Cache(tmp_path, "read-write")
+    calls = []
+    skip = {429, 406, 500, 502, 503, 504}
+
+    def persist(rec):
+        return rec.get("status") not in skip
+
+    c.get_or_fetch("http", {"u": 1}, lambda: (calls.append(1), {"status": 429})[1], persist=persist)
+    rec = c.get_or_fetch("http", {"u": 1}, lambda: (calls.append(1), {"status": 200})[1], persist=persist)
+    assert rec["status"] == 200 and len(calls) == 2
+    c.get_or_fetch("http", {"u": 2}, lambda: {"status": 429}, persist=None)
+    rec = c.get_or_fetch("http", {"u": 2}, lambda: (calls.append(1), {"status": 200})[1], persist=persist)
+    assert rec["status"] == 200
+
+
 # ----------------------------- providers --------------------------------- #
 def test_openalex_abstract_reconstruction():
     assert reconstruct_abstract({"is": [1], "This": [0], "abstract": [3], "an": [2]}) == "This is an abstract"
@@ -96,6 +112,26 @@ def test_arxiv_query_conversion():
     q = to_arxiv_query('"brain-computer interface" AND (EEG OR neurofeedback) NOT rats')
     assert q == 'all:"brain-computer interface" AND ( all:EEG OR all:neurofeedback ) ANDNOT all:rats'
     assert plain_query('"Neurofeedback"[MeSH] OR "EEG biofeedback" AND (elderly OR aged)') == "Neurofeedback EEG biofeedback elderly aged"
+    nl = to_arxiv_query(
+        "Could you point me to research on binary classification systems that predict whether "
+        "sentences within a context require clarification, particularly using the wikiHowToImprove dataset?"
+    )
+    assert "all:dataset?" not in nl and "all:clarification," not in nl
+    assert "all:wikiHowToImprove" in nl and "all:classification" in nl
+    assert "all:Could" not in nl
+    assert sanitize_search("binary classification dataset?") == "binary classification dataset"
+    assert "clarification" in compact_search(
+        "Could you point me to research on binary classification systems that predict whether "
+        "sentences within a context require clarification, particularly using the wikiHowToImprove dataset?"
+    )
+    assert "Could" not in compact_search("Could you point me to research on binary classification?")
+    assert "?" not in plain_query("Which paper proposed prefix-tuning?")
+    from scholar_research.providers.query_text import search_variants
+
+    vs = search_variants("Could you point me to research on binary classification dataset?")
+    assert vs[0].endswith("dataset") and "?" not in vs[0]
+    assert vs[-1] == "binary classification dataset" or "classification" in vs[-1]
+    assert len(vs) >= 1
 
 
 PUBMED_XML = """<PubmedArticleSet><PubmedArticle><MedlineCitation><PMID>123</PMID><Article><ArticleTitle>Neurofeedback in MCI</ArticleTitle>

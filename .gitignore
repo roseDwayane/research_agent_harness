@@ -216,3 +216,26 @@ research.toml
 decisions.toml
 10_Research/
 .vscode/
+eval_runs/
+
+# Local environment variants; keep shareable templates available for versioning.
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+.venv*/
+.conda/
+.virtualenv/
+
+# Temporary directories used by local pytest/evaluation runs.
+.pytest_tmp*/
+.test_tmp*/
+
+# Root-level one-off diagnostics, not maintained evaluation entry points.
+/_tmp_*.py
+/_reset_retry*.py
+/_retry_*.py
+/_start_*.py
+/_watchdog_*.py
+/_run_remaining*.py
+/_skip*_continue.py

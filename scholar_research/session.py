@@ -94,11 +94,11 @@ class Clock:
 
 
 class Session:
-    def __init__(self, session_dir: Path, config: Config, cache_mode: CacheMode | None = None):
+    def __init__(self, session_dir: Path, config: Config, cache_mode: CacheMode | None = None, cache_dir: Path | None = None):
         self.dir = Path(session_dir)
         self.config = config
         mode = cache_mode or config.cache_mode
-        self.cache = Cache(self.dir / ".cache", mode)
+        self.cache = Cache(Path(cache_dir) if cache_dir else self.dir / ".cache", mode)
         self.ledger = Ledger(self.dir / ".cache" / "llm" / "ledger.jsonl")
         self.state_path = self.dir / ".state.json"
         self.state: dict[str, Any] = {"step_timestamps": {}, "notes": []}
@@ -110,12 +110,12 @@ class Session:
     # construction
     # ------------------------------------------------------------------ #
     @classmethod
-    def create(cls, root: Path, topic: str, config: Config, session_id: str | None = None, cache_mode: CacheMode | None = None) -> "Session":
+    def create(cls, root: Path, topic: str, config: Config, session_id: str | None = None, cache_mode: CacheMode | None = None, cache_dir: Path | None = None) -> "Session":
         sid = session_id or make_session_id()
         slug = slugify(topic)
         d = Path(root) / f"{sid}_{slug}"
         d.mkdir(parents=True, exist_ok=True)
-        s = cls(d, config, cache_mode)
+        s = cls(d, config, cache_mode, cache_dir=cache_dir)
         s.state.setdefault("topic_original", topic)
         s.state.setdefault("session_id", sid)
         s.state.setdefault("topic_slug", slug)

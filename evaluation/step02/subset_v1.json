@@ -1,0 +1,888 @@
+{
+  "seed": 20260924,
+  "description": "LitSearch Table-7 clone: 80 specific, 40 inline + 40 author, Qual-stratified.",
+  "n": 80,
+  "questions": [
+    {
+      "query_set": "inline_acl",
+      "query": "Could you point me to research on binary classification systems that predict whether sentences within a context require clarification, particularly using the wikiHowToImprove dataset?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        236486314
+      ],
+      "qid": "ls_001",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_acl",
+      "query": "Could you recommend datasets that include SQL annotations over WikiTQ?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        225039884
+      ],
+      "qid": "ls_002",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_acl",
+      "query": "I'm exploring research that utilizes large datasets for the task of sentence simplification. Are there any prominent datasets sourced from Wikipedia that I could look into?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        7473831
+      ],
+      "qid": "ls_003",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_acl",
+      "query": "I'm looking into the distillation process of language models and would like to examine studies that specifically discuss the attention mechanism alignment in the teacher-student model architecture. Are there any papers you can suggest?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        229923069
+      ],
+      "qid": "ls_004",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_acl",
+      "query": "When using pretrained transformer models for generating sentence embeddings, I've heard different strategies such as mean pooling and using the CLS token's embedding. What study shows that mean pooling outperforms CLS in semantic similarity tasks?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        201646309
+      ],
+      "qid": "ls_005",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_acl",
+      "query": "Where can I find a detailed discussion on automating the assessment of clarifications in instructional text, including tasks for grading these clarifications as plausible, implausible, or neutral and ranking them on a scale?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        250390720
+      ],
+      "qid": "ls_006",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_acl",
+      "query": "Which work should I explore to understand the techniques that expand the scope of open infomation extraction beyond verbs, to include various parts of speech such as nouns and adjectives?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        74065
+      ],
+      "qid": "ls_007",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Are there any papers on training video-language models with contrastive approahes and evaluation on temporal localization tasks?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        252815403
+      ],
+      "qid": "ls_008",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Are there any research papers investigating the improvement of radiology report summarization through the application of graph neural networks in conjunction with biomedical entity extraction?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        236477655
+      ],
+      "qid": "ls_009",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Could you point me to research that tackles the issue of disambiguating word senses in infrequent and zero-shot scenarios?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        248779910
+      ],
+      "qid": "ls_010",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Could you recommend a paper that builds a writing assistant with autocomplete capabilities conditioned on user intent?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        233231544
+      ],
+      "qid": "ls_011",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Could you recommend a study that examines how incorporating external commonsense knowledge into conversational agents can better interpret user emotions and refine their response formulation techniques?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        247748640
+      ],
+      "qid": "ls_012",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Could you recommend a study that explores the difficulties in creating shared multilingual vocabularies, especially focusing on the problem of over segmentation in low-resource languages?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        232233194
+      ],
+      "qid": "ls_013",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Could you recommend a study that explores the improvement of Chinese sequence labeling with BERT through the incorporation of lexical data via a character-to-word bilinear attention approach?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        234741719
+      ],
+      "qid": "ls_014",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Could you recommend a study that investigates enhancing token alignment in speech processing by employing inverse document frequency (idf)?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        235097520
+      ],
+      "qid": "ls_015",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Could you recommend research that assesses how well language learning models, such as ChatGPT, perform in creating reading comprehension tasks for educational software?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        259376566
+      ],
+      "qid": "ls_016",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Could you recommend research that examines how optimized continuous prompts perform against discrete prompts in relational tasks?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        233210199
+      ],
+      "qid": "ls_017",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Could you recommend research that examines the challenges faced by pre-trained language models in learning inferential commonsense knowledge when the context is sparse?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        236478307
+      ],
+      "qid": "ls_018",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Could you suggest a dataset containing diverse, intricate natural language queries that necessitate multi-step reasoning, comparing attributes, and performing set operations for answering questions from a knowledge base, without depending on entity linking?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        247362971
+      ],
+      "qid": "ls_019",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Could you suggest a study examining how transformer models utilize feed-forward neural networks (FFNs) to encode factual information?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        229923720
+      ],
+      "qid": "ls_020",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Could you suggest research that investigates across multiple languages how dictionary definitions and word embedding models compare?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        249151979
+      ],
+      "qid": "ls_021",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Could you suggest research that investigates aspect-based sentiment analysis across different languages, incorporating methods such as code-switching of aspect terms?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        243865296
+      ],
+      "qid": "ls_022",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Could you suggest research that investigates graph-based methods for predicting connections in knowledge graphs, focusing on n-ary relational facts rather than just simple triple structures?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        234763248
+      ],
+      "qid": "ls_023",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Could you suggest research that investigates how cross-attention mechanisms improve the interplay between token and syntax data within automated program repair systems?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        236478113
+      ],
+      "qid": "ls_024",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Could you suggest some work that develops multimodal models with contrastive learning approaches?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        229924402
+      ],
+      "qid": "ls_025",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Has any research tried to mitigate overfitting in weakly-supervised settings by introducing an adversarial framework where the influence of the labeling function is a hyperparameter for the feature representation?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        237532398
+      ],
+      "qid": "ls_026",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Has any study explored the zero-shot extraction of persona characteristics within conversational dialogues?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        258971765
+      ],
+      "qid": "ls_027",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Has there been any research that uses multiple models to learn the preferences of individual annotators, and then ensembles these models to obtain majority-vote preference scores while also having an uncertainty measure?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        238634750
+      ],
+      "qid": "ls_028",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Has there been any work that improves the work on integrated gradients by leveraging interpolation strategies to improve gradient accuracies?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        237363853
+      ],
+      "qid": "ls_029",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Have any research papers tried to create conversational agents with inner states represented by a knowledge graph that can be continually updated based on the agent’s environment?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        252847559
+      ],
+      "qid": "ls_030",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "I know about prompt tuning, but have any works tried learning embeddings that are inputted to every transformer layer in a language model?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        230433941
+      ],
+      "qid": "ls_031",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "In multi-hop question answering, is there a paper that explores \"per-hop\" retrieval evaluation that treats each hop of retrieval independently?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        237592852
+      ],
+      "qid": "ls_032",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Is it possible to adatp named entity recognition systems to learn new entities by combining knowledge distillation and synthetic data augmentation by using a two-stage training approach?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        248779939
+      ],
+      "qid": "ls_033",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Is there a specialized question answering dataset that concentrates on intricate tables within certain sectors, like the airline industry?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        235623770
+      ],
+      "qid": "ls_034",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "What research exists on employing generative models with latent variable to capture semantic dependencies in conversational systems?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        235358586
+      ],
+      "qid": "ls_035",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "What research exists on leveraging syntactic roles and semantic interpretations for backdoor attacks on natural language processing systems?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        235196099,
+        235417102
+      ],
+      "qid": "ls_036",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Which paper has conducted a thorough analysis of how language models of different architectures generate text that either aligns with or deviates from the properties of natural human language?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        235265909
+      ],
+      "qid": "ls_037",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Which paper shows that human experts and non-experts focus on very different aspects when identifying AI=generated texts?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        235694265
+      ],
+      "qid": "ls_038",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Which work suggests that machine translation models might get too confident and generate coherent but inadequant translations?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        235166394
+      ],
+      "qid": "ls_039",
+      "split": "inline"
+    },
+    {
+      "query_set": "inline_nonacl",
+      "query": "Which works shows that training large language models with purely mathematical and structural data can exhibit emergence of causal reasoning faster?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        259089125
+      ],
+      "qid": "ls_040",
+      "split": "inline"
+    },
+    {
+      "query_set": "manual_acl",
+      "query": "In multimodal (multilingual) abstractive summarization field, is there any paper that propose target-oriented vision modeling method to improve the quality of summaries?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        254685691
+      ],
+      "qid": "ls_041",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_acl",
+      "query": "Is there a paper that connects the basic elements of storytelling with biased or imbalanced media reporting?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        259075515
+      ],
+      "qid": "ls_042",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_acl",
+      "query": "Is there a study that shows how to help the demonstration retriever better integrate feedback from LLMs?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        258557751
+      ],
+      "qid": "ls_043",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_acl",
+      "query": "Is there any paper that aligns speech and text embeddings better than CTC training?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        254854514
+      ],
+      "qid": "ls_044",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_acl",
+      "query": "Is there any paper that attempts to evaluate the similarity of meaning representations without using annotated data?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        259370579
+      ],
+      "qid": "ls_045",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_acl",
+      "query": "Is there any paper that constructs augmented training data based on the entity-to-entity correlations?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        252918792
+      ],
+      "qid": "ls_046",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_acl",
+      "query": "Is there any paper that explores using only an encoder-only masked language model for open-ended long text generation (such as story generation)?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        259370630
+      ],
+      "qid": "ls_047",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_acl",
+      "query": "Is there any research paper that can extract attributes from both a predefined label set and the surrounding context?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        259370741
+      ],
+      "qid": "ls_048",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_acl",
+      "query": "Is there any work that allows large numbers of model outputs to be encoded and compared by causal language models in a single forward pass?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        258999673
+      ],
+      "qid": "ls_049",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_acl",
+      "query": "Is there any work that attacks language models in dialogue generation?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        258546855
+      ],
+      "qid": "ls_050",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_acl",
+      "query": "What work attempts to explore multi-hop reasoning by densifying commonsense knowledge graphs?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        258959081
+      ],
+      "qid": "ls_051",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_acl",
+      "query": "Which paper first applied the chain-of-thought technique in the text summarization field?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        258841145
+      ],
+      "qid": "ls_052",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_acl",
+      "query": "Which paper first combines different methods for uncertainty quantification in one?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        259370752
+      ],
+      "qid": "ls_053",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_acl",
+      "query": "Which paper first shows that it is possible to maintain high LLM reasoning performance with in-context examples that are absurdly wrong?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        254877569
+      ],
+      "qid": "ls_054",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_acl",
+      "query": "Which paper first shows that large language models can be prompted to act like professional annotators to evaluate text generation quality?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        258461287
+      ],
+      "qid": "ls_055",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_acl",
+      "query": "Which paper first use the attention weights to guide the simultaneous inference of speech translation models?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        254685574
+      ],
+      "qid": "ls_056",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_acl",
+      "query": "Which paper introduced the human-evaluated timeliness metric for misinformation detection?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        254853990
+      ],
+      "qid": "ls_057",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_acl",
+      "query": "Which paper introduces the R-GCN technique into document-level joint entity and relation extraction?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        259370653
+      ],
+      "qid": "ls_058",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_acl",
+      "query": "Which paper shows assessment of training instabilities at different levels for language models?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        256868814
+      ],
+      "qid": "ls_059",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_acl",
+      "query": "Which paper was the first to propose combining human spoken language and sign language datasets with gloss annotations to enhance the performance of sign language translation?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        259370577
+      ],
+      "qid": "ls_060",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_acl",
+      "query": "Which work proposes an approach to improve candidate responses in the smart reply task by directly optimizing the metric to ensure that a response is selected by the user?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        258947156
+      ],
+      "qid": "ls_061",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_iclr",
+      "query": "Are there any papers that construct convolutional networks which are equivariant with respect to non-compact/non-abelian Lie groups?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        264172845
+      ],
+      "qid": "ls_062",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_iclr",
+      "query": "Is there any paper that previously proposed to control a risk using prediction sets, based on the literature in conformal prediction?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        251320513
+      ],
+      "qid": "ls_063",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_iclr",
+      "query": "Is there any paper that theoretically explains why in-context reinforcement learning works?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        263909278
+      ],
+      "qid": "ls_064",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_iclr",
+      "query": "What are some evaluation benchmarks for LLM privacy at inference time, targeted towards model input and NOT the training data.",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        264555202
+      ],
+      "qid": "ls_065",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_iclr",
+      "query": "What is a paper studying data being collected in bundles in reinforcement learning ?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        263609164
+      ],
+      "qid": "ls_066",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_iclr",
+      "query": "What is the first paper that uses the generalized linear model to analyze multi-neural spike train data?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        264438909
+      ],
+      "qid": "ls_067",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_iclr",
+      "query": "What paper first showed that you can score the code explanations using the pass@k metric?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        260886874
+      ],
+      "qid": "ls_068",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_iclr",
+      "query": "What paper first used the technique of prompt engineering to generate adversarial prompts that can fool LLMs into making wrong predictions in prompt-based learning?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        264406064
+      ],
+      "qid": "ls_069",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_iclr",
+      "query": "What paper first uses decoupled workers in distributed RL system?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        259287121
+      ],
+      "qid": "ls_070",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_iclr",
+      "query": "What paper investigated the effect of the relative position (closer or further away) of the most pertinent retrieved code snippets on repository-level code completion performance?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        259075246
+      ],
+      "qid": "ls_071",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_iclr",
+      "query": "What paper showed first that one can build a fully differentiable mixture of experts layer with no increase in time complexity?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        260378993
+      ],
+      "qid": "ls_072",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_iclr",
+      "query": "What work proposes to combine video foundation models with vision language models to effective high dimensional robot planning?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        264172935
+      ],
+      "qid": "ls_073",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_iclr",
+      "query": "Which machine learning paper proposed certified robustness in the malware detection domain?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        257687205
+      ],
+      "qid": "ls_074",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_iclr",
+      "query": "Which neural theorem proving paper first attempted to prove theorems in a block-by-block manner?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        263334074
+      ],
+      "qid": "ls_075",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_iclr",
+      "query": "Which paper first tried to fine-tune LLMs with chain-of-thoughts and program-of-thoughts for math reasoning?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        261696697
+      ],
+      "qid": "ls_076",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_iclr",
+      "query": "Which paper proposes to integrate black-box LLMs with a pool of smaller but specialized language models?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        258741298
+      ],
+      "qid": "ls_077",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_iclr",
+      "query": "Which paper systematically examed the input mismatch between training and sampling in diffusion models",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        261276856
+      ],
+      "qid": "ls_078",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_iclr",
+      "query": "Which paper trains on linear regression to hypothesize how fine-tuning affects language models?",
+      "specificity": 1,
+      "quality": 2,
+      "corpusids": [
+        262054014
+      ],
+      "qid": "ls_079",
+      "split": "author"
+    },
+    {
+      "query_set": "manual_iclr",
+      "query": "Which paper uses the latent diffusion model for the first time to solve offline reinforcement learning problems based on the sequential modeling framework?",
+      "specificity": 1,
+      "quality": 1,
+      "corpusids": [
+        263334587
+      ],
+      "qid": "ls_080",
+      "split": "author"
+    }
+  ]
+}

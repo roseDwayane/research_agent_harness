@@ -65,6 +65,7 @@ def run(ctx: Context) -> StepOutput:
     scores: dict[str, Any] = {}
     for start in range(0, n, scfg.batch_size):
         batch = papers[start : start + scfg.batch_size]
+        ctx.say(f"Step 3 scoring papers {start + 1}–{start + len(batch)} / {n}")
         blob = "\n\n".join(_paper_block(p) for p in batch)
         out = ctx.llm.structured("s3_score", S3Batch, {"topic": sc.topic, "population": pico.population, "intervention": pico.intervention, "comparison": pico.comparison, "outcome": pico.outcome, "inclusion": inclusion, "exclusion": exclusion, "n": len(batch), "papers": blob, "today": ts[:10]}, step=3, tag=f"batch{start // scfg.batch_size + 1}")
         wanted = {p.id for p in batch}
