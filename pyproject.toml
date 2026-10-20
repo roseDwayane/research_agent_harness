@@ -19,16 +19,20 @@ dependencies = [
 
 [project.optional-dependencies]
 pdf = ["pymupdf>=1.23"]
+eval = ["datasets>=2.20"]
+litsearch = ["datasets==2.20.0", "numpy==1.26.4", "nltk==3.8.1", "rank-bm25==0.2.2", "pandas==2.2.3", "pyarrow==17.0.0", "huggingface-hub==0.23.4"]
 dev = ["pytest>=7", "pytest-cov"]
 
 [project.scripts]
 scholar-research = "scholar_research.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["scholar_research*"]
+include = ["scholar_research*", "evaluation.step02*", "evaluation.step03*", "evaluation.step08*"]
 
 [tool.setuptools.package-data]
 "scholar_research.llm" = ["prompts/*.md"]
+"evaluation.step02" = ["*.json"]
+"evaluation.step08" = ["prompts/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

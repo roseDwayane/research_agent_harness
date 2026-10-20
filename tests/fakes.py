@@ -105,6 +105,8 @@ class FakeHttpx:
                 return FakeResponse(404, "{}")
             if "/paper/ARXIV:2401.00001" in url:
                 return FakeResponse(200, json.dumps({"paperId": "s2D", "externalIds": {"DOI": "10.1000/d", "ArXiv": "2401.00001"}}))
+            if "/paper/CorpusId:1001" in url:
+                return FakeResponse(200, json.dumps({"paperId": "s2A", "title": PAPERS["A"]["title"], "year": 2023, "citationCount": 40, "externalIds": {"DOI": "10.1000/a", "CorpusId": 1001}}))
             if "/paper/" in url:
                 return FakeResponse(404, "{}")
         if "api.openalex.org/works" in url and "search" in params:

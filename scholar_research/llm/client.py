@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import json
 import time
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Protocol, TypeVar
 
@@ -74,6 +76,7 @@ class OllamaBackend:
         import httpx
 
         self._cfg = cfg
+        self.attempt_observer = None
         self._client = httpx.Client(base_url=cfg.base_url.rstrip("/"), timeout=httpx.Timeout(cfg.request_timeout, connect=10.0))
 
     def __call__(self, *, model, system, messages, tool, temperature, max_tokens):
@@ -86,28 +89,65 @@ class OllamaBackend:
             "reply instead with ONE JSON object holding that tool's input — no prose, no markdown fences. JSON schema:\n"
             f"{json.dumps(schema, ensure_ascii=False)}"
         )
+        if not self._cfg.think:
+            sys_prompt = "/no_think\n" + sys_prompt
         body = {
             "model": model,
             "messages": [{"role": "system", "content": sys_prompt}] + [_flatten_message(m) for m in messages],
             "format": schema,
-            "stream": False,
+            "stream": True,
             "think": self._cfg.think,
+            "keep_alive": "5m",
             "options": {"temperature": temperature, "num_predict": max_tokens, "num_ctx": self._cfg.num_ctx, "seed": 0},
         }
         last_err: Exception | None = None
         for attempt in range(self._cfg.max_retries + 1):
+            started = time.perf_counter()
+            started_at = datetime.now(timezone.utc).isoformat()
+            data = None
+            failure = None
             try:
-                resp = self._client.post("/api/chat", json=body)
+                content_parts: list[str] = []
+                data = None
+                with self._client.stream("POST", "/api/chat", json=body) as resp:
+                    if resp.status_code != 200:
+                        resp.read()
+                        raise RuntimeError(f"Ollama error {resp.status_code}: {resp.text[:500]}")
+                    for line in resp.iter_lines():
+                        if not line.strip():
+                            continue
+                        chunk = json.loads(line)
+                        if chunk.get("error"):
+                            raise RuntimeError(f"Ollama generation error: {chunk['error']}")
+                        content_parts.append((chunk.get("message") or {}).get("content", ""))
+                        if chunk.get("done"):
+                            data = chunk
+                            break
+                    if data is None:
+                        # Never validate or cache a truncated stream as a completion.
+                        raise httpx.RemoteProtocolError("Ollama stream ended without a done record")
                 break
             except httpx.TransportError as e:
+                failure = type(e).__name__
                 last_err = e
                 time.sleep(2 * (attempt + 1))
+            except Exception as e:
+                failure = type(e).__name__
+                raise
+            finally:
+                if self.attempt_observer:
+                    known = data is not None and 'prompt_eval_count' in data and 'eval_count' in data
+                    self.attempt_observer({
+                        'transport_attempt': attempt + 1, 'started_at': started_at,
+                        'ended_at': datetime.now(timezone.utc).isoformat(),
+                        'wall_seconds': round(time.perf_counter() - started, 6),
+                        'status': 'failed' if failure else 'received', 'error_type': failure,
+                        'usage_known': known,
+                        'usage': {'input_tokens': data['prompt_eval_count'], 'output_tokens': data['eval_count']} if known else None,
+                    })
         else:
-            raise RuntimeError(f"cannot reach Ollama at {self._cfg.base_url} (is `ollama serve` running?): {last_err}")
-        if resp.status_code != 200:
-            raise RuntimeError(f"Ollama error {resp.status_code}: {resp.text[:500]}")
-        data = resp.json()
-        content = (data.get("message") or {}).get("content", "")
+            raise RuntimeError(f"Ollama request failed at {self._cfg.base_url}: {type(last_err).__name__}: {last_err}")
+        content = "".join(content_parts)
         done_reason = data.get("done_reason")
         try:
             tool_input = json.loads(content)
@@ -183,13 +223,44 @@ class LLMClient:
             "schema": tool["input_schema"],
         }
         t0 = time.time()
+        call_id = uuid.uuid4().hex
+        telemetry = self.ledger.path.with_name(self.ledger.path.stem + '_attempts.jsonl')
+
+        def observe(event):
+            entry = {'call_id': call_id, 'step': step, 'tag': tag, 'prompt': prompt_name,
+                     'prompt_version': prompt.version, 'model': self.cfg.model, **event}
+            telemetry.parent.mkdir(parents=True, exist_ok=True)
+            with telemetry.open('a', encoding='utf-8') as fh:
+                fh.write(json.dumps(entry, ensure_ascii=False) + '\n')
+
         attempts: list[str] = []
 
         def fetch() -> dict[str, Any]:
             msgs = list(messages)
             last_err: Exception | None = None
             for attempt in range(self.cfg.validation_retries + 1):
-                raw = self.backend(model=self.cfg.model, system=system, messages=msgs, tool=tool, temperature=self.cfg.temperature, max_tokens=self.cfg.max_tokens)
+                backend = self.backend
+                original_observer = getattr(backend, 'attempt_observer', None)
+                native_events = isinstance(backend, OllamaBackend)
+                if native_events:
+                    backend.attempt_observer = lambda event: observe({'validation_attempt': attempt + 1, **event})
+                started = time.perf_counter()
+                started_at = datetime.now(timezone.utc).isoformat()
+                try:
+                    raw = backend(model=self.cfg.model, system=system, messages=msgs, tool=tool, temperature=self.cfg.temperature, max_tokens=self.cfg.max_tokens)
+                except Exception as exc:
+                    if not native_events:
+                        observe({'validation_attempt': attempt + 1, 'status': 'failed', 'usage_known': False,
+                                 'usage': None, 'error_type': type(exc).__name__, 'started_at': started_at,
+                                 'ended_at': datetime.now(timezone.utc).isoformat(), 'wall_seconds': time.perf_counter()-started})
+                    raise
+                finally:
+                    if native_events:
+                        backend.attempt_observer = original_observer
+                if not native_events:
+                    observe({'validation_attempt': attempt + 1, 'status': 'received', 'usage_known': bool(raw.get('usage')),
+                             'usage': raw.get('usage'), 'started_at': started_at,
+                             'ended_at': datetime.now(timezone.utc).isoformat(), 'wall_seconds': time.perf_counter()-started})
                 try:
                     schema.model_validate(raw["input"])
                     return {"response": raw["input"], "usage": raw.get("usage", {}), "stop_reason": raw.get("stop_reason"), "model": raw.get("model", self.cfg.model), "attempts": attempt + 1}
@@ -209,6 +280,7 @@ class LLMClient:
         self.ledger.record(
             {
                 "step": step,
+                "call_id": call_id,
                 "tag": tag,
                 "prompt": prompt_name,
                 "prompt_version": prompt.version,

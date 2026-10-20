@@ -1,18 +1,227 @@
 # Step-level evaluation
 
-Step-level evaluation of the pipeline, one folder per step. Nothing in `scholar_research/` is modified; this
-folder drives the engine as a library. Most of this README is about Step 6 (the state-of-the-art review,
-`step6_sota_review.md`); Steps 5 and 7 have deterministic contract checks so far.
+Step-level evaluation of the pipeline, one folder per step. Evaluators call the formal engine in
+`scholar_research/`. Steps 2–3 use LitSearch; Step 6 evaluates the state-of-the-art review
+(`step6_sota_review.md`); Steps 5 and 7 have deterministic contract checks so far.
 
 ```text
 evaluation/
 ├── eval_common.py, run_batch.py, topics.toml   shared: batch layout, topic batches (Steps 1–N)
+├── step02/            Step 2: LitSearch live retrieval and gold recall
+├── step03/            Step 3: screening/ranking and official BM25 candidates
 ├── step05_fulltext/   Step 5 contract check
 ├── step06_sota/       Step 6: contract / numeric checks, AutoSurvey, MetaSyn (+ metasyn.toml)
 ├── step07_gaps/       Step 7 contract check
+├── step08/            Step 8: independent rubric and IdeaBench P1/P2 evaluation
 ├── experiments/       local one-off scripts (Step 6 variants, Step 7 reruns) — gitignored, not shared
 └── runs/{batch}/      sessions/ + eval/ (not in git)
 ```
+
+## Step 02 / Step 03：獨立執行並自動評估
+
+以下使用 **Git Bash**，在 repo 根目錄執行。兩階段各有獨立入口；
+每題保存結果後自動重算評估，失敗與尚未完成題目保留在固定題目分母中。
+正式搜尋與篩選仍呼叫 `scholar_research/steps/`。
+
+```bash
+./.venv/Scripts/python.exe -m pip install -e ".[litsearch]"
+```
+
+API 金鑰及模型連線讀取 repo 根目錄的 `.env`／`research.toml`。
+搜尋支援 `S2_API_KEY`、`OPENALEX_API_KEY`；Ollama 使用
+`SCHOLAR_LLM_PROVIDER=ollama`、`SCHOLAR_LLM_BASE_URL`、`SCHOLAR_LLM_MODEL`。
+Step 2 Mode A 不使用生成模型；Mode B 和 Step 3 需要模型。
+
+### Step 02：搜尋 → 自動評估
+
+```bash
+./.venv/Scripts/python.exe -m evaluation.step02.run --mode A --limit 1 --out eval_runs/verification/step02
+```
+
+Mode A 使用原始 query；`--mode B` 會先執行正式 Step 1 建立查詢。
+預設題目集為 `evaluation/step02/subset_v1.json`；`--subset` 可指定另一份固定題目集。
+`--mapping` 可讀取已保存的 gold map，省略 gold ID API lookup。
+拿掉 `--limit 1` 可跑完整題目集，但需用新的 `--out`，避免變更已固定的實驗設定。
+
+輸出在 `--out`：
+
+- `subset_v1.json`、`gold_id_map.json`、`run_contract.json`：固定題目、對應與設定。
+- `sessions/`：各題正式 Step 2 的候選與 trace。
+- `results.jsonl`、`summary.json`：原執行紀錄與基本 set recall。
+- `evaluation/results.jsonl`、`evaluation/summary.json`、`evaluation/report.md`、
+  `evaluation/provenance.json`：自動完整 gold 評估；Step 2 重點看
+  `completion.step2`、direct-search recall、final set recall、snowball gain 和 provider 狀態。
+  共用的完整評估格式也會包含尚未執行的 Step 3 欄位，不能把它解讀為已測 Step 3。
+
+### Step 03：讀 Step 2 固定候選 → 評分 → 自動評估
+
+先完成上面的 Step 2，再執行：
+
+```bash
+./.venv/Scripts/python.exe -m evaluation.step03.run --source step02 --input eval_runs/verification/step02 --out eval_runs/verification/step03
+```
+
+從 Step 2 保存的題目、gold map 和結果建立輸入快照；不重新呼叫搜尋 API 或 gold lookup。
+每份非失敗候選都執行正式 Step 3，**不依 gold 是否命中決定要不要評分**。
+評分必須覆蓋所有候選且不得含缺失分數 fallback，才算成功。
+Step 2 目錄維持原樣，Step 3 分開保存：
+
+- `sessions/`：固定輸入快照與 Step 3 的完整分數、shortlist。
+- `rank.jsonl`、`rank_summary.json`：排名結果。
+- `evaluation/`：完整 gold 評估；查看 `completion.step3`、relevance／composite
+  Recall@k、MRR、nDCG@10、shortlist recall、gold retention。
+
+### 自動串接兩階段
+
+```bash
+./.venv/Scripts/python.exe -m evaluation.step02.run --mode A --limit 1 --out eval_runs/verification/step02 --then-step3 --step3-out eval_runs/verification/step03
+```
+
+順序是 Step 2 → Step 2 評估 → Step 3 → Step 3 評估。
+成功結束回傳 0；有題目執行失敗回傳非 0。部分 provider 失敗等診斷仍需閱讀報告，
+回傳 0 不代表 recall 或研究品質達標。
+相同設定可續跑；改題目、候選、模型或 prompt 時使用新的輸出目錄。
+Step 3 會核對輸入與完成輸出 hash。`--out` 不可與 `--input` 相同或互相嵌套。
+
+### Step 03：官方 BM25 固定候選 → 自動評估
+
+這條流程跳過 Step 2 API 搜尋。首次需要下載官方資料、建立 BM25 baseline，
+並從已有的 80 題 run 取得凍結的 topic／PICO。將 `--old-source` 換成自己的 run：
+
+```bash
+./.venv/Scripts/python.exe -m evaluation.step03.official_bm25 download
+./.venv/Scripts/python.exe -m evaluation.step03.official_bm25 baseline
+./.venv/Scripts/python.exe -m evaluation.step03.official_bm25 prepare --subset evaluation/step02/subset_v1.json --old-source eval_runs/litsearch/modeB_step3_retry6_v2
+./.venv/Scripts/python.exe -m evaluation.step03.run --source bm25 --out eval_runs/litsearch/official_bm25_step3_80
+```
+
+最後一條指令同時執行 Step 3 與 evaluation，不需再手動執行 `evaluate`。
+已有 prepared 候選時，直接執行最後一條；加 `--limit 1` 可先驗證第一題，
+此時報表分母只包含該一題。移除 limit 可續跑完整 prepared 題目集。
+BM25 scorer 沿用原實驗固定的 Ollama `qwen3.8` 設定。
+輸出為 `comparison_summary.json`、`comparison_per_question.jsonl` 和各題 sessions。
+
+完整 597 題入口也會自動評估；完成 download／baseline 後可直接使用，
+不需要 80 題的 prepare，但會對每題重新執行 Step 1：
+
+```bash
+./.venv/Scripts/python.exe -m evaluation.step03.full597 --date 2026-10-13
+```
+
+上述日期沿用原實驗，續跑不得改變。新實驗可另指定日期與新的 `--out`；
+此入口使用 Windows 檔案鎖。全部 597 題完成前，結果僅視為部分結果。
+
+### 檢查程式與階段交接
+
+```bash
+./.venv/Scripts/python.exe -m pytest tests/test_eval_stage_commands.py tests/test_eval_litsearch.py tests/test_litsearch_full_gold.py tests/test_official_bm25.py tests/test_litsearch_full597.py -q
+```
+
+測試使用假的 provider／model，不驗證遠端連線；上面的實際執行指令才會呼叫服務。
+舊的 `scholar_research.cli eval litsearch --mode A/B/A3/B3` 保留相容性；
+A3／B3 的歷史 gold-hit gating 與新獨立入口不同，新實驗使用本節的 `step02.run`／`step03.run`。
+
+詳細協定：[完整 gold 指標](step02/litsearch-full-gold-evaluation.md)、
+[官方 BM25](step03/litsearch-official-bm25-step3.md)、
+[597 題實驗](step03/litsearch-full597-run.md)。
+
+## Step 08：假說生成、IdeaBench 比較與獨立 rubric
+
+程式位於 `evaluation/step08/`：`runner.py`／`metrics.py`／`render.py` 執行 rubric；
+`ideabench/` 建立固定資料集、執行 P1／P2 比較；`prompts/` 保存 6 份評估指令。
+正式假說生成仍呼叫 `scholar_research/steps/s8_hypothesis.py`。
+
+### 環境設定
+
+在 repo 根目錄的本機 `research.toml` 分開設定 generator 與 judge。
+以下使用本機 Ollama 位址；遠端服務請換成自己的 base URL：
+
+```toml
+[llm]
+provider = "ollama"
+model = "qwen3.8"
+base_url = "http://127.0.0.1:11434"
+num_ctx = 32768
+max_tokens = 16384
+temperature = 0.0
+think = false
+request_timeout = 300
+
+[judge]
+provider = "ollama"
+model = "gemma4:31b"
+num_ctx = 32768
+max_tokens = 2048
+temperature = 0.0
+think = false
+request_timeout = 600
+```
+
+Judge 未指定 base URL 時繼承 generator；必須明確指定 judge model，預設禁止
+與 generator 相同名稱。這組模型／參數也是已保存的歷史實驗設定；不代表遠端服務目前已驗證可用。
+
+也可使用本機 `.env` 的 `SCHOLAR_LLM_PROVIDER`、`SCHOLAR_LLM_MODEL`、
+`SCHOLAR_LLM_BASE_URL`、`SCHOLAR_LLM_NUM_CTX`、`SCHOLAR_LLM_MAX_TOKENS`、
+`SCHOLAR_LLM_TIMEOUT`、`SCHOLAR_LLM_THINK`，以及對應的 `SCHOLAR_JUDGE_*`。
+環境變數覆寫 TOML，`.env` 不覆寫已存在的 shell 環境變數。
+使用 Anthropic 時則設定對應 provider 與 `ANTHROPIC_API_KEY`。
+`.env`、本機 `research.toml`、虛擬環境與評估輸出均不納入 Git；
+可分享的設定範本為 `research.toml.example`。
+
+### 評分已生成的 Step 8 session
+
+以下為 Git Bash 指令。先列出指標，不會呼叫模型：
+
+```bash
+./.venv/Scripts/python.exe -m scholar_research.cli eval step8-rubric --list-metrics
+```
+
+將下面兩個 placeholder 換成實際 session 上層目錄與資料夾名稱：
+
+```bash
+./.venv/Scripts/python.exe -m scholar_research.cli eval step8-rubric --root "SESSION_PARENT" --session "SESSION_FOLDER"
+```
+
+此入口只評估既有假說，不重新執行 Step 8。必要輸入為 `step0_session_config.json`
+和 `step8_hypothesis.json`；Step 3 shortlist、Step 6 SOTA、Step 7 gaps 提供評審背景。
+單一 session 缺少部分背景時會標記 unavailable；完整評估應提供這些檔案。
+每項指標獨立呼叫 judge，評 Problem／Method 各 5 項、每項 1–5 分，Python 計算平均。
+輸出同一 session 的 `step8_rubric_scores.json`、`step8_rubric_report.md`，
+分數不回灌 Steps 8／9，也不觸發 revise。
+
+### IdeaBench：生成完成後自動排名與評估
+
+若尚無固定資料集，先建立。這會查詢外部論文 API 並抽取 gold idea；
+預設使用 OpenAlex，API 設定沿用正式 providers。
+
+```bash
+./.venv/Scripts/python.exe -m scholar_research.cli eval ideabench-build --out eval_runs/ideabench/subset_v1 --m 20 --low-k 5 --source openalex
+```
+
+已有 `subset_v1` 時直接執行以下指令，先用一題確認真實模型可以完成流程：
+
+```bash
+./.venv/Scripts/python.exe -m scholar_research.cli eval ideabench-run --dataset eval_runs/ideabench/subset_v1 --out eval_runs/verification/step08 --limit 1 --rubric --max-tokens 16384 --num-ctx 32768
+```
+
+P1 從固定 references 直接生成 ideas；P2 使用相同 references 執行正式
+Steps 3／4／6／7／8，每個有效 gap 產生一份 spec。Step 2 不做線上搜尋，
+Step 5 採摘要背景。獨立 judge 進行匿名 coherence／ranking，另評 P2 rubric。
+這裡的 P1／P2 是兩種實驗流程，不是 Step 1／2。
+
+去掉 `--limit 1` 並換新的輸出目錄可跑完整資料集。
+續跑同一實驗時維持相同參數、資料、模型與 prompts；改設定需換新 `--out`。
+也可用 `--phase generate`、`--phase rank`、`--phase rubric` 分階段執行，
+只重跑 rubric 時仍需保留 `--rubric` 及原實驗的設定。
+
+輸出位於 `--out`：
+
+- `experiment_manifest.json`：固定資料、模型、prompts 與實驗設定。
+- `summary.json`、`report.md`：P1／P2 成對排名結果；Insight Score 為相對排名指標。
+- `rubric_summary.json`：P2 的 1–5 分絕對評分，與 Insight Score 分開解讀。
+- `costs.json`：記錄到的模型用量與時間。
+- `tasks/`：各題 ideas、pipeline 輸出、spec、排名和 rubric 原始結果。
+- `errors.json` 與各題錯誤檔：查看失敗／未完成項目，不以檔案存在就判定成功。
 
 **Working together.** Each `stepNN_<name>/` folder has one owner (Steps 5–7: Chih-Yun Lin). Code that only one
 step uses stays in that step's folder; something moves to the top level only when two steps really need it and
@@ -21,7 +230,7 @@ LLM-judge outputs — `autosurvey/`, `metasyn/` directly under `eval/{session}/`
 they are; batches made before 2026-10-18 also keep `contract_results.json` etc. there).
 Branch from `eval/main` as `eval/<step>-<topic>` and open PRs back into it.
 
-Scripts run from the repo root as `python evaluation/<step folder>/<script>.py`; each adds `evaluation/` to
+Steps 2–3 use the module commands above. Steps 5–7 run from the repo root as `python evaluation/<step folder>/<script>.py`; each adds `evaluation/` to
 `sys.path` itself where it needs `eval_common` / `run_batch`.
 
 Two families of measures:

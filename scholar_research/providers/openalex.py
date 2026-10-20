@@ -3,9 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 from .base import HttpClient
+from .query_text import compact_search, sanitize_search
 from .records import Hit
 
 BASE = "https://api.openalex.org"
+
+__all__ = ["OpenAlex", "compact_search", "reconstruct_abstract", "sanitize_search"]
 
 
 def reconstruct_abstract(inv: dict[str, list[int]] | None) -> str | None:
@@ -22,30 +25,45 @@ def reconstruct_abstract(inv: dict[str, list[int]] | None) -> str | None:
 class OpenAlex:
     name = "openalex"
 
-    def __init__(self, http: HttpClient, mailto: str | None = None):
+    def __init__(self, http: HttpClient, mailto: str | None = None, api_key: str | None = None):
         self.http = http
         self.mailto = mailto
-        http.limiter.intervals["api.openalex.org"] = 0.12
+        self.api_key = api_key
+        # With a key, 429 is daily budget or >100 rps. Keep 1 rps so search credits last.
+        http.limiter.intervals["api.openalex.org"] = 1.1
+
+    def _auth_params(self, extra: dict[str, Any]) -> dict[str, Any]:
+        params = dict(extra)
+        if self.mailto:
+            params["mailto"] = self.mailto
+        if self.api_key:
+            params["api_key"] = self.api_key
+        return params
 
     def search(self, query: str, query_id: str, year_from: int, year_to: int, limit: int = 30) -> list[Hit]:
-        params = {
+        # Mode A: same natural-language string (only strip OpenAlex wildcard chars). No keyword rewrite.
+        return self._search_once(sanitize_search(query), query_id, year_from, year_to, limit)
+
+    def _search_once(self, query: str, query_id: str, year_from: int, year_to: int, limit: int) -> list[Hit]:
+        if not query:
+            return []
+        params = self._auth_params({
             "search": query,
             "filter": f"from_publication_date:{year_from}-01-01,to_publication_date:{year_to}-12-31",
-            "per_page": limit,
+            "per_page": min(limit, 100),
             "sort": "relevance_score:desc",
-            "mailto": self.mailto,
-        }
+        })
         r = self.http.get(f"{BASE}/works", params=params)
         if not r.ok:
             raise RuntimeError(f"openalex search HTTP {r.status}")
         return [self._to_hit(w, query_id) for w in r.json().get("results") or [] if w.get("title")]
 
     def lookup_doi(self, doi: str) -> dict[str, Any] | None:
-        r = self.http.get(f"{BASE}/works/https://doi.org/{doi}", params={"mailto": self.mailto})
+        r = self.http.get(f"{BASE}/works/https://doi.org/{doi}", params=self._auth_params({}))
         return r.json() if r.ok else None
 
     def lookup_title(self, title: str) -> dict[str, Any] | None:
-        r = self.http.get(f"{BASE}/works", params={"filter": f"title.search:{title[:200]}", "per_page": 1, "mailto": self.mailto})
+        r = self.http.get(f"{BASE}/works", params=self._auth_params({"filter": f"title.search:{title[:200]}", "per_page": 1}))
         if not r.ok:
             return None
         res = r.json().get("results") or []

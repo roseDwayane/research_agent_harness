@@ -214,6 +214,15 @@ class S8HypothesisSpec(BaseModel):
     submission_strategy_en: str
 
 
+# ---------------------- Step 8 absolute rubric (judge) ----------------- #
+class S8RubricRating(BaseModel):
+    """One ResearchAgent-style metric rating. Arithmetic (means) is done in Python."""
+
+    review: str = Field(description="Brief evidence-grounded review of this single metric; cite spec fields")
+    feedback: str = Field(description="Concrete improvement advice for this metric, or 'none' if rating is 5")
+    rating: Score = Field(description="Integer 1–5 for this metric only; do not inflate to 4–5 without evidence")
+
+
 # ----------------------------- Step 9 ---------------------------------- #
 class S9Manuscript(BaseModel):
     intro_latex: str = Field(description="body of \\section{Introduction} (no preamble); every citation as \\cite{key}")

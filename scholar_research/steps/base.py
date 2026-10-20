@@ -43,6 +43,7 @@ class Context:
     def http(self) -> HttpClient:
         if self._http is None:
             self._http = HttpClient(self.session.cache, timeout=self.config.search.request_timeout, max_attempts=self.config.search.max_attempts)
+            self._http.log = lambda m: self.say(f"    {m}")
         return self._http
 
     def ts(self, step: int) -> str:
@@ -52,7 +53,10 @@ class Context:
         return self.ts(step)[:10]
 
     def say(self, msg: str) -> None:
-        self.ui_print(msg)
+        try:
+            self.ui_print(msg)
+        except UnicodeEncodeError:
+            self.ui_print(msg.encode("ascii", "replace").decode("ascii"))
 
     def close(self) -> None:
         if self._http is not None:

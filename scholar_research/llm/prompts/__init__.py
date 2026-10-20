@@ -19,6 +19,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from functools import lru_cache
+from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
@@ -48,6 +49,8 @@ class Prompt:
 @lru_cache(maxsize=None)
 def load_prompt(name: str) -> Prompt:
     path = _DIR / f"{name}.md"
+    if name == "s8_rubric" or name.startswith("ideabench_"):
+        path = files("evaluation.step08").joinpath("prompts", f"{name}.md")
     if not path.exists():
         raise FileNotFoundError(f"prompt not found: {path}")
     text = path.read_text(encoding="utf-8")
@@ -74,4 +77,7 @@ def load_prompt(name: str) -> Prompt:
 
 
 def list_prompts() -> list[str]:
-    return sorted(p.stem for p in _DIR.glob("*.md"))
+    names = {p.stem for p in _DIR.glob("*.md")}
+    evaluation_prompts = files("evaluation.step08").joinpath("prompts")
+    names.update(p.name[:-3] for p in evaluation_prompts.iterdir() if p.name.endswith(".md"))
+    return sorted(names)

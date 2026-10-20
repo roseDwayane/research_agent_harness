@@ -67,8 +67,14 @@ class HttpClient:
         self.timeout = timeout
         self.max_attempts = max_attempts
         self.limiter = RateLimiter()
-        self._client = httpx.Client(timeout=timeout, follow_redirects=True, headers={"User-Agent": user_agent})
+        # connect vs read: a hung TLS socket must not sit for hours
+        self._client = httpx.Client(
+            timeout=httpx.Timeout(timeout, connect=min(10.0, timeout), pool=10.0),
+            follow_redirects=True,
+            headers={"User-Agent": user_agent},
+        )
         self.failures: list[str] = []
+        self.log: Any = None
 
     def close(self) -> None:
         self._client.close()
@@ -87,14 +93,27 @@ class HttpClient:
             for attempt in range(self.max_attempts):
                 self.limiter.wait(host)
                 try:
-                    r = self._client.request(method, url, params=params, headers=headers, content=body)
+                    # Do not pass params={} — httpx then drops a query string already on `url`
+                    # (arXiv builds search_query into the URL so brackets stay literal).
+                    kw: dict[str, Any] = {"headers": headers, "content": body}
+                    if params:
+                        kw["params"] = params
+                    r = self._client.request(method, url, **kw)
                 except httpx.HTTPError as e:
                     last_exc = e
+                    if self.log:
+                        self.log(f"http {host} {type(e).__name__} attempt {attempt + 1}/{self.max_attempts}")
                     time.sleep(min(2 ** attempt, 20))
                     continue
                 if r.status_code in RETRY_STATUS and attempt < self.max_attempts - 1:
                     retry_after = r.headers.get("retry-after")
                     delay = float(retry_after) if retry_after and retry_after.isdigit() else min(2 ** attempt * 2, 30)
+                    if r.status_code == 429:
+                        delay = min(max(delay, 10.0), 30.0)
+                    else:
+                        delay = min(delay, 8.0)
+                    if self.log:
+                        self.log(f"http {r.status_code} {host} attempt {attempt + 1}/{self.max_attempts} sleep {delay:.0f}s")
                     time.sleep(delay)
                     continue
                 rec: dict[str, Any] = {
@@ -110,7 +129,7 @@ class HttpClient:
                 return rec
             raise ProviderError(f"{method} {url} failed after {self.max_attempts} attempts: {last_exc}")
 
-        rec = self.cache.get_or_fetch(cache_ns, descriptor, fetch)
+        rec = self.cache.get_or_fetch(cache_ns, descriptor, fetch, persist=lambda row: int(row.get("status") or 0) not in RETRY_STATUS)
         return Response(
             status=int(rec["status"]),
             text=rec.get("text"),
