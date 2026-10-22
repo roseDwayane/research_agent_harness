@@ -216,3 +216,8 @@ research.toml
 decisions.toml
 10_Research/
 .vscode/
+# LitSearch benchmark: HF download, API caches, slimmed corpus (rebuild with benchmarks/litsearch/build.py)
+benchmarks/
+benchmarks/litsearch/raw/
+benchmarks/litsearch/corpus.jsonl.gz
+eval_runs/
