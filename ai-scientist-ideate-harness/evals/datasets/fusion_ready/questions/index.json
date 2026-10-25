@@ -1,0 +1,27 @@
+{
+  "at": "2026-10-17T09:00:00+00:00",
+  "target_ready": 5,
+  "ready": 3,
+  "questions": [
+    {
+      "id": "Q_001",
+      "status": "ready",
+      "gap_rank": 1
+    },
+    {
+      "id": "Q_002",
+      "status": "ready",
+      "gap_rank": 2
+    },
+    {
+      "id": "Q_003",
+      "status": "ready",
+      "gap_rank": 3
+    },
+    {
+      "id": "Q_099",
+      "status": "abandoned",
+      "gap_rank": 9
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+ "unit": "A7.R",
+ "target": "question:Q_001.md",
+ "ops": [
+  {
+   "op": "replace",
+   "path": "evidence: X0002",
+   "value": "evidence: it matters"
+  }
+ ],
+ "expect": "Y05",
+ "level": "ERROR",
+ "why": "a So-what rung on opinion"
+}

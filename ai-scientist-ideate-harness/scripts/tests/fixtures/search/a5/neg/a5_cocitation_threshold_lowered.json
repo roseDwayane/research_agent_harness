@@ -1,0 +1,13 @@
+{
+ "unit": "A5",
+ "ops": [
+  {
+   "op": "set",
+   "path": "rounds.0.threshold_cocitation",
+   "value": 2
+  }
+ ],
+ "expect": "N03",
+ "level": "ERROR",
+ "why": "the co-citation threshold lowered by hand"
+}

@@ -1,0 +1,16 @@
+{
+ "unit": "A3",
+ "target": "scores",
+ "ops": [
+  {
+   "op": "set",
+   "path": "scores.0.violates",
+   "value": [
+    "EX9"
+   ]
+  }
+ ],
+ "expect": "C05",
+ "level": "ERROR",
+ "why": "an exclusion citing a criterion that does not exist"
+}

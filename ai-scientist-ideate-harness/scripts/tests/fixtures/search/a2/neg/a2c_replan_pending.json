@@ -1,0 +1,14 @@
+{
+ "unit": "A2.c",
+ "target": "relevance",
+ "ops": [
+  {
+   "op": "set",
+   "path": "rounds.0.verdicts.0.verdict",
+   "value": "replan"
+  }
+ ],
+ "expect": "R08",
+ "level": "ERROR",
+ "why": "a replan not yet carried out"
+}

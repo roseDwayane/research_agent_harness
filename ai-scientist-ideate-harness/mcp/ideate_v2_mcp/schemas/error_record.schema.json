@@ -1,0 +1,30 @@
+{
+  "$id": "ideate-v2-error/1",
+  "title": "Error record (ideate_v2.errors.ErrorRecord)",
+  "type": "object",
+  "required": ["schema", "error_id", "error_code", "error_category", "error_message", "severity", "retryable", "unit_id", "step_id", "run_id", "trace_id", "parent_error_id", "timestamp", "attempt", "context", "recovery_action", "instance"],
+  "properties": {
+    "schema": {"const": "ideate-v2-error/1"},
+    "error_id": {"type": "string", "pattern": "^E-[0-9]{8}T[0-9]{6}-[0-9a-f]{8}$"},
+    "error_code": {"type": "string", "description": "IDEATE.* v2 code, or <unit>:<check code> for a Unit's own check"},
+    "error_category": {"enum": ["input_validation", "input_contract", "stale", "external_service", "tool_invocation", "model_output", "schema", "state", "environment", "timeout", "cancelled", "interrupted", "check_failed", "budget", "policy", "human", "internal"]},
+    "error_message": {"type": "string", "maxLength": 1100},
+    "severity": {"enum": ["fatal", "error", "degraded", "warning"]},
+    "retryable": {"type": "boolean"},
+    "unit_id": {"type": ["string", "null"]},
+    "step_id": {"type": ["string", "null"]},
+    "run_id": {"type": "string", "pattern": "^r_[0-9]{8}_[0-9]{6}_[0-9a-f]{4}$"},
+    "trace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "span_id": {"type": ["string", "null"]},
+    "parent_error_id": {"type": ["string", "null"]},
+    "timestamp": {"type": "string"},
+    "attempt": {"type": "integer", "minimum": 1},
+    "instance": {"type": "string"},
+    "context": {"type": "object", "description": "redacted, size-bounded metadata; never payloads or secrets"},
+    "recovery_action": {"enum": ["none", "retry", "rerun-upstream", "degrade", "stop", "escalate", "fix-input", "revise"]},
+    "caveat": {"type": ["string", "null"]},
+    "must_disclose": {"type": "boolean"},
+    "origin": {"type": "object"},
+    "idempotency_key": {"type": ["string", "null"]}
+  }
+}

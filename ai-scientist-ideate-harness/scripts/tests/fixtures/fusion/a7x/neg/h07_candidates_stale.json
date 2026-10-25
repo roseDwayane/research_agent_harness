@@ -1,0 +1,14 @@
+{
+ "unit": "A7.X2",
+ "target": "coords",
+ "ops": [
+  {
+   "op": "set",
+   "path": "smithetal2020#A1.axes.construct",
+   "value": "construct:label-validity"
+  }
+ ],
+ "expect": "H07",
+ "level": "ERROR",
+ "why": "coordinates changed after the candidates were listed"
+}

@@ -1,0 +1,13 @@
+{
+ "unit": "A1.p",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "protocol.framework.name",
+   "value": "PCC"
+  }
+ ],
+ "expect": "P02",
+ "why": "PICO slots under a PCC label"
+}

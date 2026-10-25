@@ -1,0 +1,29 @@
+{
+  "$id": "ideate-v2-eval-case/1",
+  "title": "One evaluation case (evals/cases/*.json -> cases[])",
+  "type": "object",
+  "required": ["case_id", "unit_id", "description", "tags", "evaluation_method", "steps"],
+  "additionalProperties": false,
+  "properties": {
+    "case_id": {"type": "string", "pattern": "^EV-[A-Z]+-[0-9]{3}$"},
+    "unit_id": {"type": "string", "minLength": 1},
+    "description": {"type": "string", "minLength": 10},
+    "tags": {"type": "array", "minItems": 1, "items": {"enum": ["normal", "boundary", "invalid-input", "failure", "recovery", "regression", "architecture-risk", "security", "idempotency", "registry", "status", "gate", "loop", "observability", "error", "retry", "report", "trace", "rules", "contracts", "quality"]}},
+    "evaluation_method": {"enum": ["deterministic", "llm_rubric"]},
+    "dataset": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+    "rubric": {"type": "string"},
+    "input": {"type": "object"},
+    "steps": {"type": "array", "items": {"type": "object", "properties": {
+      "id": {"type": "string", "pattern": "^[A-Za-z0-9_]+$"},
+      "tool": {"type": "string", "pattern": "^ideate_[a-z_]+$"},
+      "function": {"type": "string"},
+      "args": {"type": "object"},
+      "expect_ok": {"type": "boolean"}}, "additionalProperties": false}},
+    "assertions": {"type": "array", "items": {"type": "object", "required": ["path", "op"], "properties": {
+      "step": {"type": "string"}, "path": {"type": "string"},
+      "op": {"enum": ["eq", "ne", "gte", "lte", "in", "contains", "len_eq", "len_gte", "matches", "any_eq", "none_eq", "all_eq", "exists", "not_exists"]},
+      "value": {}}, "additionalProperties": false}},
+    "expected_output": {"type": "object", "required": ["file", "path"], "properties": {"file": {"type": "string"}, "path": {"type": "string"}, "step": {"type": "string"}}},
+    "expected_error": {"type": "object", "required": ["error_code"], "properties": {"error_code": {"type": "string"}}}
+  }
+}

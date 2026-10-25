@@ -1,0 +1,343 @@
+{
+ "schema": "ai-scientist-argument/1",
+ "idea": "whitened_frozen_frontend_codebook",
+ "generation": 1,
+ "gap": "GAP_001",
+ "angle": "token geometry of the quantizer input: fixed versus learned front end at matched reconstruction",
+ "variant": "cause",
+ "study_sentence": "A seed-paired training experiment in which the front end of one EEG tokenizer is assigned to a learned convolution, a frozen filter bank, the frozen filter bank with a fixed whitening, or the frozen filter bank with rank-matched noise, with codebook perplexity over steps 10,000-16,000 as the outcome, on sleep EEG (ISRUC, Sleep-EDF) and repeated on awake EEG (EEGBCI).",
+ "question": "Why does a frozen filter-bank front end that reconstructs as well as a learned convolution give lower codebook perplexity in an EEG tokenizer: is the deficit set by the anisotropy of its tokens, which a fixed whitening removes without any training, or by the absence of a trained front end?",
+ "original_question": null,
+ "key_terms": [
+  "frozen filter-bank front end",
+  "learned convolution",
+  "whitening",
+  "codebook perplexity",
+  "anisotropy"
+ ],
+ "coverage": {
+  "question": "whole",
+  "tested_part": "",
+  "untested": [],
+  "angle": "whole",
+  "angle_parts": [
+   {
+    "part": "token geometry of the quantizer input",
+    "by": "C1"
+   },
+   {
+    "part": "fixed versus learned front end",
+    "by": "C2"
+   },
+   {
+    "part": "at matched reconstruction",
+    "by": "E2"
+   }
+  ],
+  "angle_dropped": ""
+ },
+ "external_check": {
+  "synthetic": false,
+  "real_data": "not applicable",
+  "datasets": [
+   "ISRUC-Sleep + Sleep-EDF telemetry (project h5, one preprocessing pipeline)"
+  ],
+  "second_dataset": "E6",
+  "inventory": [
+   "~/mne_data/MNE-eegbci-data: 109 subjects, awake, other amplifier, no ASR needed - used as the second dataset in E6",
+   "~/mne_data/sleep-edf-s3: 20 raw Sleep-EDF cassette recordings, 2 EEG channels - would serve as a third pool, not used to keep the budget",
+   "~/mne_data: the other sets (lee2019, bnci, gigadb, braininvaders, epflp300, erpcore, liu2020beta, nakanishi, wang) are task BCI data - usable, add nothing over EEGBCI for this contrast",
+   "~/openneuro_data: ds003478, ds003775, ds003810, ds004148, ds004784, ds006801, ds007176, ds007222, ds007406, ds007558 - resting and task sets cached for an earlier topic; usable, not needed",
+   "/Users/kyc/PythonProject/LaBraM/data: ISRUC + Sleep-EDF telemetry pretraining h5 (the primary pool; one preprocessing pipeline)",
+   "/Users/kyc/PythonProject/LaBraM/checkpoints: trained tokenizers of the project record - reference numbers only, not evidence for the claim"
+  ]
+ },
+ "claims": [
+  {
+   "id": "C1",
+   "hypothesis": "H1",
+   "primary": true,
+   "kind": "cause",
+   "mode": "test",
+   "statement": "Although the codebook perplexity deficit of a frozen filter-bank front end against a learned convolution is read as the price of not training it, a fixed whitening of its tokens closes at least half of that deficit, because the deficit is set by the anisotropy of the tokens the encoder receives.",
+   "reasons": [
+    "Flattening the variance spectrum of the frozen front end's tokens, with no gradient reaching the front end, raises codebook perplexity by at least half of the gap to the learned convolution.",
+    "The gain is not produced by noise that merely raises the tokens' rank."
+   ],
+   "evidence": [
+    {
+     "experiment": "E2",
+     "measure": "codebook perplexity = exp(entropy of the quantizer's EMA code-usage shares), read every 200 steps -> mean over steps 10,000-16,000 per run -> per seed G = P_W - P_F and D = P_L - P_F -> mean over 5 seeds; validation loss per run at step 16,000",
+     "would_show": "mean G >= 0.5 mean D with W's validation loss within 5% of F's",
+     "refuted_if": "mean G < 0.5 * mean D over the 5 seeds, or validation loss of W more than 5% above F",
+     "can_fail": "yes: the manipulation acts on the 256-dimensional token at the encoder's input, the measure is read at the codebook after 12 trained layers; the encoder may map raw and whitened tokens to the same z distribution, or whitening may lower usage"
+    },
+    {
+     "experiment": "E4",
+     "measure": "same perplexity path for arm N (frozen bank + Gaussian noise matched to W's token effective rank), 3 seeds: mean of P_W - P_N and of P_N - P_F",
+     "would_show": "P_W - P_N > 0 and P_N - P_F below 0.5 mean D",
+     "can_fail": "yes: noise is added to the same tokens the encoder reads, so it can raise usage as much as whitening does"
+    },
+    {
+     "experiment": "E6",
+     "measure": "the E2 path on EEGBCI (6 channels, 250 Hz), arms L, F, W, 2 seeds: mean G and mean D",
+     "would_show": "the same sign and a closure of at least half",
+     "refuted_if": "mean G < 0.5 * mean D on EEGBCI (2 seeds; reported as agreement or disagreement, no test)",
+     "can_fail": "yes: same reasons as E2, on data with another spectrum and no corpus blocking"
+    }
+   ],
+   "construction": {
+    "predictor_formula": "t'_i = s * C_shrunk^(-1/2) * (t_i - m), C_shrunk = 0.9*C + 0.1*(tr C / 256)*I, m and C from 20,000 training patches",
+    "outcome_formula": "P = exp(-sum_k p_k * ln p_k) averaged over steps 10,000-16,000, p_k = EMA usage share of code k; statistic G = P_W - P_F against 0.5*(P_L - P_F)",
+    "shared_terms": [],
+    "computable_without_experiment": "no: p_k is the share of patches whose normalised encoder output falls in code k's cell after 16,000 steps of joint training; existing data give neither the trained encoder under whitening nor its codebook (only the tokens' own effective rank follows from algebra, and it is not in the rule)",
+    "free_quantity": "how the jointly trained encoder and the EMA cosine codebook transmit the geometry of their input to code usage"
+   },
+   "warrant": "When an outcome follows a manipulation that changes only the second-order statistics of a fixed front end's output, with the front end untrained in both arms, then the outcome's difference between the arms is attributable to those statistics and not to learning in the front end.",
+   "warrant_basis": "zhaoetal2026",
+   "outcomes": {
+    "if_supported": "we learn that an analytic front end needs a fixed normalisation stage, not gradients, to feed a discrete codebook, and that usage differences between tokenizers may reflect input geometry",
+    "if_not": "we learn that flattening the token spectrum is not enough, so training pressure on the front end (or something else it supplies) is necessary and the gradient starvation of structured front ends is the problem to solve"
+   },
+   "negation": {
+    "text": "A fixed whitening of the frozen front end's tokens closes less than half of the deficit.",
+    "verdict": "contestable"
+   },
+   "expected_direction": {
+    "direction": "whitening raises codebook perplexity",
+    "basis": "contested: zhaoetal2026 predicts a gain from flattening what is quantized; the project record's reading and andersonetal2023 (a non-moving front end is an optimisation failure) predict that training is what is missing"
+   },
+   "estimate_because": null,
+   "smallest_effect_of_interest": null,
+   "falsifier": "E2: mean over 5 seeds of G = P_W - P_F is below 0.5 times the mean of D = P_L - P_F, or the validation loss of W is more than 5% above that of F; read only if E1 shows mean D > 0 at one-sided paired p < 0.05",
+   "rivals": [
+    {
+     "type": "other",
+     "how": "whitening amplifies low-variance token directions that carry noise, so codes spread over noise and perplexity rises without more usable codes",
+     "ruled_out_by": "E4",
+     "main": true
+    },
+    {
+     "type": "chance",
+     "how": "perplexity varies between runs and only 5 seeds are used",
+     "ruled_out_by": "E2 (paired one-sided test and 90% CI over seeds)"
+    },
+    {
+     "type": "bias",
+     "how": "the outcome window or probe schedule could be chosen after seeing the curves",
+     "ruled_out_by": "design: window 10,000-16,000 and the 200-step probe fixed before any run"
+    },
+    {
+     "type": "reverse-cause",
+     "how": "cannot arise",
+     "ruled_out_by": "design: the factor is assigned"
+    },
+    {
+     "type": "confounding",
+     "how": "whitening changes the token scale and so the effective step size of the encoder",
+     "ruled_out_by": "design: the scalar s matches the mean squared token norm of W to F"
+    },
+    {
+     "type": "leakage",
+     "how": "whitening statistics or the outcome computed on data the model was fit to",
+     "ruled_out_by": "design: m and C from training patches only; perplexity also reported on validation patches"
+    },
+    {
+     "type": "selection",
+     "how": "the bank configuration (48 poles, 8 oscillators) is the most anisotropic one in the project record, so the effect may not hold for other banks",
+     "ruled_out_by": "(not addressed)"
+    }
+   ],
+   "controls": {
+    "negative": "E4: frozen bank + Gaussian noise matched to W's token effective rank; expected under the claim: P_N - P_F below 0.5 mean D and P_W - P_N above 0; under the main rival P_N is about P_W",
+    "negative_can_move": "yes: the noise is added to the tokens the encoder reads, the same place whitening acts",
+    "positive": "E1: the learned convolution against the frozen bank, the contrast the project record reports",
+    "positive_expected": "D = P_L - P_F is a signed difference of means with no absolute value, rank or clip, so a known difference comes back unchanged: +109 in the project record (397 vs 288, one seed, 15 patches, GPU); the size at 4 patches and 16,000 steps is unknown, the sign is expected positive"
+   },
+   "baseline_predictor": null,
+   "comparator": null,
+   "scope": {
+    "internal": "for this tokenizer, bank configuration and training length, how much of the deficit a fixed whitening closes",
+    "external": "suggests that fixed front ends need a normalisation stage in VQ tokenizers; does not generalise to other bank configurations, longer training, downstream accuracy or other quantizers",
+    "limits": [
+     "one bank configuration (48 poles, 8 oscillators, 4 bins)",
+     "16,000 steps with 4 patches per window, not the 44,000 steps and 15 patches of the project record",
+     "the because clause is tested only against noise-driven rank inflation; other consequences of whitening are not separated"
+    ]
+   },
+   "power": {
+    "unit": "seeds (training runs)",
+    "n": 5,
+    "clusters": "1 data pool",
+    "min_detectable": "d >= 1.11 at 80% power, one-sided alpha = 0.05 (paired, normal approximation)",
+    "literature_effect": "(TBD)",
+    "verdict": "marginal"
+   },
+   "precision_target": null
+  },
+  {
+   "id": "C2",
+   "hypothesis": "H2",
+   "primary": false,
+   "kind": "fact",
+   "mode": "estimate",
+   "statement": "The deficit in codebook perplexity of the frozen filter-bank front end against the learned convolution, D = P_L - P_F, is estimated over 5 seeds at this scale with its 95% confidence interval.",
+   "reasons": [
+    "The project record has one seed per arm."
+   ],
+   "evidence": [
+    {
+     "experiment": "E1",
+     "measure": "P per run as in E2 -> per seed D = P_L - P_F -> mean and 95% CI over 5 seeds",
+     "would_show": "the size and spread of the deficit"
+    }
+   ],
+   "warrant": "When the same contrast is run from several seeds, then the mean difference and its interval describe the contrast better than one run.",
+   "warrant_basis": "(field convention)",
+   "outcomes": {
+    "if_supported": "a deficit with an interval that excludes zero makes the project's single-seed observation a replicated fact",
+    "if_not": "an interval that includes zero says the deficit is within seed noise at this scale"
+   },
+   "negation": null,
+   "estimate_because": "size-open: the direction is the project record's single-seed observation (397 vs 288); its size and seed-to-seed spread at this scale are unknown",
+   "falsifier": null,
+   "rivals": [],
+   "controls": null,
+   "baseline_predictor": null,
+   "comparator": null,
+   "scope": {
+    "internal": "this tokenizer and training length",
+    "external": "not beyond",
+    "limits": []
+   },
+   "power": null,
+   "precision_target": "95% CI of total width 1.75 SD of the per-seed difference with n = 5 (SD unknown); aim: an interval that separates the deficit from zero"
+  },
+  {
+   "id": "C3",
+   "hypothesis": "H3",
+   "primary": false,
+   "kind": "fact",
+   "mode": "estimate",
+   "statement": "For the four front-end arms the anisotropy of the tokens (effective rank, signal-subspace rank, mean pairwise cosine) and the effective rank of the quantizer input are reported beside each arm's codebook perplexity.",
+   "reasons": [
+    "The project record found that no offline token statistic predicted the deficit."
+   ],
+   "evidence": [
+    {
+     "experiment": "E3",
+     "measure": "token statistics on 8,800 held-out patches per arm; effective rank of z at step 16,000 per run -> mean per arm; listed with mean perplexity",
+     "would_show": "which statistic orders the arms as perplexity does"
+    }
+   ],
+   "warrant": "When several candidate statistics are listed beside an outcome over the same arms, then the ones that order the arms differently from the outcome are poor predictors of it.",
+   "warrant_basis": "(field convention)",
+   "outcomes": {
+    "if_supported": "a statistic that orders the arms as perplexity does becomes a candidate offline screen for front ends",
+    "if_not": "no offline statistic orders them, as the project record found, and the screen has to be a training run"
+   },
+   "negation": null,
+   "estimate_because": "descriptive: four arms give an ordering, not a test",
+   "falsifier": null,
+   "rivals": [],
+   "controls": null,
+   "baseline_predictor": null,
+   "comparator": null,
+   "scope": {
+    "internal": "four arms",
+    "external": "not beyond",
+    "limits": []
+   },
+   "power": null,
+   "precision_target": "per-arm means over 5 (L, F, W) or 3 (N) seeds with their ranges; no interval aimed for"
+  }
+ ],
+ "representation": {
+  "sample": {
+   "target": "EEG tokenizers trained on multi-corpus EEG",
+   "accessible": "one tokenizer architecture on 55 h of sleep EEG, 5 seeds, plus EEGBCI",
+   "concern": "small corpus and short training; the project's preprocessing left quality defects in the sleep pool"
+  },
+  "predictor": {
+   "phenomenon": "the second-order geometry of what the front end hands to the encoder",
+   "variable": "front-end arm (L, F, W, N)",
+   "precision": "assigned",
+   "accuracy": "assigned",
+   "validity": "construct: whitening changes only mean and covariance of the tokens (manipulation check E0)"
+  },
+  "outcome": {
+   "phenomenon": "how much of the codebook the tokenizer uses",
+   "variable": "codebook perplexity over steps 10,000-16,000",
+   "precision": "between-seed spread unknown; estimated in E1",
+   "accuracy": "exact for the EMA usage the quantizer keeps",
+   "validity": "content: the usage entropy the VQ literature reports (fangetal2025, takida2022); it is not a measure of downstream usefulness"
+  }
+ },
+ "experiments": [
+  {
+   "id": "E0",
+   "role": "instrument",
+   "claims": []
+  },
+  {
+   "id": "E1",
+   "role": "descriptive",
+   "claims": [
+    "C2"
+   ]
+  },
+  {
+   "id": "E2",
+   "role": "tests",
+   "claims": [
+    "C1"
+   ]
+  },
+  {
+   "id": "E3",
+   "role": "descriptive",
+   "claims": [
+    "C3"
+   ]
+  },
+  {
+   "id": "E4",
+   "role": "control",
+   "claims": [
+    "C1"
+   ]
+  },
+  {
+   "id": "E6",
+   "role": "tests",
+   "claims": [
+    "C1"
+   ]
+  }
+ ],
+ "tradeoffs": [
+  {
+   "gate": "none",
+   "ids": [],
+   "change": "a centring-only arm (mean removal without variance flattening) was not included",
+   "because": "budget: 3-5 more training runs",
+   "lost": "the split of the whitening effect into its mean-removal part and its variance-flattening part",
+   "still_answers_question": true,
+   "covers_gap": true,
+   "covers_angle": true,
+   "why": "the question asks about whitening as a whole against training"
+  },
+  {
+   "gate": "none",
+   "ids": [],
+   "change": "other bank configurations (12 poles, 26 oscillators) were not included",
+   "because": "budget: each configuration needs its own F and W runs",
+   "lost": "whether the result holds for less anisotropic banks",
+   "still_answers_question": true,
+   "covers_gap": true,
+   "covers_angle": true,
+   "why": "the question is asked of the configuration whose deficit is documented; the limit is stated in scope"
+  }
+ ],
+ "reader_doubts": []
+}

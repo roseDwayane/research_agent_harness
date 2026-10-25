@@ -1,0 +1,14 @@
+{
+ "unit": "A2.c",
+ "target": "relevance",
+ "ops": [
+  {
+   "op": "set",
+   "path": "rounds.0.raw_sha",
+   "value": "0000000000000000000000000000000000000000000000000000000000000000"
+  }
+ ],
+ "expect": "R07",
+ "level": "ERROR",
+ "why": "verdicts on an older collection"
+}

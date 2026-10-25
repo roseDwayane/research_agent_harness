@@ -1,0 +1,14 @@
+{
+ "unit": "A3",
+ "target": "scores",
+ "ops": [
+  {
+   "op": "set",
+   "path": "scores.0.needs_text",
+   "value": "maybe"
+  }
+ ],
+ "expect": "C18",
+ "level": "ERROR",
+ "why": "needs_text is a flag: true or absent"
+}

@@ -1,0 +1,12 @@
+{
+ "unit": "A1.q",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "delete",
+   "path": "queries.4"
+  }
+ ],
+ "expect": "Q11",
+ "why": "standard without the contrast variant"
+}

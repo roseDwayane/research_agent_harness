@@ -1,0 +1,503 @@
+{
+ "schema": "ai-scientist-argument/1",
+ "idea": "time_zero_stroke_onset_vs_ball_contact",
+ "generation": 3,
+ "gap": "GAP_003",
+ "angle": "event definition: stroke onset versus ball contact as time zero",
+ "variant": "none",
+ "study_sentence": "Within-recording re-analysis of 12 putting recordings of 4 novices in which the event that defines time zero (stroke onset or ball contact, both located in a synchronised video) is the factor and the hit-minus-miss contrast of last-second band power is the outcome.",
+ "question": "How does the hit-minus-miss contrast in pre-putt band power change when the same putts are time-locked to stroke onset instead of ball contact?",
+ "original_question": null,
+ "key_terms": [
+  "stroke onset",
+  "ball contact",
+  "time-locked",
+  "hit-minus-miss",
+  "band power"
+ ],
+ "coverage": {
+  "question": "part",
+  "tested_part": "whether the hit-minus-miss contrast in pre-putt band power changes when the same putts are time-locked to stroke onset instead of ball contact",
+  "untested": [
+   {
+    "part": "in which bands and regions, in which direction and by how much it changes",
+    "terms": [
+     "which bands",
+     "direction",
+     "by how much"
+    ],
+    "by": "C3"
+   }
+  ],
+  "angle": "whole",
+  "angle_parts": [
+   {
+    "part": "event definition as time zero",
+    "by": "C1"
+   },
+   {
+    "part": "stroke onset versus ball contact",
+    "by": "C1"
+   }
+  ]
+ },
+ "external_check": {
+  "synthetic": false,
+  "real_data": "not applicable",
+  "datasets": [
+   "PilotDataV2 (CGX Quick-32r dry headset, one laboratory)"
+  ],
+  "second_dataset": "none: no second recording of putting or aiming with two movement events is on this machine; the public Carey et al. (2024) set has ball contact only and is not on disk",
+  "inventory": [
+   "/Users/kyc/PythonProject/Golf: the study's own 12 keyed recordings with front video - the first data set",
+   "~/mne_data: cue-paced BCI and ERP sets - no self-paced aiming task with movement events",
+   "~/openneuro_data: ds003478, ds003775, ds003810, ds004148, ds004784, ds006801, ds007176, ds007222, ds007406, ds007558 - rest or cognitive tasks, no putting",
+   "~/.cache/huggingface/hub: model weights - not data",
+   "~/.cache/torch: model cache - not data",
+   "OSF D6483 (careyetal2024): contact-locked only (backswing onset could not be detected), not on disk"
+  ]
+ },
+ "claims": [
+  {
+   "id": "C1",
+   "hypothesis": "H1",
+   "primary": true,
+   "kind": "fact",
+   "mode": "test",
+   "statement": "Although movement-locked and contact-locked studies are compared as accounts of one preparation period, the hit-minus-miss contrast of band power in the last second differs between epochs time-locked to stroke onset and to ball contact for the same putts, which we conjecture is because the last second before ball contact contains the stroke.",
+   "reasons": [
+    "the last second before ball contact contains the stroke, the last second before stroke onset does not",
+    "studies using the two locks report different outcome bands [cookeetal2014], [careyetal2024]"
+   ],
+   "evidence": [
+    {
+     "experiment": "E2",
+     "measure": "T: per putt, band power (dB relative to the second -5 to -4 s before ball contact; putts with an onset-to-contact interval above 2 s dropped) in the last second of epochs time-locked to stroke onset and to ball contact, 12 ROI x band features -> hit-minus-miss median per recording -> median over recordings within participant -> median over participants, per lock -> difference between locks per feature -> maximum absolute difference over features",
+     "would_show": "the time-zero definition alone changes the outcome contrast",
+     "refuted_if": "T at or below the 95th percentile of its circular-shift null, or below 0.5 dB",
+     "can_fail": "yes: the factor changes which second is analysed; if outcome is unrelated to band power in the interval between the two events the two contrasts agree and T stays inside the null"
+    }
+   ],
+   "construction": {
+    "predictor_formula": "time-zero definition of each putt's last-second window: stroke onset or ball contact, both taken from the front video",
+    "outcome_formula": "T = max over 12 features of | hit-minus-miss contrast under the onset lock - hit-minus-miss contrast under the contact lock |, in dB",
+    "shared_terms": [],
+    "computable_without_experiment": "no: when the onset-to-contact interval is zero for every putt T is exactly 0, but for real intervals T depends on how band power between the two events differs by outcome, which no existing table gives",
+    "free_quantity": "the outcome dependence of band power during the interval between stroke onset and ball contact"
+   },
+   "warrant": "When the same trials give different contrasts under two event definitions, then results obtained under one definition cannot be compared with results under the other without correction",
+   "warrant_basis": "careyetal2024#E1",
+   "outcomes": {
+    "if_supported": "we learn that the lock alone can change the outcome contrast, so movement-locked and contact-locked studies describe different moments",
+    "if_not": "we learn that in these recordings the contrast does not depend on the lock, so the published disagreement needs another explanation (reference, baseline, sample)"
+   },
+   "negation": {
+    "text": "The hit-minus-miss contrast is the same under both locks",
+    "verdict": "contestable"
+   },
+   "expected_direction": {
+    "direction": "a non-zero difference between locks (unsigned)",
+    "basis": "contested: cookeetal2014 and careyetal2024 report different bands under different locks, but they also differ in reference, baseline and sample, and gallicchioring2018 treat one lock as sufficient"
+   },
+   "estimate_because": null,
+   "smallest_effect_of_interest": "0.5 dB (design choice; the nearest reported outcome difference is 0.484 dB in careyetal2024)",
+   "falsifier": "E2: T is at or below the 95th percentile of its circular-shift null, or below 0.5 dB",
+   "rivals": [
+    {
+     "type": "bias",
+     "how": "stroke-onset detection errs differently for hit and miss putts (hesitant strokes), so onset-locked windows of the two classes cover different phases",
+     "ruled_out_by": "E4",
+     "main": true
+    },
+    {
+     "type": "chance",
+     "how": "12 features and two noisy contrasts",
+     "ruled_out_by": "E2 circular-shift null on the maximum"
+    },
+    {
+     "type": "confounding",
+     "how": "the contact-locked window contains movement artifact that the onset-locked window lacks, so the contrast differs for a non-neural reason",
+     "ruled_out_by": "E9"
+    },
+    {
+     "type": "selection",
+     "how": "putts without a detectable onset are dropped, possibly more often in one outcome class",
+     "ruled_out_by": "E1 reports drops by outcome and E2 excludes recordings whose drop share differs by more than 10 percentage points between outcomes"
+    }
+   ],
+   "controls": {
+    "negative": "E5: the same statistic on the second from 2 to 1 s before each event, before the stroke under both locks and clear of the baseline second, with onsets from both detectors (E4); expected T inside its null",
+    "negative_can_move": "yes: the far window is cut from the same epochs by the same onset times, so outcome-dependent onset errors would shift it and move T",
+    "positive": "E6: +1 dB and +0.5 dB planted in frontal alpha (fixed in advance) of the onset-locked window of hit putts",
+    "positive_expected": "T takes an absolute value, so the planted 1 dB returns as |d0 + 1| - |d0|, which equals 1 dB only when the unplanted difference d0 of that feature is not negative; the feature is fixed in advance (frontal alpha) and d0 and its sign are reported; the control passes when T exceeds its null and 0.5 dB for the 1 dB plant, and the 0.5 dB plant shows whether an effect of the floor's size is detectable"
+   },
+   "baseline_predictor": null,
+   "comparator": null,
+   "scope": {
+    "internal": "in these 12 recordings the contrast does or does not depend on the lock",
+    "external": "shows whether the lock can matter in putting with a dry headset; does not explain the disagreement between published studies, whose data are not available here",
+    "limits": [
+     "T takes an absolute value because the claim is unsigned: it asserts that the contrasts differ, not in which direction",
+     "the because-clause is a conjecture: no experiment separates the stroke from other events in the interval",
+     "stroke onset is detected from 30 fps video and from the head accelerometer, not from a putter sensor",
+     "4 participants: a permutation statement about these recordings"
+    ]
+   },
+   "power": {
+    "unit": "subjects",
+    "n": 4,
+    "clusters": "12 recordings",
+    "min_detectable": "paired d >= 1.24 at 80% power, one-sided alpha = 0.05 (n = 4; worse in truth)",
+    "literature_effect": "(TBD)",
+    "verdict": "underpowered"
+   },
+   "precision_target": null
+  },
+  {
+   "id": "C2",
+   "hypothesis": "H2",
+   "primary": false,
+   "kind": "fact",
+   "mode": "test",
+   "statement": "Although outcome contrasts are attributed to preparation, the interval from stroke onset to ball contact separates hit from miss putts within a recording.",
+   "reasons": [
+    "stroke timing varies with distance and skill [diasetal2014], [wuetal2020]"
+   ],
+   "evidence": [
+    {
+     "experiment": "E7",
+     "measure": "per recording AUC of the onset-to-contact interval for hit vs miss, minus 0.5 -> median over recordings within participant -> median over participants; two-sided",
+     "would_show": "stroke duration carries outcome",
+     "refuted_if": "the hierarchical |AUC - 0.5| inside the circular-shift null",
+     "can_fail": "yes: duration may be unrelated to outcome"
+    }
+   ],
+   "construction": null,
+   "warrant": "When a behavioural interval differs by outcome, windows locked to its two ends differ systematically by outcome",
+   "warrant_basis": "(TBD)",
+   "outcomes": {
+    "if_supported": "stroke duration is itself an outcome correlate and a reason for lock dependence",
+    "if_not": "stroke duration does not differ by outcome here, so lock dependence would have to come from the content of the interval"
+   },
+   "negation": {
+    "text": "Stroke duration is the same for hit and miss putts",
+    "verdict": "contestable"
+   },
+   "expected_direction": {
+    "direction": "a difference (unsigned)",
+    "basis": "unknown: no source in the shortlist reports stroke duration by putt outcome"
+   },
+   "estimate_because": null,
+   "smallest_effect_of_interest": null,
+   "falsifier": "E7: hierarchical |AUC - 0.5| inside the circular-shift null",
+   "rivals": [
+    {
+     "type": "bias",
+     "how": "onset detection error by outcome",
+     "ruled_out_by": "E4"
+    }
+   ],
+   "controls": null,
+   "baseline_predictor": null,
+   "comparator": null,
+   "scope": {
+    "internal": "these recordings",
+    "external": "none",
+    "limits": [
+     "absolute value because the claim is unsigned"
+    ]
+   },
+   "power": {
+    "unit": "subjects",
+    "n": 4,
+    "clusters": "12 recordings",
+    "min_detectable": "paired d >= 1.24 at 80% power, one-sided alpha = 0.05 (n = 4; worse in truth)",
+    "literature_effect": "(TBD)",
+    "verdict": "underpowered"
+   },
+   "precision_target": null
+  },
+  {
+   "id": "C3",
+   "hypothesis": "H3",
+   "primary": false,
+   "kind": "fact",
+   "mode": "estimate",
+   "statement": "The hit-minus-miss contrast of 36 window band power features is estimated under three locks (experimenter's P key, stroke onset, ball contact), each with a bootstrap interval over recordings.",
+   "reasons": [
+    "a map lets readers see where the locks agree"
+   ],
+   "evidence": [
+    {
+     "experiment": "E8",
+     "measure": "contrast per feature and lock, bootstrap 95% interval over recordings",
+     "would_show": "which features depend on the lock"
+    }
+   ],
+   "construction": null,
+   "warrant": "A contrast with its interval describes the data",
+   "warrant_basis": "(field convention)",
+   "outcomes": {
+    "if_supported": "a table of contrasts under three locks",
+    "if_not": "intervals too wide to compare locks"
+   },
+   "negation": null,
+   "expected_direction": null,
+   "estimate_because": "descriptive: a map of contrasts; no ordering asserted",
+   "smallest_effect_of_interest": null,
+   "falsifier": null,
+   "rivals": [],
+   "controls": null,
+   "baseline_predictor": null,
+   "comparator": null,
+   "scope": {
+    "internal": "these recordings",
+    "external": "none",
+    "limits": []
+   },
+   "power": null,
+   "precision_target": "bootstrap 95% interval over 12 recordings; aim: half-width at most 0.5 dB; the width obtained is reported"
+  },
+  {
+   "id": "C4",
+   "hypothesis": "H4",
+   "primary": false,
+   "kind": "fact",
+   "mode": "estimate",
+   "statement": "The distributions of the experimenter's P key minus ball contact and of stroke onset minus ball contact are estimated per recording and by outcome.",
+   "reasons": [
+    "the size of the timing differences bounds how far the locks can differ"
+   ],
+   "evidence": [
+    {
+     "experiment": "E1",
+     "measure": "median and inter-quartile range of each interval per recording and outcome; agreement between video and accelerometer onsets",
+     "would_show": "how far apart the events are and how reliably onset is found"
+    }
+   ],
+   "construction": null,
+   "warrant": "Intervals between events are measured from their time stamps",
+   "warrant_basis": "williamsetal2021#E1",
+   "outcomes": {
+    "if_supported": "timing distributions",
+    "if_not": "onset cannot be located reliably, which limits C1"
+   },
+   "negation": null,
+   "expected_direction": null,
+   "estimate_because": "descriptive: the quantity has no direction to test",
+   "smallest_effect_of_interest": null,
+   "falsifier": null,
+   "rivals": [],
+   "controls": null,
+   "baseline_predictor": null,
+   "comparator": null,
+   "scope": {
+    "internal": "these recordings",
+    "external": "none",
+    "limits": []
+   },
+   "power": null,
+   "precision_target": "video resolution 33 ms per frame; aim: detector agreement within 100 ms for 80% of putts; the share obtained is reported"
+  }
+ ],
+ "representation": {
+  "sample": {
+   "target": "putting studies that lock EEG to a movement event",
+   "accessible": "12 recordings of 4 novices, dry headset, carpet target",
+   "concern": "novices; few participants"
+  },
+  "predictor": {
+   "phenomenon": "the moment a study calls time zero",
+   "variable": "stroke onset and ball contact from 30 fps video; onset also from accelerometer jerk",
+   "precision": "33 ms",
+   "accuracy": "contact audited against the accelerometer; onset has no physical reference",
+   "validity": "criterion: the events correspond to the infrared (backswing) and piezo (impact) events of gallicchioring2018"
+  },
+  "outcome": {
+   "phenomenon": "outcome-related preparation",
+   "variable": "hit-minus-miss contrast of last-second band power",
+   "precision": "bootstrap interval",
+   "accuracy": "depends on label pairing",
+   "validity": "face: the contrast the cited studies report"
+  }
+ },
+ "experiments": [
+  {
+   "id": "E0",
+   "role": "instrument",
+   "claims": []
+  },
+  {
+   "id": "E1",
+   "role": "descriptive",
+   "claims": [
+    "C4"
+   ]
+  },
+  {
+   "id": "E2",
+   "role": "tests",
+   "claims": [
+    "C1"
+   ]
+  },
+  {
+   "id": "E3",
+   "role": "control",
+   "claims": [
+    "C1"
+   ]
+  },
+  {
+   "id": "E4",
+   "role": "control",
+   "claims": [
+    "C1",
+    "C2"
+   ]
+  },
+  {
+   "id": "E5",
+   "role": "control",
+   "claims": [
+    "C1"
+   ]
+  },
+  {
+   "id": "E6",
+   "role": "control",
+   "claims": [
+    "C1"
+   ]
+  },
+  {
+   "id": "E7",
+   "role": "tests",
+   "claims": [
+    "C2"
+   ]
+  },
+  {
+   "id": "E8",
+   "role": "descriptive",
+   "claims": [
+    "C3"
+   ]
+  },
+  {
+   "id": "E9",
+   "role": "control",
+   "claims": [
+    "C1"
+   ]
+  }
+ ],
+ "tradeoffs": [
+  {
+   "gate": "none",
+   "ids": [],
+   "change": "no claim that the lock explains the disagreement between the two published studies",
+   "because": "their data are not on this machine",
+   "lost": "a direct resolution of that disagreement",
+   "still_answers_question": true,
+   "covers_gap": true,
+   "covers_angle": true,
+   "why": "the gap is that the same putts were never analysed under both locks, which E2 does"
+  },
+  {
+   "gate": "restatement",
+   "ids": [
+    "E2",
+    "E5",
+    "E3",
+    "E6"
+   ],
+   "change": "baseline moved to -5 to -4 s before ball contact; putts with an interval above 2 s dropped; recordings with unequal onset loss excluded; far-window control moved to 2 to 1 s before each event; E3 given a classification rule; E6 plants 0.5 and 1 dB in a pre-fixed feature; E9 added",
+   "because": "restatement-1 doubts 1, 4a, 5, 7, 8",
+   "lost": "putts with very long strokes and recordings with unequal onset loss no longer enter the primary test",
+   "still_answers_question": true,
+   "covers_gap": true,
+   "covers_angle": true,
+   "why": "the same comparison with windows that cannot overlap the baseline"
+  }
+ ],
+ "reader_doubts": [
+  {
+   "source": "restatement-1",
+   "doubt": "1. A difference between locks may be movement artifact in the contact-locked window, not brain activity",
+   "level": "design",
+   "response": "fixed",
+   "how": "E9 added: E2 repeated after regressing each feature on head acceleration of the same window; the confounding rival of C1 now points to E9"
+  },
+  {
+   "source": "restatement-1",
+   "doubt": "2. Four participants: failing to exceed the null says little and a pass concerns these recordings only",
+   "level": "design",
+   "response": "not-fixed",
+   "how": "data: only 4 participants with keyed recordings exist on this machine"
+  },
+  {
+   "source": "restatement-1",
+   "doubt": "3. The question asks how the contrast changes but the only rule is an unsigned maximum; which band, region and direction are only described",
+   "level": "wording",
+   "response": "fixed",
+   "how": "coverage declared as part: the test covers whether the contrast changes; which bands and regions and in which direction is estimated by C3; Title and Short Hypothesis say so"
+  },
+  {
+   "source": "restatement-1",
+   "doubt": "4a. Putts without a detectable onset may be lost unequally by outcome and there is no rule",
+   "level": "design",
+   "response": "fixed",
+   "how": "E2 now excludes a recording when the share of dropped putts differs by more than 10 percentage points between hit and miss, and E1 reports it"
+  },
+  {
+   "source": "restatement-1",
+   "doubt": "4b. Event timing has no physical reference; two detectors may share an error",
+   "level": "design",
+   "response": "not-fixed",
+   "how": "data: the recordings hold no putter or impact sensor; the trigger channel is constant in every file"
+  },
+  {
+   "source": "restatement-1",
+   "doubt": "5. The far-window control coincides with the baseline second, and the onset-locked window can overlap the baseline",
+   "level": "design",
+   "response": "fixed",
+   "how": "E2 and E5 changed: the baseline is now the second -5 to -4 s before ball contact, the control window is 2 to 1 s before each event, and putts with an onset-to-contact interval above 2 s are dropped and counted"
+  },
+  {
+   "source": "restatement-1",
+   "doubt": "6. If stroke duration differs by outcome the reading of E2 is complicated and no rule combines E7 and E2",
+   "level": "wording",
+   "response": "fixed",
+   "how": "E7 now states how the two are read together with E3"
+  },
+  {
+   "source": "restatement-1",
+   "doubt": "7. E3 has no pass/fail rule so the conjectured reason stays untested",
+   "level": "design",
+   "response": "fixed",
+   "how": "E3 now carries a classification rule (pseudo-onset T at least 0.8 of T: position of the window; below: putt-specific timing)"
+  },
+  {
+   "source": "restatement-1",
+   "doubt": "8. The 0.5 dB threshold comes from a different quantity and the positive control plants 1 dB in a feature chosen after looking",
+   "level": "design",
+   "response": "fixed",
+   "how": "E6 now plants both 1 dB and 0.5 dB in a feature fixed in advance (frontal alpha) and states the sign condition"
+  },
+  {
+   "source": "restatement-1",
+   "doubt": "9. One unpublished data set, no second data set",
+   "level": "design",
+   "response": "not-fixed",
+   "how": "data: no second recording with both movement events is on this machine; the Carey et al. set has ball contact only"
+  },
+  {
+   "source": "restatement-1",
+   "doubt": "10. C2, C3 and C4 are not stated in words",
+   "level": "wording",
+   "response": "fixed",
+   "how": "each experiment entry now states the claim it serves"
+  }
+ ]
+}

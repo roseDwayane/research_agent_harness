@@ -1,0 +1,34 @@
+<evaluation>
+  <qa_pair>
+    <question>Using the candidate file 10_Research/20260605_predictive-preventive-bci-positional/step3_tier1_candidates.md, how many papers are listed in total across all groups?</question>
+    <answer>39</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>In step3_tier1_candidates.md, how many of the candidate papers have NO DOI listed (the doi cell is "(none)")?</question>
+    <answer>6</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>In step3_tier1_candidates.md, what is the DOI of the single Group A (Preventive Level-1) paper with citation_key BergeyEtAl2015?</question>
+    <answer>10.1212/wnl.0000000000001280</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Which resolver source successfully provides an open-access PDF for the DOI 10.1371/journal.pone.0345470 (citation_key AmiriEtAl2026)? Answer with the source label the server reports.</question>
+    <answer>unpaywall+pmc</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>For the DOI 10.1109/tnsre.2025.3623129 (citation_key GuanEtAl2025), does the server find a downloadable open-access PDF? Answer yes or no.</question>
+    <answer>no</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>In step3_tier1_candidates.md, which group label contains exactly 22 candidate papers? Answer with the group letter.</question>
+    <answer>C</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>When paper_pdf_download is run twice with overwrite=false, what status does the second run report for a paper whose PDF was already downloaded in the first run?</question>
+    <answer>skipped</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What filename does the server write for the paper with citation_key CostaEtAl2024 when downloading PDFs?</question>
+    <answer>CostaEtAl2024.pdf</answer>
+  </qa_pair>
+</evaluation>

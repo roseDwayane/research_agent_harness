@@ -1,0 +1,17 @@
+{
+ "unit": "A6.c",
+ "edits": [
+  {
+   "target": "processed",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "kim2022"
+    }
+   ]
+  }
+ ],
+ "expect": "F13",
+ "level": "ERROR",
+ "why": "a PDF that never went through `figures`"
+}

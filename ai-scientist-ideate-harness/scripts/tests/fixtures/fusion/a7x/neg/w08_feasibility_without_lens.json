@@ -1,0 +1,16 @@
+{
+ "unit": "B3",
+ "target": "gaps",
+ "ops": [
+  {
+   "op": "set",
+   "path": "gaps.0.feasibility_basis",
+   "value": [
+    "runs on a laptop"
+   ]
+  }
+ ],
+ "expect": "W08",
+ "level": "ERROR",
+ "why": "feasibility not read off the lens"
+}

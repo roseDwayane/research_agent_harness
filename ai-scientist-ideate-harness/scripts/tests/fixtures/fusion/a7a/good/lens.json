@@ -1,0 +1,25 @@
+{
+ "persona": {
+  "expert_domain": "EEG signal processing",
+  "target_venues": [
+   "Journal of Neural Engineering"
+  ],
+  "compute": "CPU / Apple MPS, minutes to hours",
+  "scope": "scalp EEG, automated cleaning, decoding"
+ },
+ "on_coords": {
+  "method-family:artifact-rejection": {
+   "affordable": "yes",
+   "why": "thresholding, CPU seconds"
+  },
+  "method-family:ica": {
+   "affordable": "yes",
+   "why": "MNE ICA on CPU, minutes per subject"
+  },
+  "dataset:bnci-2a": {
+   "on_disk": "yes",
+   "where": "mne_data/BNCI",
+   "why": "cached by MOABB"
+  }
+ }
+}

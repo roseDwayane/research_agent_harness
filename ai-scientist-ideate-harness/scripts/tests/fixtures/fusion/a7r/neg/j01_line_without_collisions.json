@@ -1,0 +1,14 @@
+{
+ "unit": "A7.R",
+ "target": "line:D_draft_RejectionVsICA.md",
+ "ops": [
+  {
+   "op": "replace",
+   "path": "collisions: [X0001]\n",
+   "value": ""
+  }
+ ],
+ "expect": "J01",
+ "level": "ERROR",
+ "why": "a Line that names no collision"
+}

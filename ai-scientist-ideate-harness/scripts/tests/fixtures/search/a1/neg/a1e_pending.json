@@ -1,0 +1,13 @@
+{
+ "unit": "A1.e",
+ "target": "evaluation",
+ "ops": [
+  {
+   "op": "set",
+   "path": "final.status",
+   "value": "pending-revision"
+  }
+ ],
+ "expect": "E04",
+ "why": "revision required but not done"
+}

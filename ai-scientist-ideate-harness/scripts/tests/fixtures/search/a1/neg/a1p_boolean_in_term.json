@@ -1,0 +1,13 @@
+{
+ "unit": "A1.p",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "protocol.axes.1.terms.0",
+   "value": "artifact OR artefact"
+  }
+ ],
+ "expect": "P05",
+ "why": "operators typed into a term"
+}

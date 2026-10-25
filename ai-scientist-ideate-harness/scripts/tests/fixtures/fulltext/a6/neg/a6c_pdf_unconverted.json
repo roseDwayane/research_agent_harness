@@ -1,0 +1,31 @@
+{
+ "unit": "A6.c",
+ "edits": [
+  {
+   "target": "fs",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "step5_full_text/lee2023.md"
+    },
+    {
+     "op": "delete",
+     "path": "step5_full_text/lee2023_meta.json"
+    }
+   ]
+  },
+  {
+   "target": "shortlist",
+   "ops": [
+    {
+     "op": "set",
+     "path": "papers.5.access_level",
+     "value": "pdf-only"
+    }
+   ]
+  }
+ ],
+ "expect": "F16",
+ "level": "WARN",
+ "why": "a PDF nothing could convert is said"
+}

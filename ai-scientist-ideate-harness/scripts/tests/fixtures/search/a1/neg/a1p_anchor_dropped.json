@@ -1,0 +1,13 @@
+{
+ "unit": "A1.p",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "protocol.framework.slots.1.operational_role",
+   "value": "eligibility-only"
+  }
+ ],
+ "expect": "P04",
+ "why": "the anchor left out of the search"
+}

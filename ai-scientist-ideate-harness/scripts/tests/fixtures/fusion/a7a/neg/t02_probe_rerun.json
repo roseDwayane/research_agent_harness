@@ -1,0 +1,14 @@
+{
+ "unit": "B1",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "local_environment.probe.date",
+   "value": "2099-01-01T00:00:00+00:00"
+  }
+ ],
+ "expect": "T02",
+ "level": "ERROR",
+ "why": "the machine was probed again after the lens was set"
+}

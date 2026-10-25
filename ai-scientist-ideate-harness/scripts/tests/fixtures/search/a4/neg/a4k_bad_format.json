@@ -1,0 +1,14 @@
+{
+ "unit": "A4.k",
+ "target": "log",
+ "ops": [
+  {
+   "op": "log_set_first",
+   "field": "key",
+   "value": "Jas_2017"
+  }
+ ],
+ "expect": "K04",
+ "why": "a key that is not lower-case author+year(+suffix)",
+ "level": "ERROR"
+}

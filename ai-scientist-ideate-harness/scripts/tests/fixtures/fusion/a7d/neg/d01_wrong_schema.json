@@ -1,0 +1,14 @@
+{
+ "unit": "A7.D",
+ "target": "record:smithetal2020",
+ "ops": [
+  {
+   "op": "set",
+   "path": "schema",
+   "value": "ai-scientist-decon/0"
+  }
+ ],
+ "expect": "D01",
+ "level": "ERROR",
+ "why": "a record in another schema"
+}

@@ -1,0 +1,4 @@
+-r requirements.txt
+pytest>=8           # tested with 9.1.1
+ruff                # lint of the v2 layer (scripts/run_checks.py)
+pyyaml              # optional: front matter of older topic files

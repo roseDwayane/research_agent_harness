@@ -1,0 +1,14 @@
+{
+ "unit": "A7.R",
+ "target": "body:B_draft_fx_descriptive.md",
+ "ops": [
+  {
+   "op": "replace",
+   "path": "E_draft_Cleaning (X0004).",
+   "value": "smithetal2020#L1."
+  }
+ ],
+ "expect": "J07",
+ "level": "ERROR",
+ "why": "how methods evolved, with no evolution behind it"
+}

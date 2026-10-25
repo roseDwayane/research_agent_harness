@@ -1,0 +1,54 @@
+{
+  "topic": "EEG artefact handling",
+  "topic_file": "eeg_topic.md",
+  "depth": "standard",
+  "timestamp": "2026-10-17T09:00:00+00:00",
+  "protocol": {
+    "review_type": "scoping",
+    "framework": {
+      "name": "PCC"
+    },
+    "axes": [
+      {
+        "id": "C1",
+        "terms": [
+          "eeg"
+        ]
+      }
+    ],
+    "timeframe": "2013-2026",
+    "languages": [
+      "en"
+    ]
+  },
+  "queries": [
+    {
+      "id": "Q1",
+      "strategy": "primary",
+      "flat_query": "eeg artefact rejection",
+      "status": "active"
+    }
+  ],
+  "anchor_terms": [
+    "eeg"
+  ],
+  "sources": [
+    "openalex",
+    "pubmed"
+  ],
+  "known_items": [],
+  "target_venues": [
+    "NeuroImage",
+    "J Neural Eng"
+  ],
+  "expert_domain": "EEG signal processing",
+  "local_environment": {
+    "artefacts": [],
+    "cached_data": [],
+    "packages_present": [
+      "mne"
+    ],
+    "packages_missing": []
+  },
+  "max_num_generations": 3
+}

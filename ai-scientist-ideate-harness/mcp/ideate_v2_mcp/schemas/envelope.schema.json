@@ -1,0 +1,27 @@
+{
+  "$id": "ideate-v2-envelope/1",
+  "title": "Response envelope of every ideate_v2 tool",
+  "description": "ok=true carries 'data' (the tool's output schema in tools.json); ok=false carries 'error' and the MCP result has isError=true. Schema violations of the JSON types themselves are rejected by the MCP SDK before the handler runs (isError=true, text message).",
+  "type": "object",
+  "required": ["ok", "tool", "trace_id", "duration_ms"],
+  "properties": {
+    "ok": {"type": "boolean"},
+    "tool": {"type": "string"},
+    "trace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "duration_ms": {"type": "number", "minimum": 0},
+    "data": {"type": "object"},
+    "error": {
+      "type": "object",
+      "required": ["error_code", "error_category", "error_message", "severity", "retryable", "recovery_action"],
+      "properties": {
+        "error_code": {"type": "string"},
+        "error_category": {"type": "string"},
+        "error_message": {"type": "string"},
+        "severity": {"enum": ["fatal", "error", "degraded", "warning"]},
+        "retryable": {"type": "boolean"},
+        "recovery_action": {"enum": ["none", "retry", "rerun-upstream", "degrade", "stop", "escalate", "fix-input", "revise"]},
+        "context": {"type": "object"}
+      }
+    }
+  }
+}

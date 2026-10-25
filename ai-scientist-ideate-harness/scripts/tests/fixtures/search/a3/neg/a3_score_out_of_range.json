@@ -1,0 +1,14 @@
+{
+ "unit": "A3",
+ "target": "scores",
+ "ops": [
+  {
+   "op": "set",
+   "path": "scores.0.rel",
+   "value": 7
+  }
+ ],
+ "expect": "C02",
+ "level": "ERROR",
+ "why": "relevance 7"
+}

@@ -1,0 +1,67 @@
+{
+ "unit": "A7.D",
+ "target": "answer:parketal2019",
+ "ops": [
+  {
+   "op": "set",
+   "path": "units",
+   "value": [
+    {
+     "id": "parketal2019#C1",
+     "kind": "claim",
+     "text": "t",
+     "strength": "suggests",
+     "scope": {
+      "population": "9 subjects",
+      "data": "(TBD)",
+      "conditions": "(TBD)"
+     },
+     "where": "abstract",
+     "quote": "Results suggest that ICA-based cleaning"
+    },
+    {
+     "id": "parketal2019#C2",
+     "kind": "claim",
+     "text": "t",
+     "strength": "suggests",
+     "scope": {
+      "population": "9 subjects",
+      "data": "(TBD)",
+      "conditions": "(TBD)"
+     },
+     "where": "abstract",
+     "quote": "may reduce class-correlated artifacts in"
+    },
+    {
+     "id": "parketal2019#C3",
+     "kind": "claim",
+     "text": "t",
+     "strength": "suggests",
+     "scope": {
+      "population": "9 subjects",
+      "data": "(TBD)",
+      "conditions": "(TBD)"
+     },
+     "where": "abstract",
+     "quote": "in a public dataset of 9 subjects"
+    },
+    {
+     "id": "parketal2019#C4",
+     "kind": "claim",
+     "text": "t",
+     "strength": "suggests",
+     "scope": {
+      "population": "9 subjects",
+      "data": "(TBD)",
+      "conditions": "(TBD)"
+     },
+     "where": "abstract",
+     "quote": "We report decoding accuracy before and after cleaning"
+    }
+   ]
+  }
+ ],
+ "expect": "D10",
+ "level": "WARN",
+ "why": "four claims read off a two-sentence abstract"
+}

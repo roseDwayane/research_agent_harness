@@ -1,0 +1,13 @@
+{
+ "unit": "A5",
+ "ops": [
+  {
+   "op": "set",
+   "path": "papers.0.round",
+   "value": 3
+  }
+ ],
+ "expect": "N03",
+ "why": "a round never recorded",
+ "level": "ERROR"
+}

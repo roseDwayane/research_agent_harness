@@ -1,0 +1,108 @@
+{
+ "citation_key": "smithetal2020",
+ "basis": "full-text",
+ "model": "claude-opus-5-5",
+ "eligibility": {
+  "verdict": "eligible",
+  "reason": "scalp EEG, automated rejection, decoding before/after (IN1, IN3)"
+ },
+ "summary": {
+  "problem": "does automated artifact rejection change motor imagery decoding",
+  "method": "automated rejection before a CSP + LDA decoder",
+  "data": "own motor imagery EEG, 20 subjects (licence (TBD))",
+  "metrics": "decoding accuracy",
+  "headline": "+4.2 percentage points with rejection [Abstract]",
+  "builds_on": "(TBD)"
+ },
+ "units": [
+  {
+   "id": "smithetal2020#C1",
+   "kind": "claim",
+   "text": "automated artifact rejection improves MI decoding accuracy",
+   "strength": "shows",
+   "scope": {
+    "population": "20 subjects",
+    "data": "motor imagery EEG",
+    "conditions": "(TBD)"
+   },
+   "where": "Abstract",
+   "quote": "automated artifact rejection improves decoding accuracy in motor imagery EEG"
+  },
+  {
+   "id": "smithetal2020#A1",
+   "kind": "assumption",
+   "text": "one expert's labels are ground truth",
+   "where": "Sec. 1",
+   "quote": "whose labels we treat as ground truth for all comparisons"
+  },
+  {
+   "id": "smithetal2020#L1",
+   "kind": "limitation",
+   "text": "healthy young adults, single session",
+   "where": "Sec. 5",
+   "quote": "Our sample was limited to healthy young adults recorded in a single session"
+  },
+  {
+   "id": "smithetal2020#F1",
+   "kind": "future",
+   "text": "test across sessions and devices",
+   "where": "Sec. 5",
+   "quote": "test whether the gain holds across sessions and devices"
+  },
+  {
+   "id": "smithetal2020#N1",
+   "kind": "not-done",
+   "text": "no subject-grouped split; folds over trials only"
+  }
+ ],
+ "experiments": [
+  {
+   "exp_id": "smithetal2020#E1",
+   "citation_key": "smithetal2020",
+   "evidence": "full-text",
+   "where": "Sec. 1",
+   "role": "comparison-study",
+   "problem": "rejection vs none before decoding",
+   "method_family": [
+    "artifact-rejection"
+   ],
+   "data": [
+    {
+     "name": "own MI EEG",
+     "n": "20 subj",
+     "modality": "EEG",
+     "preproc": "(NR)"
+    }
+   ],
+   "split": "10-fold CV over trials",
+   "baselines": [
+    "no cleaning"
+   ],
+   "metrics": [
+    "accuracy"
+   ],
+   "stats": "(NR) - point estimate only",
+   "headline": "+4.2 pp",
+   "affordable_here": "(TBD)",
+   "not_done": [
+    "no subject-grouped split"
+   ]
+  }
+ ],
+ "terms": [
+  {
+   "term": "SNR",
+   "kind": "measure",
+   "where": "Sec. 1",
+   "definition": "defined as the ratio of evoked power to pre-stimulus baseline power"
+  },
+  {
+   "term": "10-fold cross-validation over trials",
+   "kind": "split"
+  },
+  {
+   "term": "CSP + LDA",
+   "kind": "method"
+  }
+ ]
+}

@@ -1,0 +1,14 @@
+{
+ "unit": "A2.m",
+ "target": "raw",
+ "ops": [
+  {
+   "op": "set",
+   "path": "schema",
+   "value": "none"
+  }
+ ],
+ "expect": "M00",
+ "level": "ERROR",
+ "why": "a collection the merge did not write"
+}

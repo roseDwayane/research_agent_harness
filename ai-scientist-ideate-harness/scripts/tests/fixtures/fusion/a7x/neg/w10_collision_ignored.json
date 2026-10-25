@@ -1,0 +1,37 @@
+{
+ "unit": "B3",
+ "target": "log_add",
+ "ops": [
+  {
+   "op": "append",
+   "path": "",
+   "value": {
+    "collision_id": "X0009",
+    "candidate": "@assumption-vs-claim",
+    "type": "assumption-vs-claim",
+    "result": "assumption-challenged",
+    "sides": [
+     {
+      "id": "smithetal2020#A1",
+      "paper": "smithetal2020",
+      "kind": "assumption"
+     },
+     {
+      "id": "parketal2019#C1",
+      "paper": "parketal2019",
+      "kind": "claim"
+     }
+    ],
+    "axes_differ": [],
+    "reason": "a second reading",
+    "evidence_level": "mixed",
+    "model": "m",
+    "at": "2026-10-17T00:00:00",
+    "supersedes": []
+   }
+  }
+ ],
+ "expect": "W10",
+ "level": "ERROR",
+ "why": "a challenged premise neither in a gap nor set aside"
+}

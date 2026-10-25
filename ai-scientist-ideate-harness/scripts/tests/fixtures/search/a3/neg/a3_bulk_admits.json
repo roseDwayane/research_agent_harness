@@ -1,0 +1,19 @@
+{
+ "unit": "A3",
+ "target": "scores",
+ "ops": [
+  {
+   "op": "append",
+   "path": "bulk",
+   "value": {
+    "title_regex": "EEG",
+    "rel": 4,
+    "qual": 3,
+    "rationale": "x"
+   }
+  }
+ ],
+ "expect": "C06",
+ "level": "ERROR",
+ "why": "a bulk rule that admits papers unread"
+}

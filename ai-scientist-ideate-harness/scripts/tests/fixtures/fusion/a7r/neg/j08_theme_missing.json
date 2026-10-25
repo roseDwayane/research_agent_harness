@@ -1,0 +1,14 @@
+{
+ "unit": "A7.R",
+ "target": "sota",
+ "ops": [
+  {
+   "op": "replace",
+   "path": "## Theme 1: Cleaning",
+   "value": "## Cleaning"
+  }
+ ],
+ "expect": "J08",
+ "level": "ERROR",
+ "why": "a Plane with no section in the synthesis"
+}

@@ -1,0 +1,24 @@
+{
+ "smithetal2020#C1": {
+  "axes": {
+   "construct": "construct:class-correlated-artifacts",
+   "measure": "measure:accuracy",
+   "population": "unstated",
+   "data": "dataset:own-mi-eeg",
+   "split": "split:trial-kfold",
+   "method_family": "method-family:artifact-rejection"
+  },
+  "note": "rejection is credited with removing class-related contamination"
+ },
+ "smithetal2020#A1": {
+  "axes": {
+   "construct": "construct:class-correlated-artifacts",
+   "measure": "unstated",
+   "population": "unstated",
+   "data": "dataset:own-mi-eeg",
+   "split": "n/a",
+   "method_family": "unstated"
+  },
+  "note": "expert labels decide which epochs count as artifact"
+ }
+}

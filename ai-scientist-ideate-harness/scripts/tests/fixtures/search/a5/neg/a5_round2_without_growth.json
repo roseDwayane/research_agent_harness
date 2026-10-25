@@ -1,0 +1,47 @@
+{
+ "unit": "A5",
+ "ops": [
+  {
+   "op": "append",
+   "path": "rounds",
+   "value": {
+    "round": 2,
+    "at": "x",
+    "threshold": 3,
+    "included_before": 6,
+    "basis": {
+     "shortlist": "x",
+     "bibliometrics": "x"
+    },
+    "truncated": {
+     "backward": 0,
+     "cocitation": 0,
+     "forward": 0,
+     "similar": 0
+    },
+    "added": 0,
+    "status": {
+     "backward": {
+      "status": "ok",
+      "seeds": [],
+      "failed_seeds": 0
+     },
+     "forward": {
+      "status": "ok",
+      "seeds": [],
+      "failed_seeds": 0
+     },
+     "similar": {
+      "status": "ok",
+      "seeds": [],
+      "failed_seeds": 0
+     }
+    },
+    "threshold_cocitation": 3
+   }
+  }
+ ],
+ "expect": "N06",
+ "why": "a second round although round 1 grew nothing",
+ "level": "ERROR"
+}

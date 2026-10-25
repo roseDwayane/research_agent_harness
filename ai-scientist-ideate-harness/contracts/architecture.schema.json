@@ -1,0 +1,129 @@
+{
+  "$id": "ideate-architecture/2",
+  "title": "v2 architecture contracts (architecture.json and contracts/units/*.json)",
+  "$defs": {
+    "id": {"type": "string", "minLength": 1, "pattern": "^[A-Za-z@][A-Za-z0-9._/\\-]*$"},
+    "ids": {"type": "array", "items": {"$ref": "#/$defs/id"}},
+    "text": {"type": "string", "minLength": 1},
+    "texts": {"type": "array", "items": {"$ref": "#/$defs/text"}},
+    "provenance": {"enum": ["PPT", "PPT-OTHER", "IMPL", "INF", "PROP"]},
+    "verdict": {
+      "type": "object",
+      "required": ["decision", "problem", "why_separate", "if_removed", "merge", "duplication", "boundary", "dependencies", "cost_risk", "quality", "alternatives", "evidence", "benefits", "risks", "actions"],
+      "properties": {
+        "decision": {"enum": ["KEEP", "MERGE", "SPLIT", "REFACTOR", "OPTIONAL", "REMOVE", "TBD"]},
+        "problem": {"$ref": "#/$defs/text"}, "why_separate": {"$ref": "#/$defs/text"}, "if_removed": {"$ref": "#/$defs/text"},
+        "merge": {"$ref": "#/$defs/text"}, "duplication": {"$ref": "#/$defs/text"}, "boundary": {"$ref": "#/$defs/text"},
+        "dependencies": {"$ref": "#/$defs/text"}, "cost_risk": {"$ref": "#/$defs/text"}, "quality": {"$ref": "#/$defs/text"},
+        "alternatives": {"$ref": "#/$defs/text"}, "evidence": {"$ref": "#/$defs/text"}, "benefits": {"$ref": "#/$defs/text"},
+        "risks": {"$ref": "#/$defs/text"}, "actions": {"$ref": "#/$defs/text"}
+      },
+      "additionalProperties": false
+    },
+    "unit": {
+      "type": "object",
+      "required": ["id", "name", "name_zh", "step", "kind", "deterministic", "llm", "on_ledger", "provenance", "necessity", "trigger", "requires", "inputs", "outputs", "commands", "mcp", "preconditions", "logic", "state", "error_boundary", "idempotency", "security", "open_questions", "verdict"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "name": {"$ref": "#/$defs/text"},
+        "name_zh": {"$ref": "#/$defs/text"},
+        "step": {"$ref": "#/$defs/id"},
+        "kind": {"enum": ["script", "model", "subagent", "fanout", "hybrid"]},
+        "deterministic": {"enum": ["yes", "partial", "no"]},
+        "llm": {"type": "boolean"},
+        "on_ledger": {"type": "boolean"},
+        "provenance": {"$ref": "#/$defs/provenance"},
+        "purpose": {"$ref": "#/$defs/text"},
+        "necessity": {"$ref": "#/$defs/text"},
+        "trigger": {"$ref": "#/$defs/text"},
+        "requires": {"$ref": "#/$defs/ids"},
+        "legacy_deviation": {"$ref": "#/$defs/text"},
+        "substeps": {"$ref": "#/$defs/ids"},
+        "inputs": {
+          "type": "object", "required": ["required", "optional", "context"],
+          "properties": {"required": {"$ref": "#/$defs/ids"}, "optional": {"$ref": "#/$defs/ids"}, "context": {"type": "array", "items": {"type": "string"}}},
+          "additionalProperties": false
+        },
+        "outputs": {
+          "type": "object", "required": ["artifacts", "side_effects"],
+          "properties": {"artifacts": {"$ref": "#/$defs/ids", "minItems": 1}, "side_effects": {"type": "array", "items": {"type": "string"}}},
+          "additionalProperties": false
+        },
+        "commands": {"$ref": "#/$defs/texts", "minItems": 1},
+        "mcp": {"type": "array", "items": {"type": "string"}},
+        "preconditions": {"$ref": "#/$defs/texts", "minItems": 1},
+        "logic": {"$ref": "#/$defs/texts", "minItems": 1},
+        "state": {"$ref": "#/$defs/text"},
+        "error_boundary": {
+          "type": "object", "required": ["retry_policy", "local_recovery", "escalation"],
+          "properties": {"retry_policy": {"$ref": "#/$defs/id"}, "local_recovery": {"$ref": "#/$defs/text"}, "escalation": {"$ref": "#/$defs/text"}},
+          "additionalProperties": false
+        },
+        "idempotency": {"$ref": "#/$defs/text"},
+        "security": {"$ref": "#/$defs/text"},
+        "performance": {"$ref": "#/$defs/text"},
+        "testing": {"$ref": "#/$defs/text"},
+        "observability": {"$ref": "#/$defs/text"},
+        "failure_modes": {"$ref": "#/$defs/texts"},
+        "postconditions": {"$ref": "#/$defs/texts"},
+        "open_questions": {"$ref": "#/$defs/ids"},
+        "verdict": {"$ref": "#/$defs/verdict"}
+      },
+      "additionalProperties": false
+    },
+    "substep": {
+      "type": "object",
+      "required": ["id", "parent", "name", "provenance", "kind", "purpose", "commands", "error_boundary"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Za-z0-9.]+/[A-Za-z0-9.\\-]+$"},
+        "parent": {"$ref": "#/$defs/id"},
+        "legacy_id": {"$ref": "#/$defs/text"},
+        "name": {"$ref": "#/$defs/text"},
+        "name_zh": {"$ref": "#/$defs/text"},
+        "provenance": {"$ref": "#/$defs/provenance"},
+        "kind": {"enum": ["script", "model", "subagent", "fanout", "hybrid"]},
+        "purpose": {"$ref": "#/$defs/text"},
+        "commands": {"$ref": "#/$defs/texts"},
+        "outputs": {"type": "array", "items": {"type": "string"}},
+        "checks": {"type": "array", "items": {"type": "string"}},
+        "error_boundary": {"$ref": "#/$defs/text"}
+      },
+      "additionalProperties": false
+    },
+    "unit_file": {
+      "type": "object",
+      "required": ["schema", "block", "units", "substeps"],
+      "properties": {
+        "schema": {"const": "ideate-architecture-units/2"},
+        "block": {"$ref": "#/$defs/id"},
+        "units": {"type": "array", "items": {"$ref": "#/$defs/unit"}},
+        "substeps": {"type": "array", "items": {"$ref": "#/$defs/substep"}}
+      },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": ["schema", "version", "status", "updated", "unit_files", "provenance_labels", "sources", "pipeline", "stages", "blocks", "steps", "gates", "loops", "artifacts", "infrastructure", "external_services", "data_stores", "mcp_servers", "retry_policies", "decisions", "open_questions"],
+  "properties": {
+    "schema": {"const": "ideate-architecture/2"},
+    "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "status": {"enum": ["draft", "accepted", "superseded"]},
+    "updated": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "unit_files": {"$ref": "#/$defs/texts", "minItems": 1},
+    "sources": {"type": "array", "items": {"type": "object", "required": ["id", "title", "path", "sha256", "used_for", "verified"], "properties": {"sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}, "verified": {"type": "boolean"}}}},
+    "pipeline": {"type": "object", "required": ["id", "name", "stages", "output"]},
+    "stages": {"type": "array", "items": {"type": "object", "required": ["id", "name", "name_zh", "frequency", "blocks", "provenance"]}},
+    "blocks": {"type": "array", "items": {"type": "object", "required": ["id", "stage", "name", "name_zh", "slide", "steps", "exit_gate", "exit_contract", "provenance"]}},
+    "steps": {"type": "array", "items": {"type": "object", "required": ["id", "block", "ordinal", "name", "name_zh", "units", "entry_gate", "exit_gate", "provenance"], "properties": {"id": {"type": "string", "pattern": "^STEP-"}, "ordinal": {"type": "integer"}, "units": {"$ref": "#/$defs/ids", "minItems": 1}}}},
+    "gates": {"type": "array", "items": {"type": "object", "required": ["id", "name", "scope", "from_step", "to_step", "legacy_command", "requires_done", "requires_artifacts", "rules", "provenance"], "properties": {"id": {"type": "string", "pattern": "^GATE-"}, "scope": {"enum": ["topic", "generation"]}, "rules": {"type": "array", "items": {"type": "object", "required": ["rule"], "properties": {"rule": {"type": "string"}, "params": {"type": "object"}}, "additionalProperties": false}}}}},
+    "loops": {"type": "array", "items": {"type": "object", "required": ["id", "name", "from", "to", "kind", "trigger", "interface", "bound", "on_exhausted", "counter", "provenance"], "properties": {"id": {"type": "string", "pattern": "^LOOP-[0-9]{2}$"}, "to": {"$ref": "#/$defs/ids", "minItems": 1}, "bound": {"type": "object", "required": ["max_iterations", "conditions"], "properties": {"max_iterations": {"type": ["integer", "null"], "minimum": 1}, "conditions": {"type": "array", "items": {"type": "object", "required": ["name", "value", "meaning"], "properties": {"name": {"enum": ["min_growth", "min_new_share", "max_items"]}, "value": {"type": "number"}}}}}}}}},
+    "artifacts": {"type": "array", "items": {"type": "object", "required": ["id", "path", "kind", "schema", "owners", "description", "sensitive"], "properties": {"id": {"type": "string", "pattern": "^ART-"}, "kind": {"enum": ["file", "part", "view", "external", "infrastructure"]}, "owners": {"type": "array", "items": {"type": "object", "required": ["unit"], "properties": {"unit": {"type": "string"}, "part": {"type": "string"}}, "additionalProperties": false}}, "derived_from": {"$ref": "#/$defs/ids"}, "revised_by": {"$ref": "#/$defs/ids"}, "sensitive": {"type": "boolean"}}}},
+    "infrastructure": {"type": "array", "items": {"type": "object", "required": ["id", "name", "role", "implemented_by", "provenance"]}},
+    "external_services": {"type": "array", "items": {"type": "object", "required": ["id", "name", "used_by", "via", "credential", "provenance"]}},
+    "data_stores": {"type": "array", "items": {"type": "object", "required": ["id", "path", "role", "provenance"]}},
+    "mcp_servers": {"type": "array", "items": {"type": "object", "required": ["id", "name", "tools", "transport", "location", "provenance"]}},
+    "retry_policies": {"type": "array", "items": {"type": "object", "required": ["id", "owner", "max_attempts", "retry_on", "backoff", "on_exhausted", "applies_to"], "properties": {"id": {"type": "string", "pattern": "^RP-"}, "owner": {"enum": ["orchestrator", "unit", "unit-tool", "unit-transport"]}, "max_attempts": {"type": "integer", "minimum": 1}, "on_exhausted": {"enum": ["stop", "degrade", "error", "escalate"]}, "backoff": {"type": ["object", "null"], "properties": {"base_s": {"type": "number", "minimum": 0}, "factor": {"type": "number", "minimum": 1}, "cap_s": {"type": "number", "minimum": 0}, "jitter": {"enum": ["none", "full"]}}}}}},
+    "decisions": {"type": "array", "items": {"type": "object", "required": ["id", "title", "decision", "rationale", "status", "provenance"], "properties": {"id": {"type": "string", "pattern": "^D-[0-9]{2}$"}, "status": {"enum": ["proposed", "accepted", "rejected", "superseded"]}}}},
+    "open_questions": {"type": "array", "items": {"type": "object", "required": ["id", "priority", "owner_role", "question", "impact", "resolution", "refs"], "properties": {"id": {"type": "string", "pattern": "^OQ-[0-9]{2}$"}, "priority": {"enum": ["P1", "P2", "P3"]}}}}
+  }
+}

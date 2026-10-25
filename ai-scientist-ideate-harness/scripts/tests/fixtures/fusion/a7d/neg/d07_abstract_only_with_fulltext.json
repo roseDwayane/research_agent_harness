@@ -1,0 +1,14 @@
+{
+ "unit": "A7.D",
+ "target": "answer:smithetal2020",
+ "ops": [
+  {
+   "op": "set",
+   "path": "eligibility.verdict",
+   "value": "abstract-only"
+  }
+ ],
+ "expect": "D07",
+ "level": "ERROR",
+ "why": "abstract-only verdict on a full-text record"
+}

@@ -1,0 +1,28 @@
+{
+ "unit": "A7.D",
+ "target": "answer:leeetal2021",
+ "ops": [
+  {
+   "op": "set",
+   "path": "units",
+   "value": [
+    {
+     "id": "leeetal2021#C1",
+     "kind": "claim",
+     "text": "x",
+     "strength": "shows",
+     "scope": {
+      "population": "12",
+      "data": "MEG",
+      "conditions": "(TBD)"
+     },
+     "where": "p1",
+     "quote": "No EEG was recorded in this study"
+    }
+   ]
+  }
+ ],
+ "expect": "D07",
+ "level": "ERROR",
+ "why": "an ineligible paper still used as evidence"
+}

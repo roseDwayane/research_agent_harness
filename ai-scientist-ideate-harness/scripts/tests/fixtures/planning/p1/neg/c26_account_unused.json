@@ -1,0 +1,6 @@
+{
+ "expect": "C26",
+ "level": "ERROR",
+ "exercised_by": "tests/planning/test_p1_gap2hypo.py::P1.test_every_account_is_used_or_set_aside",
+ "why": "a pointer for units check: the counter-example itself is built in Python in the named test (NEG)"
+}

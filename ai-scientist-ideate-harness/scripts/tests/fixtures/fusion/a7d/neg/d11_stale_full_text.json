@@ -1,0 +1,13 @@
+{
+ "unit": "A7.D",
+ "target": "fulltext:smithetal2020",
+ "ops": [
+  {
+   "op": "append_text",
+   "value": "\nAddendum: results replicated on a second cohort.\n"
+  }
+ ],
+ "expect": "D11",
+ "level": "ERROR",
+ "why": "the full text changed after the record was written"
+}

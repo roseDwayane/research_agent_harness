@@ -1,0 +1,14 @@
+{
+ "unit": "A3",
+ "target": "scores",
+ "ops": [
+  {
+   "op": "set",
+   "path": "scores.0.duplicate_of",
+   "value": "paper_999"
+  }
+ ],
+ "expect": "C10",
+ "level": "ERROR",
+ "why": "a duplicate of a paper that does not exist"
+}

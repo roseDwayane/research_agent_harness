@@ -1,0 +1,19 @@
+{
+ "unit": "A4.k",
+ "target": "log",
+ "ops": [
+  {
+   "op": "log_append",
+   "value": {
+    "id": "paper_950",
+    "key": "@first",
+    "at": "x",
+    "authors_basis": "search",
+    "n_authors": 1
+   }
+  }
+ ],
+ "expect": "K03",
+ "why": "a key handed to a second paper (a retired key reused)",
+ "level": "ERROR"
+}

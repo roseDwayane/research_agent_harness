@@ -1,0 +1,14 @@
+{
+ "unit": "B3",
+ "target": "gaps",
+ "ops": [
+  {
+   "op": "set",
+   "path": "gaps.0.source_check.quote",
+   "value": "the expert labels are assumed to be correct"
+  }
+ ],
+ "expect": "W05",
+ "level": "ERROR",
+ "why": "a source check that is not the paper's words"
+}

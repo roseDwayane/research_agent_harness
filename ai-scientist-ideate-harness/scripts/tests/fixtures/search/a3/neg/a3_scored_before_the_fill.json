@@ -1,0 +1,17 @@
+{
+ "unit": "A3",
+ "target": "bib",
+ "ops": [
+  {
+   "op": "set",
+   "path": "papers.paper_004.abstract_fill",
+   "value": {
+    "text": "We study how recordings are cleaned before analysis and compare three procedures on two public datasets, reporting how often each one removes useful signal.",
+    "source": "semantic_scholar"
+   }
+  }
+ ],
+ "expect": "C19",
+ "level": "WARN",
+ "why": "the paper's abstract was found after it was scored: the entry rests on the title alone"
+}

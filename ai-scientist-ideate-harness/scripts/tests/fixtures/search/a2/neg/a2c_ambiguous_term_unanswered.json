@@ -1,0 +1,27 @@
+{
+ "unit": "A2.c",
+ "target": "round",
+ "ops": [],
+ "expect": "R10",
+ "level": "ERROR",
+ "why": "a flagged ambiguous term with no keep / retire answer",
+ "sig_ops": [
+  {
+   "op": "set",
+   "path": "term_pull",
+   "value": [
+    {
+     "axis": "C2",
+     "term": "automated cleaning",
+     "own": 8,
+     "far": 6,
+     "far_share": 0.75,
+     "flagged": true,
+     "far_titles": [
+      "Automated cleaning of solar panels"
+     ]
+    }
+   ]
+  }
+ ]
+}

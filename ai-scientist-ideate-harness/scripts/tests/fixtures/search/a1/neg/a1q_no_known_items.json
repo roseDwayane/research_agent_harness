@@ -1,0 +1,13 @@
+{
+ "unit": "A1.q",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "known_items",
+   "value": []
+  }
+ ],
+ "expect": "Q16",
+ "why": "no known items at standard depth"
+}

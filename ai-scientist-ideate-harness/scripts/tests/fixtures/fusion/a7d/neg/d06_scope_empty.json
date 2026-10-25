@@ -1,0 +1,18 @@
+{
+ "unit": "A7.D",
+ "target": "answer:smithetal2020",
+ "ops": [
+  {
+   "op": "set",
+   "path": "units.0.scope",
+   "value": {
+    "population": "(TBD)",
+    "data": "(TBD)",
+    "conditions": "(TBD)"
+   }
+  }
+ ],
+ "expect": "D06",
+ "level": "ERROR",
+ "why": "a claim with no stated scope at all"
+}

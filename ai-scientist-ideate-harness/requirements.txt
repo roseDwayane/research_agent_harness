@@ -1,0 +1,5 @@
+# Runtime: the Unit implementation (scripts/), the bundled MCP servers and the ideate_v2 MCP server.
+# The v2 core (ideate_v2/) and the conductor (harness/) are standard library only.
+mcp>=1.27,<2        # official MCP Python SDK; tested with 1.30.0
+httpx>=0.27
+pydantic>=2.6

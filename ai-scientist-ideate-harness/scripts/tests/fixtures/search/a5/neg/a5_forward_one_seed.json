@@ -1,0 +1,15 @@
+{
+ "unit": "A5",
+ "ops": [
+  {
+   "op": "set",
+   "path": "papers.2.cites_seeds",
+   "value": [
+    "paper_002"
+   ]
+  }
+ ],
+ "expect": "N03",
+ "why": "a citer of one seed only (a citer of any one paper is not a field's recent work)",
+ "level": "ERROR"
+}

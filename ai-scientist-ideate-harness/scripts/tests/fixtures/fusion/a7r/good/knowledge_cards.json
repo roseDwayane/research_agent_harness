@@ -1,0 +1,42 @@
+{
+ "points": [
+  {
+   "slug": "Decoding_Accuracy",
+   "name": "decoding accuracy",
+   "origin": "align",
+   "concept": "measure:accuracy",
+   "unit_refs": [
+    "smithetal2020#C1"
+   ]
+  },
+  {
+   "slug": "Gain_On_BNCI",
+   "name": "cleaning gains on BNCI",
+   "origin": "collide",
+   "collisions": [
+    "X0003"
+   ],
+   "claim_type": "empirical"
+  }
+ ],
+ "planes": [
+  {
+   "n": 1,
+   "slug": "Cleaning",
+   "name": "Cleaning before decoding",
+   "member_points": [
+    "P_draft_Decoding_Accuracy",
+    "P_draft_Gain_On_BNCI"
+   ],
+   "member_papers": [
+    "smithetal2020",
+    "parketal2019"
+   ],
+   "q1": "(TBD)",
+   "q2": "(TBD)",
+   "q3": "D_draft_RejectionVsICA, E_draft_Cleaning (X0004)",
+   "q4": "smithetal2020#E1",
+   "q5": "the expert-label premise (X0002); smithetal2020#L1"
+  }
+ ]
+}

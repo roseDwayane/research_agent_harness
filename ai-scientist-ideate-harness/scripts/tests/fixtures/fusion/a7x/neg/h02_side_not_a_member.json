@@ -1,0 +1,14 @@
+{
+ "unit": "A7.X2",
+ "target": "log",
+ "ops": [
+  {
+   "op": "set",
+   "path": "0.sides.0.id",
+   "value": "smithetal2020#A1"
+  }
+ ],
+ "expect": "H02",
+ "level": "ERROR",
+ "why": "a side the candidate did not contain"
+}

@@ -1,0 +1,16 @@
+{
+ "unit": "A7.D",
+ "target": "answer:smithetal2020",
+ "ops": [
+  {
+   "op": "set",
+   "path": "summary.builds_on_keys",
+   "value": [
+    "jonesetal1999"
+   ]
+  }
+ ],
+ "expect": "D19",
+ "level": "ERROR",
+ "why": "builds_on_keys naming a paper outside the shortlist"
+}

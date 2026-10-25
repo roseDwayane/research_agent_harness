@@ -1,0 +1,53 @@
+{
+ "same-coords": [
+  {
+   "result": "conflict",
+   "sides": [
+    "parketal2019#C1",
+    "smithetal2020#C1"
+   ],
+   "axes_differ": [
+    "claim-strength",
+    "method-config"
+   ],
+   "reason": "rejection credited with a gain vs ICA only possibly reducing the contamination"
+  }
+ ],
+ "assumption-vs-claim": [
+  {
+   "result": "assumption-challenged",
+   "sides": [
+    "smithetal2020#A1",
+    "parketal2019#C1"
+   ],
+   "axes_differ": [
+    "measure-definition"
+   ],
+   "reason": "if artifacts are class-correlated, expert artifact labels are not a neutral ground truth"
+  }
+ ],
+ "numbers": [
+  {
+   "result": "agree",
+   "sides": [
+    "parketal2019#E1",
+    "smithetal2020#E1"
+   ],
+   "axes_differ": [],
+   "reason": "both report a gain on BNCI"
+  }
+ ],
+ "lineage": [
+  {
+   "result": "extends",
+   "sides": [
+    "parketal2019#E1",
+    "smithetal2020#E1"
+   ],
+   "axes_differ": [
+    "method-config"
+   ],
+   "reason": "automated rejection after ICA-based cleaning"
+  }
+ ]
+}

@@ -1,0 +1,14 @@
+{
+ "unit": "A7.R",
+ "target": "map",
+ "ops": [
+  {
+   "op": "append",
+   "path": "",
+   "value": "\n| added | by hand |\n"
+  }
+ ],
+ "expect": "J10",
+ "level": "ERROR",
+ "why": "the fusion map edited by hand"
+}

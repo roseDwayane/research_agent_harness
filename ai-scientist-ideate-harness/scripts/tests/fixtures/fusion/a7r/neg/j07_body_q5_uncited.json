@@ -1,0 +1,14 @@
+{
+ "unit": "A7.R",
+ "target": "body:B_draft_fx_descriptive.md",
+ "ops": [
+  {
+   "op": "replace",
+   "path": "D_draft_RejectionVsICA (X0001); the expert-label premise is challenged (X0002).",
+   "value": "the lines disagree."
+  }
+ ],
+ "expect": "J07",
+ "level": "ERROR",
+ "why": "the Body's conflicts uncited"
+}

@@ -1,0 +1,15 @@
+{
+ "unit": "A2.c",
+ "target": "round",
+ "ops": [],
+ "expect": "R02",
+ "level": "ERROR",
+ "why": "ok for a query that found nothing",
+ "sig_ops": [
+  {
+   "op": "set",
+   "path": "queries.Q5.papers",
+   "value": 0
+  }
+ ]
+}

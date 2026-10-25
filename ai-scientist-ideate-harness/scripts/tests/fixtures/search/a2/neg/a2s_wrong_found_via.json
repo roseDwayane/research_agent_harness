@@ -1,0 +1,15 @@
+{
+ "unit": "A2.s",
+ "target": "instance",
+ "ops": [
+  {
+   "op": "set",
+   "path": "papers.0.found_via",
+   "value": "Q9"
+  }
+ ],
+ "expect": "S04",
+ "level": "ERROR",
+ "why": "a paper that does not name its query",
+ "qid": "Q1"
+}

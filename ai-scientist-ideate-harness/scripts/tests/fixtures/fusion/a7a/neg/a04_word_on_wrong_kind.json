@@ -1,0 +1,18 @@
+{
+ "unit": "A7.A",
+ "target": "alignment",
+ "ops": [
+  {
+   "op": "set",
+   "path": "vocab.overrides",
+   "value": {
+    "smithetal2020": {
+     "SNR": "dataset:own-mi-eeg"
+    }
+   }
+  }
+ ],
+ "expect": "A04",
+ "level": "ERROR",
+ "why": "a measure aligned to a dataset"
+}

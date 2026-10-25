@@ -1,0 +1,8 @@
+{"verdict": "approved-with-notes", "summary": "The axes follow from the PICO and the comparison arm is correctly a screening criterion. One note on spelling variants.", "model": "fixture",
+ "findings": [
+  {"check": "E1", "result": "pass", "evidence": "C1 EEG and C2 automated cleaning are both searched; comparison is eligibility-only"},
+  {"check": "E2", "result": "pass", "evidence": "IN2 applies the comparison slot; IN2 and IN3 cover O1 and O2"},
+  {"check": "E3", "result": "pass", "evidence": "the researcher applies the method: PICO, not PECO"},
+  {"check": "E4", "result": "note", "evidence": "C2 has no 'artefact rejection' (British, rejection)", "fix": "consider adding it"},
+  {"check": "E5", "result": "pass", "evidence": "every section filled; completion criterion concrete"},
+  {"check": "E6", "result": "pass", "evidence": "no criterion rests on a word of the topic that reads two ways"}]}

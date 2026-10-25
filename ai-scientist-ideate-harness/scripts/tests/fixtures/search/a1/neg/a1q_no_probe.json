@@ -1,0 +1,12 @@
+{
+ "unit": "A1.q",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "delete",
+   "path": "scope_probe"
+  }
+ ],
+ "expect": "Q20",
+ "why": "no scope probe at standard depth"
+}

@@ -1,0 +1,14 @@
+{
+ "unit": "A7.D",
+ "target": "answer:smithetal2020",
+ "ops": [
+  {
+   "op": "set",
+   "path": "basis",
+   "value": "abstract"
+  }
+ ],
+ "expect": "D02",
+ "level": "ERROR",
+ "why": "deconstructed from the abstract although the full text exists"
+}

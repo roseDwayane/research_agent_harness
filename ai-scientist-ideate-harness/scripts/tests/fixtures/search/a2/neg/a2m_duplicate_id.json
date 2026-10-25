@@ -1,0 +1,12 @@
+{
+ "unit": "A2.m",
+ "target": "raw",
+ "ops": [
+  {
+   "op": "copy_id"
+  }
+ ],
+ "expect": "M02",
+ "level": "ERROR",
+ "why": "two papers, one id"
+}

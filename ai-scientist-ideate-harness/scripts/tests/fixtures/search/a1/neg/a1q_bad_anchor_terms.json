@@ -1,0 +1,15 @@
+{
+ "unit": "A1.q",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "anchor_terms",
+   "value": [
+    "EEG"
+   ]
+  }
+ ],
+ "expect": "Q14",
+ "why": "one upper-case anchor term"
+}

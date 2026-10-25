@@ -1,0 +1,13 @@
+{
+  "claims": [
+    {
+      "id": "C1",
+      "primary": true
+    }
+  ],
+  "experiments": [
+    {
+      "id": "E1"
+    }
+  ]
+}

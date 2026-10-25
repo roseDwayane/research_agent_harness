@@ -1,0 +1,579 @@
+{
+ "schema": "ai-scientist-argument/1",
+ "idea": "quality_index_state_specificity",
+ "generation": 1,
+ "gap": "GAP_001",
+ "angle": "measurement side - what an EEG signal-quality index responds to: contamination versus neural state",
+ "variant": "cause",
+ "study_sentence": "Within-subject simulation experiment on 24 simulated subjects (seed sets with jittered network parameters) of a spiking thalamocortical EEG generator: after an assigned artifact-free change of neural state (predictor), the false-alarm rate of signal-quality indices thresholded on the baseline state (outcome) is compared with its nominal 5%, expressed as an equivalent dose of added recorded contamination, and repeated on eyes-closed versus eyes-open recordings.",
+ "question": "How large is the false-alarm rate of EEG signal-quality indices on an artifact-free simulated EEG whose neural state alone has changed, and to what dose of contamination is that change equivalent?",
+ "original_question": {
+  "text": "How much do EEG signal-quality indices change when the neural state of an artifact-free simulated EEG changes, relative to their change under a known dose of contamination?",
+  "changed_because": "restatement: the reader showed that a ratio at one arbitrary dose (a_0 = 0.3) and threshold (0.25) decides little; the question now asks for the false-alarm rate against each index's own detection threshold and for the equivalent dose"
+ },
+ "key_terms": [
+  "signal-quality indices",
+  "neural state",
+  "artifact-free simulated EEG",
+  "false-alarm rate",
+  "contamination"
+ ],
+ "coverage": {
+  "question": "part",
+  "tested_part": "how large the false-alarm rate of the within-recording composite signal-quality indices is on an artifact-free simulated EEG whose neural state alone has changed (against a threshold of 0.20)",
+  "untested": [
+   {
+    "part": "to what dose of contamination that change is equivalent",
+    "terms": [
+     "equivalent",
+     "dose"
+    ],
+    "by": "C2"
+   }
+  ],
+  "angle": "whole",
+  "angle_parts": [
+   {
+    "part": "measurement side",
+    "by": "C1"
+   },
+   {
+    "part": "what an EEG signal-quality index responds to",
+    "by": "C1"
+   },
+   {
+    "part": "contamination",
+    "by": "C2"
+   },
+   {
+    "part": "versus neural state",
+    "by": "C1"
+   }
+  ]
+ },
+ "external_check": {
+  "synthetic": true,
+  "real_data": "E6",
+  "datasets": [
+   "clean_eeg_sim generator"
+  ],
+  "second_dataset": "E6",
+  "inventory": [
+   "~/openneuro_data/ds004148: serves - 60 adults, eyes-closed and eyes-open rest (E0 calibration, E6, E7)",
+   "~/openneuro_data/ds003478: serves - 30 adults, rest with EOG channels (artifact library, E6)",
+   "~/openneuro_data/ds004784: serves the contamination library - phantom head with ocular, muscle and motion artifacts",
+   "~/openneuro_data/ds007176: reserve for E6 - rest, 45 adults",
+   "~/openneuro_data/ds003775: reserve - rest, 111 adults, no EOG channel checked",
+   "~/openneuro_data/ds003810: does not serve - low-cost system, few channels",
+   "~/openneuro_data/ds006801: does not serve - intervention study, montage not checked",
+   "~/openneuro_data/ds007222: does not serve - treadmill walking",
+   "~/openneuro_data/ds007406: does not serve - video task, epoched",
+   "~/openneuro_data/ds007558: does not serve - intervention study",
+   "~/mne_data: serves in part - MNE-fsaverage-data gives the lead field; the other sets are task data",
+   "~/.cache/huggingface/hub: does not serve - model weights only",
+   "~/.cache/torch: does not serve - model hub only"
+  ]
+ },
+ "claims": [
+  {
+   "id": "C1",
+   "hypothesis": "H1",
+   "primary": true,
+   "kind": "cause",
+   "mode": "test",
+   "statement": "Although signal-quality indices are read as measures of contamination, in an artifact-free simulated EEG a change of neural state of eyes-closed/eyes-open size raises the false-alarm rate of at least two of the three within-recording composite signal-quality indices (PREP-style, FASTER-style, Layer-Q), thresholded on the baseline state, to 0.20 or more (nominal 0.05), because these indices compare channels and epochs within the recording, and a state change alters that comparison with no contamination added.",
+   "reasons": [
+    "Robust-z criteria compare each channel or epoch with the others of the same recording; a change of thalamic drive changes the between-channel and between-epoch distribution without adding any non-neural source.",
+    "On a signal with zero non-neural content every epoch above the threshold is a false alarm."
+   ],
+   "evidence": [
+    {
+     "experiment": "E2",
+     "measure": "false-alarm rate: 1-s epochs of 64-channel signal -> index Q_k per epoch -> indicator Q_k > tau_k (tau_k = 95th percentile of Q_k over the 60 epochs of a separate 60-s baseline-state calibration run of the same simulated subject) -> fraction of the 40 state-B epochs flagged per subject and index -> mean over 24 subjects per index -> FA2 = the second-largest of the three per-index rates (PREP-style, FASTER-style, Layer-Q), with one-sided 95% bootstrap bounds over subjects; the Riemannian-potato and single-feature rates are reported, not counted",
+     "would_show": "a lower one-sided 95% bound of FA2 at or above 0.20",
+     "refuted_if": "the upper one-sided 95% bootstrap bound of FA2 is below 0.20",
+     "can_fail": "yes: the manipulation acts on the thalamic drive of all patches and the indices are computed per epoch on all 64 channels; criteria that compare channels within the recording may not move at all when every patch changes alike, and FA2 then stays near 0.05"
+    },
+    {
+     "experiment": "E6",
+     "measure": "the same false-alarm rate on recordings: tau_k from each subject's eyes-closed epochs (first half), flagged fraction of eyes-open epochs without an EOG- or frontal-amplitude-detected ocular event, and of held-out eyes-closed epochs (nominal check), in ds004148 -> mean over 60 subjects per index -> second-largest of the three within-recording indices",
+     "would_show": "a recorded false-alarm rate also at or above 0.20",
+     "refuted_if": "E2 is supported but on recordings the upper one-sided 95% bound of the eyes-open false-alarm rate is below 0.20 - the simulated result is then not taken to hold for recorded EEG",
+     "can_fail": "yes: eyes-open epochs may stay within the eyes-closed spread of the indices"
+    }
+   ],
+   "construction": {
+    "predictor_formula": "s_B = G(theta_A with g_T -> g_T'), with P_alpha(s_B) / P_alpha(s_A) = rho_ECEO",
+    "outcome_formula": "FA2 = second largest over k in {PREP, FASTER, LayerQ} of mean over epochs e of 1[ Q_k(s_B, e) > tau_k ], tau_k = q95 over epochs of Q_k(s_A0), s_A0 a separate realisation of the state of s_A",
+    "shared_terms": [
+     "s_B",
+     "s_A"
+    ],
+    "computable_without_experiment": "partly: for the single-feature spectral indices and for the Riemannian-potato distance the direction of the shift follows from the definition and rho_ECEO or the baseline covariance, so they are excluded from FA2; for the three within-recording indices Q_k(s_B, e) depends on between-channel and between-epoch robust statistics of s_B, which exist only once s_B is simulated. s_B is the manipulated signal that the outcome scores; nothing about its robust-z statistics follows from the alpha ratio. s_A, the baseline state, defines the alpha ratio of the manipulation and (through its separate realisation s_A0) the thresholds; what that shared baseline alone produces is the rate of a second realisation of it, measured in E3 and expected at 0.05.",
+    "free_quantity": "whether a state change that affects all patches alike shifts the within-recording robust statistics beyond the epoch-to-epoch spread of the baseline state"
+   },
+   "warrant": "When a factor is assigned while every non-neural source is held at zero, and a score changes, then the score responds to that factor and not to contamination.",
+   "warrant_basis": "(field convention) - the logic of an assigned manipulation; the generator's zero non-neural content is by construction",
+   "outcomes": {
+    "if_supported": "we learn that within-recording quality criteria reject clean data after a state change, how often per index, and to what dose of real contamination that is equivalent",
+    "if_not": "we learn that these indices keep their nominal false-alarm rate across a state change of eyes-closed/eyes-open size, so a rise in flagged epochs between conditions indicates contamination"
+   },
+   "negation": {
+    "text": "After an eyes-closed/eyes-open-sized change of neural state at most one of the three within-recording indices flags one clean epoch in five.",
+    "verdict": "contestable"
+   },
+   "expected_direction": {
+    "direction": "not predicted",
+    "basis": "unknown: within-recording criteria are relative to the other channels and epochs, so a change that affects all patches alike may cancel, or may change the spread they are scaled by; the definitions do not say which"
+   },
+   "estimate_because": null,
+   "smallest_effect_of_interest": "FA2 = 0.20 (design choice: four times the nominal rate; one clean epoch in five rejected for a reason that is not contamination)",
+   "falsifier": "E2: the upper one-sided 95% bootstrap bound (24 simulated subjects) of FA2, the second-largest false-alarm rate of state-B epochs among the three within-recording composite indices, is below 0.20",
+   "rivals": [
+    {
+     "type": "bias",
+     "how": "the false alarms are a property of this simulator (identical patches, flat aperiodic slope, 20 Hz harmonic), not of EEG",
+     "ruled_out_by": "E6",
+     "main": true
+    },
+    {
+     "type": "chance",
+     "how": "two realisations of the same state differ in the indices by sampling alone",
+     "ruled_out_by": "E3"
+    },
+    {
+     "type": "confounding",
+     "how": "the drive change alters total power besides alpha, and amplitude-dependent criteria respond to that",
+     "ruled_out_by": "E3"
+    },
+    {
+     "type": "reverse-cause",
+     "how": "cannot arise",
+     "ruled_out_by": "design: the factor is assigned"
+    },
+    {
+     "type": "incorporation",
+     "how": "s_B is both the manipulated signal and what is scored; a reference-based index (the potato) rises by definition when the state leaves its baseline; s_A is the state the manipulation departs from and the state the thresholds are taken from",
+     "ruled_out_by": "E3"
+    },
+    {
+     "type": "leakage",
+     "how": "a calibrated index's reference computed on the segments it scores",
+     "ruled_out_by": "design: the reference comes from separate seeds"
+    }
+   ],
+   "controls": {
+    "negative": "E3: a second realisation of the baseline state (A', new noise seeds) is scored in place of state B; expected rate 0.05 for every index (the indicator and the order statistic pass it through: second largest of three values near 0.05 is near 0.05, slightly above the mean). A gain-only arm, an RMS-matched state B and a notch at 18-22 Hz (the generator's alpha harmonic) are scored as well.",
+    "negative_can_move": "yes: A' is scored by the same indices on the same 64 channels against the same tau_k; a miscalibrated threshold or seed dependence moves it away from 0.05",
+    "positive": "E4: half of the A' epochs are replaced by state-A epochs with ocular or muscle contamination at a dose where the detection rate has saturated in E5",
+    "positive_expected": "each per-index rate = 0.5 * 1 + 0.5 * 0.05 = 0.525, so FA2 = 0.525: the indicator returns 1 for an epoch above tau_k whatever its size, so the planted value comes back only at a dose in the saturated part of that index's dose-response curve (E5 shows it first; at detection rate p the value is 0.5 p + 0.025), and the second-largest of three equal rates is that rate"
+   },
+   "baseline_predictor": null,
+   "comparator": null,
+   "scope": {
+    "internal": "for this generator, one state path (thalamic drive), thresholds from the baseline state, and three within-recording composite indices",
+    "external": "generalises to recorded EEG only as far as E6 agrees; does not generalise to other state changes (sleep, drugs), other indices, deep-learning quality classifiers or thresholds calibrated across states",
+    "limits": [
+     "the claim is one-sided (flagged as worse); a state change that masks contamination is reported in E5, not tested",
+     "a threshold calibrated across both states bounds the rate near nominal by construction; that regime is reported, not tested",
+     "the Riemannian-potato distance rises by definition when the state leaves its baseline; its rate is reported, not counted",
+     "the because clause is a conjecture: no experiment separates the between-channel from the between-epoch route"
+    ]
+   },
+   "power": {
+    "unit": "simulated subjects (independent seed sets with jittered network parameters)",
+    "n": 24,
+    "clusters": "1 generator",
+    "min_detectable": "d >= 0.51 at 80% power, one-sided alpha = 0.05 (paired / one-sample against 0.20; rough, n < 30)",
+    "literature_effect": "(TBD)",
+    "verdict": "marginal"
+   },
+   "precision_target": null
+  },
+  {
+   "id": "C2",
+   "hypothesis": "H2",
+   "primary": false,
+   "kind": "fact",
+   "mode": "estimate",
+   "statement": "For each of the seven signal-quality indices and each contamination class on the artifact-free simulated EEG, the dose-response of the detection rate, the smallest dose with a detection rate of 0.5, and the state-equivalent dose (the dose whose detection rate equals the false-alarm rate of the changed neural state) are estimated to within one step of a nine-step dose grid in 24 simulated subjects.",
+   "reasons": [
+    "An index proposed as a validation anchor should respond monotonically to a known dose; where it starts to respond is its detection floor."
+   ],
+   "evidence": [
+    {
+     "experiment": "E5",
+     "measure": "index per 2-s epoch -> detection rate (fraction above tau_k) per dose, class and subject -> smallest dose with detection rate 0.5; dose whose detection rate equals the subject's state-B false-alarm rate (monotone interpolation); detection rate of the same doses added to state B -> median and interquartile range over subjects",
+     "would_show": "a detection floor and an equivalent dose per index and class, and whether the changed state masks contamination"
+    }
+   ],
+   "warrant": "When a known amount of a contaminant is added to a signal known to be clean, the change of a score is that score's response to the contaminant.",
+   "warrant_basis": "zhangetal2021b#E1 (graded SNR design)",
+   "outcomes": {
+    "if_supported": "we learn each index's detection floor per contaminant class on a signal whose cleanliness is known",
+    "if_not": "we learn which indices are blind or non-monotonic for which class"
+   },
+   "negation": null,
+   "estimate_because": "size-open: indices worsen with contamination by design, so the direction is settled; the dose at which each first responds is unknown",
+   "falsifier": null,
+   "rivals": [
+    {
+     "type": "bias",
+     "how": "the dose scale (a = 1: as recorded relative to its source background) is tied to two source datasets, so equivalent doses are in those datasets' units",
+     "ruled_out_by": "(not addressed)"
+    }
+   ],
+   "controls": null,
+   "baseline_predictor": null,
+   "comparator": null,
+   "scope": {
+    "internal": "four contaminant classes at nine doses on this generator",
+    "external": "floors are relative to this generator's background amplitude and spectrum",
+    "limits": [
+     "dose is an amplitude scale, not a rate of events"
+    ]
+   },
+   "power": null,
+   "precision_target": "one step of the dose grid (aim); 24 subjects give an interquartile range per index and class"
+  },
+  {
+   "id": "C3",
+   "hypothesis": "H3",
+   "primary": false,
+   "kind": "fact",
+   "mode": "test",
+   "statement": "Although a signal without contamination should receive the best score, at least one of the signal-quality indices calibrated on recordings rates the artifact-free simulated EEG worse than the median recording, because such an index measures distance from the typical recording.",
+   "reasons": [
+    "A reference-calibrated index is small for signals that resemble the reference set and large for those that do not, whatever the reason."
+   ],
+   "evidence": [
+    {
+     "experiment": "E7",
+     "measure": "index calibrated on ds004148 eyes-closed recordings -> value per simulated subject (24) and per held-out recording (60, split-half calibration) -> one-sided Mann-Whitney per index, Holm-corrected",
+     "would_show": "at least one calibrated index for which the simulated EEG is not better than the median recording",
+     "refuted_if": "every reference-calibrated index rates the simulated EEG better than the median recording (one-sided Mann-Whitney at alpha = 0.05, Holm-corrected)",
+     "can_fail": "yes: the simulated EEG has no artifacts and may score best on all"
+    }
+   ],
+   "warrant": "When a signal known to be free of contamination scores worse than recordings that are not, the score measures something other than contamination.",
+   "warrant_basis": "(TBD)",
+   "outcomes": {
+    "if_supported": "we learn that the best score is not reserved for the cleanest signal, and which index properties cost the simulated EEG its score",
+    "if_not": "we learn that calibrated indices do rank an artifact-free signal above recordings, which supports using a generator as their ceiling"
+   },
+   "negation": {
+    "text": "Every index calibrated on recordings rates the artifact-free simulated EEG better than the median recording.",
+    "verdict": "contestable"
+   },
+   "expected_direction": {
+    "direction": "not predicted",
+    "basis": "unknown: the simulated EEG lacks artifacts, which favours a better score, and differs from recordings in slope and topography, which favours a worse one"
+   },
+   "estimate_because": null,
+   "smallest_effect_of_interest": null,
+   "falsifier": "E7: every reference-calibrated index rates the simulated EEG better than the median recording (one-sided Mann-Whitney, 24 simulated vs 60 recorded, alpha = 0.05, Holm-corrected)",
+   "rivals": [
+    {
+     "type": "bias",
+     "how": "the simulated EEG scores worse because of generator defects that resemble contamination (the 20 Hz harmonic read as muscle), not because of atypicality as such",
+     "ruled_out_by": "(not addressed)"
+    }
+   ],
+   "controls": {
+    "negative": "a held-out half of the recordings scored against the other half is expected at the median by construction",
+    "negative_can_move": "yes: the held-out recordings are scored by the same indices",
+    "positive": "simulated EEG with contamination at a = 1 must score worse than the clean simulated EEG",
+    "positive_expected": "a one-sided Mann-Whitney p below 0.05 for every calibrated index that passed the orientation check"
+   },
+   "baseline_predictor": null,
+   "comparator": null,
+   "scope": {
+    "internal": "this generator against ds004148 eyes-closed recordings",
+    "external": "says nothing about other generators",
+    "limits": [
+     "a worse score may reflect generator defects"
+    ]
+   },
+   "power": {
+    "unit": "simulated subjects vs recordings",
+    "n": 24,
+    "clusters": "24 simulated, 60 recorded",
+    "min_detectable": "standardized difference of about 0.6 at 80% power (two-group 24 vs 60, one-sided; rough)",
+    "literature_effect": "(TBD)",
+    "verdict": "marginal"
+   },
+   "precision_target": null
+  }
+ ],
+ "representation": {
+  "sample": {
+   "target": "resting scalp EEG of adults in distinct neural states",
+   "accessible": "24 simulated subjects of one generator, and 90 recorded adults in E6",
+   "concern": "identical cortical patches, no cortico-cortical coupling, flat aperiodic slope"
+  },
+  "predictor": {
+   "phenomenon": "a change of neural state with no change of contamination",
+   "variable": "thalamic background drive set so that the alpha-power ratio equals the eyes-closed / eyes-open ratio of ds004148",
+   "precision": "assigned",
+   "accuracy": "assigned",
+   "validity": "construct: the alpha change of eye opening is the best-documented resting state change; the path through thalamic drive is one of several that could produce it"
+  },
+  "outcome": {
+   "phenomenon": "what a recording-level quality score responds to",
+   "variable": "seven label-free indices, oriented larger = worse",
+   "precision": "between-realisation SD measured in E3",
+   "accuracy": "unit-tested against the published definitions; not cross-checked against reference implementations (not installed)",
+   "validity": "content: covers covariance-distance, robust-z, amplitude and spectral families; classifier-based indices are missing"
+  }
+ },
+ "experiments": [
+  {
+   "id": "E0",
+   "role": "instrument",
+   "claims": []
+  },
+  {
+   "id": "E1",
+   "role": "instrument",
+   "claims": []
+  },
+  {
+   "id": "E2",
+   "role": "tests",
+   "claims": [
+    "C1"
+   ]
+  },
+  {
+   "id": "E3",
+   "role": "control",
+   "claims": [
+    "C1"
+   ]
+  },
+  {
+   "id": "E4",
+   "role": "control",
+   "claims": [
+    "C1"
+   ]
+  },
+  {
+   "id": "E5",
+   "role": "descriptive",
+   "claims": [
+    "C2"
+   ]
+  },
+  {
+   "id": "E6",
+   "role": "tests",
+   "claims": [
+    "C1"
+   ]
+  },
+  {
+   "id": "E7",
+   "role": "tests",
+   "claims": [
+    "C3"
+   ]
+  },
+  {
+   "id": "E8",
+   "role": "release",
+   "claims": []
+  }
+ ],
+ "tradeoffs": [
+  {
+   "gate": "none",
+   "ids": [],
+   "change": "a test of the state response of the three single-feature spectral indices was not written",
+   "because": "their response follows from their definitions and the imposed alpha ratio (by-construction check, step 3)",
+   "lost": "a pass/fail decision for these three indices; their responses are still reported in E2",
+   "still_answers_question": true,
+   "covers_gap": true,
+   "covers_angle": true,
+   "why": "the question is answered on the indices whose response is not derivable"
+  },
+  {
+   "gate": "restatement",
+   "ids": [
+    "C1",
+    "E2",
+    "E3",
+    "E4",
+    "E6"
+   ],
+   "change": "the primary statistic was replaced: the median absolute state-to-contamination ratio at one dose (threshold 0.25) became the false-alarm rate of state-B epochs against each index's own baseline threshold (threshold 0.20, one-sided); E3, E4 and E6 were rebuilt for the new statistic, and E6 now uses the recorded eyes-closed to eyes-open change",
+   "because": "reader doubts 1, 2, 3 and 5: the ratio depended on an arbitrary reference dose, was unsigned, summarised by a median, and E6 measured another quantity",
+   "lost": "a single number comparing the state response with the contamination response at a fixed dose; the comparison survives as the state-equivalent dose of C2, estimated and not tested",
+   "still_answers_question": false,
+   "covers_gap": true,
+   "covers_angle": true,
+   "why": "the old question asked for a ratio to a known dose; the study now tests a false-alarm rate and estimates the equivalent dose, so the question was reworded (original_question); the gap (specificity to contamination untested) and the angle are still what the study addresses"
+  },
+  {
+   "gate": "restatement",
+   "ids": [
+    "C2",
+    "E5"
+   ],
+   "change": "C2 now also estimates the state-equivalent dose and the masking of contamination by the changed state",
+   "because": "the fixed-dose comparison left the primary claim (doubt 1)",
+   "lost": "nothing: C2 gained two quantities",
+   "still_answers_question": true,
+   "covers_gap": true,
+   "covers_angle": true,
+   "why": "an addition"
+  },
+  {
+   "gate": "restatement",
+   "ids": [],
+   "change": "RMS-matching of state B was moved from the primary arm to a reported arm",
+   "because": "reader doubt 4: rescaling is not what a state change does",
+   "lost": "nothing: both arms are reported",
+   "still_answers_question": true,
+   "covers_gap": true,
+   "covers_angle": true,
+   "why": "the unmatched state is the natural manipulation; the gain-only arm separates amplitude"
+  },
+  {
+   "gate": "coherence",
+   "ids": [
+    "C1",
+    "E2",
+    "E3"
+   ],
+   "change": "the Riemannian-potato distance left the decision statistic, which became the second-largest rate among the three within-recording indices; thresholds now come from a separate 60-s calibration run with 1-s epochs; E3 gained a notch arm for the 20 Hz harmonic",
+   "because": "restatement-2 doubts 2, 3, 5 and 7 (forced revision of the finalize round)",
+   "lost": "a decision on the reference-based index; its rate is still reported",
+   "still_answers_question": true,
+   "covers_gap": true,
+   "covers_angle": true,
+   "why": "the question asks for the false-alarm rate of quality indices after a state change; the test now rests on the indices whose response is not given by their definition"
+  }
+ ],
+ "reader_doubts": [
+  {
+   "source": "restatement-1",
+   "doubt": "1. the ratio and its 0.25 threshold depend on an arbitrary reference dose a_0 = 0.3 on a dose scale tied to two datasets",
+   "level": "design",
+   "response": "fixed",
+   "how": "C1 and E2 changed: the statistic is the false-alarm rate against each index's own baseline threshold, with no reference dose; the dose comparison moved to C2 (E5) as an estimated state-equivalent dose"
+  },
+  {
+   "source": "restatement-1",
+   "doubt": "2. for reference-calibrated indices a nonzero response follows from the definition, and the calibration state was not given",
+   "level": "design",
+   "response": "fixed",
+   "how": "C1 changed to a magnitude test (direction-settled, threshold 0.20) and E1/E2 now state the calibration of every index: potato reference and thresholds from the baseline state, three of the four composite indices self-referential; the mixed-state regime is reported as a scope limit"
+  },
+  {
+   "source": "restatement-1",
+   "doubt": "3. the statistic is unsigned and a median over four indices can pass with two indices responding",
+   "level": "design",
+   "response": "fixed",
+   "how": "C1 and E2 changed: one-sided false-alarm rate (flagged as worse), mean over the four composite indices, per-index rates reported; masking is estimated in E5"
+  },
+  {
+   "source": "restatement-1",
+   "doubt": "4. the simulated state change may not resemble a real one; RMS-matching is not what eye opening does; the target alpha ratio may be unreachable",
+   "level": "design",
+   "response": "fixed",
+   "how": "E2 changed: the unmatched state B is primary and the RMS-matched and gain-only arms are reported in E3; E0 gains a go/no-go check on the reachable alpha ratio; resemblance to recordings is carried by E6"
+  },
+  {
+   "source": "restatement-1",
+   "doubt": "5. E6 measures a different quantity (high- vs low-alpha epochs over blink vs no-blink epochs) and is only an upper bound",
+   "level": "design",
+   "response": "fixed",
+   "how": "E6 changed: it computes the same false-alarm rate on the recorded eyes-closed to eyes-open change of ds004148, with held-out eyes-closed epochs as the nominal check; it remains an upper bound because eyes-open epochs can hold undetected ocular activity"
+  },
+  {
+   "source": "restatement-1",
+   "doubt": "6. the 24 subjects are seed sets of one network, so the interval reflects simulation noise, and power is marginal",
+   "level": "design",
+   "response": "fixed",
+   "how": "E0 changed: each simulated subject gets its own connectivity seed and network parameters jittered by 10% (weights, drives), so the spread is between simulated individuals; that it is not variability between people stays in the scope limits"
+  },
+  {
+   "source": "restatement-1",
+   "doubt": "7. indices are own implementations and may not match the published ones",
+   "level": "design",
+   "response": "fixed",
+   "how": "E1 changed: pyprep and autoreject (pure Python, not installed today) are installed and the PREP-style criteria are cross-checked against pyprep on ds004148 before use"
+  },
+  {
+   "source": "restatement-1",
+   "doubt": "8. decision rules are fixed only by a local commit hash",
+   "level": "wording",
+   "response": "fixed",
+   "how": "E0 says fixed before analysis, not externally timestamped, and the labelled risk entry is added"
+  },
+  {
+   "source": "restatement-1",
+   "doubt": "9. C3 is never stated and its rule does not say which claim it refutes",
+   "level": "wording",
+   "response": "fixed",
+   "how": "E7 now states the claim it tests in full"
+  },
+  {
+   "source": "restatement-2",
+   "doubt": "1. a supported result may be a property of the generator; E6 can veto but not corroborate",
+   "level": "design",
+   "response": "not-fixed",
+   "how": "data: no recording on this machine has a change of neural state with independently verified zero contamination - the phantom ds004784 has no neural state, and in ds004148 eyes-open epochs can hold undetected ocular activity"
+  },
+  {
+   "source": "restatement-2",
+   "doubt": "2. the primary test is close to true by construction for the reference-based index (potato) and thresholds set on the baseline state",
+   "level": "design",
+   "response": "fixed",
+   "how": "C1 and E2 changed: the potato distance is outside the decision statistic, which now rests on the three within-recording indices, for which no direction is predicted"
+  },
+  {
+   "source": "restatement-2",
+   "doubt": "3. fifteen epochs per condition make the 95th-percentile threshold and the negative control unreliable, and it is unclear which epochs set the threshold",
+   "level": "design",
+   "response": "fixed",
+   "how": "E0 and E2 changed: 1-s epochs; thresholds from a separate 60-s baseline calibration run (60 epochs); A' and B are 40 s each (40 epochs)"
+  },
+  {
+   "source": "restatement-2",
+   "doubt": "4. 24 jittered copies of one network are not between-person variability; power is marginal; the 0.20 cut-off is not justified",
+   "level": "design",
+   "response": "not-fixed",
+   "how": "data: no measured between-person distribution of this generator's parameters exists on this machine to sample subjects from; the cut-off stays a labelled design choice"
+  },
+  {
+   "source": "restatement-2",
+   "doubt": "5. a mean over four indices can be carried by one; three of four are own implementations",
+   "level": "design",
+   "response": "fixed",
+   "how": "C1 and E2 changed: the statistic is the second-largest per-index rate among three, so two indices must reach the threshold; implementations other than PREP-style remain uncross-checked (risk entry)"
+  },
+  {
+   "source": "restatement-2",
+   "doubt": "6. the equivalent dose is on a scale tied to two source datasets and E4 depends on E5 finding a saturated dose",
+   "level": "design",
+   "response": "not-fixed",
+   "how": "data: no artifact library on this machine has a dose scale independent of its source recording; E4's dependence on E5 is stated in its entry"
+  },
+  {
+   "source": "restatement-2",
+   "doubt": "7. the 20 Hz harmonic may vary with the state change and bear on E2",
+   "level": "design",
+   "response": "fixed",
+   "how": "E3 changed: harmonic power is reported for both states and E2's rates are recomputed after an 18-22 Hz notch"
+  },
+  {
+   "source": "restatement-2",
+   "doubt": "8. decision rules only in a local commit; novelty rests on titles and abstracts",
+   "level": "wording",
+   "response": "fixed",
+   "how": "both are stated as labelled risk entries"
+  }
+ ]
+}

@@ -1,0 +1,14 @@
+{
+ "unit": "A7.D",
+ "target": "answer:smithetal2020",
+ "ops": [
+  {
+   "op": "set",
+   "path": "units.0.id",
+   "value": "smithetal2020#A9"
+  }
+ ],
+ "expect": "D04",
+ "level": "ERROR",
+ "why": "a claim numbered as an assumption"
+}

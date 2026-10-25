@@ -1,0 +1,16 @@
+{
+ "unit": "A7.X2",
+ "target": "log",
+ "ops": [
+  {
+   "op": "set",
+   "path": "0.axes_differ",
+   "value": [
+    "none"
+   ]
+  }
+ ],
+ "expect": "H04",
+ "level": "ERROR",
+ "why": "a straight conflict built on a 'may' claim"
+}

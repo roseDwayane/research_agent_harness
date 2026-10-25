@@ -1,0 +1,8 @@
+{
+ "unit": "A7.R",
+ "target": "question:Q_001.md",
+ "ops": [{"op": "replace", "path": "\"strength\": \"may\"", "value": "\"strength\": \"shows\""}],
+ "expect": "Y11",
+ "level": "ERROR",
+ "why": "a target's strength raised above the source's verb"
+}

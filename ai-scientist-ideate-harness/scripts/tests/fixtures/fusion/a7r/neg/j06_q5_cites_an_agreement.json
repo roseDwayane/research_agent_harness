@@ -1,0 +1,14 @@
+{
+ "unit": "A7.R",
+ "target": "cards",
+ "ops": [
+  {
+   "op": "set",
+   "path": "planes.0.q5",
+   "value": "everyone agrees cleaning helps (X0003)"
+  }
+ ],
+ "expect": "J06",
+ "level": "ERROR",
+ "why": "open problems drawn from an agreement"
+}

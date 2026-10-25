@@ -1,0 +1,8 @@
+{
+ "unit": "A5",
+ "delete": true,
+ "ops": [],
+ "expect": "N01",
+ "why": "A4 cannot tell a skipped snowball from a finished one",
+ "level": "ERROR"
+}

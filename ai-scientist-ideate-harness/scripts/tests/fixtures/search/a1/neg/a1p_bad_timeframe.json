@@ -1,0 +1,13 @@
+{
+ "unit": "A1.p",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "protocol.timeframe",
+   "value": "2026-2013"
+  }
+ ],
+ "expect": "P08",
+ "why": "reversed timeframe"
+}

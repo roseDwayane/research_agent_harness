@@ -1,0 +1,16 @@
+{
+ "unit": "A1.q",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "sources",
+   "value": [
+    "google_scholar",
+    "openalex"
+   ]
+  }
+ ],
+ "expect": "Q15",
+ "why": "unknown source"
+}

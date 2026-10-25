@@ -1,0 +1,14 @@
+{
+ "unit": "A7.D",
+ "target": "answer:smithetal2020",
+ "ops": [
+  {
+   "op": "set",
+   "path": "experiments.0.baselines",
+   "value": "no cleaning"
+  }
+ ],
+ "expect": "D08",
+ "level": "ERROR",
+ "why": "a list field written as a bare string"
+}

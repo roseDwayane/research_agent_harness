@@ -1,0 +1,19 @@
+{
+ "unit": "A7.X2",
+ "target": "log",
+ "ops": [
+  {
+   "op": "set",
+   "path": "2.result",
+   "value": "incommensurable"
+  },
+  {
+   "op": "set",
+   "path": "2.vocab_issue",
+   "value": "BNCI split differs"
+  }
+ ],
+ "expect": "H06",
+ "level": "ERROR",
+ "why": "incommensurable and the vocabulary never revised"
+}

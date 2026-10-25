@@ -1,0 +1,14 @@
+{
+ "unit": "A2.m",
+ "target": "raw",
+ "ops": [
+  {
+   "op": "set",
+   "path": "papers.0.found_by",
+   "value": "Q1"
+  }
+ ],
+ "expect": "M03",
+ "level": "ERROR",
+ "why": "found_by as a single value"
+}

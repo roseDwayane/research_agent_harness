@@ -1,0 +1,14 @@
+{
+ "unit": "A7.A",
+ "target": "alignment",
+ "ops": [
+  {
+   "op": "append",
+   "path": "vocab.concepts.5.variants",
+   "value": "SNR"
+  }
+ ],
+ "expect": "A02",
+ "level": "ERROR",
+ "why": "one spelling on two concepts"
+}

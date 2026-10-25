@@ -1,0 +1,13 @@
+{
+ "unit": "A2.c",
+ "target": "round",
+ "ops": [
+  {
+   "op": "delete",
+   "path": "verdicts.4"
+  }
+ ],
+ "expect": "R01",
+ "level": "ERROR",
+ "why": "an active query without a verdict"
+}

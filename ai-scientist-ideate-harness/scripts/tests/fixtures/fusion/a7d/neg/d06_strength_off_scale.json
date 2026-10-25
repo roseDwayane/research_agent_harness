@@ -1,0 +1,14 @@
+{
+ "unit": "A7.D",
+ "target": "answer:smithetal2020",
+ "ops": [
+  {
+   "op": "set",
+   "path": "units.0.strength",
+   "value": "proves"
+  }
+ ],
+ "expect": "D06",
+ "level": "ERROR",
+ "why": "a strength outside the scale"
+}

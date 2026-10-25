@@ -1,0 +1,15 @@
+{
+ "unit": "A1.p",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "protocol.criteria.inclusion.1.refs",
+   "value": [
+    "O1"
+   ]
+  }
+ ],
+ "expect": "P07",
+ "why": "eligibility-only slot applied by no criterion"
+}

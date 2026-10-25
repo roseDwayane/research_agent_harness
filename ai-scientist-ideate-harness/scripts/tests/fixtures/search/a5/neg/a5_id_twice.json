@@ -1,0 +1,13 @@
+{
+ "unit": "A5",
+ "ops": [
+  {
+   "op": "set",
+   "path": "papers.1.id",
+   "value": "paper_010"
+  }
+ ],
+ "expect": "N02",
+ "why": "one id on two additions",
+ "level": "ERROR"
+}

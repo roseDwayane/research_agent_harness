@@ -1,0 +1,14 @@
+{
+ "unit": "A2.c",
+ "target": "relevance",
+ "ops": [
+  {
+   "op": "set",
+   "path": "rounds",
+   "value": []
+  }
+ ],
+ "expect": "R00",
+ "level": "ERROR",
+ "why": "no relevance verdicts"
+}

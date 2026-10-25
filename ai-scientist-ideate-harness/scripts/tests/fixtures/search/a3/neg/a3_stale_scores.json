@@ -1,0 +1,14 @@
+{
+ "unit": "A3",
+ "target": "scores",
+ "ops": [
+  {
+   "op": "set",
+   "path": "basis.raw",
+   "value": "0000000000000000000000000000000000000000000000000000000000000000"
+  }
+ ],
+ "expect": "C11",
+ "level": "ERROR",
+ "why": "scores merged on an older collection"
+}

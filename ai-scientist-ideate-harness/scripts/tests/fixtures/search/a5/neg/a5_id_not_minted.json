@@ -1,0 +1,13 @@
+{
+ "unit": "A5",
+ "ops": [
+  {
+   "op": "set",
+   "path": "papers.0.id",
+   "value": "paper_999"
+  }
+ ],
+ "expect": "N02",
+ "why": "an id the registry never minted",
+ "level": "ERROR"
+}

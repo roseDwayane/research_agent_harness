@@ -1,0 +1,14 @@
+{
+ "unit": "A3",
+ "target": "scores",
+ "ops": [
+  {
+   "op": "set",
+   "path": "scores.0.record_problem",
+   "value": "looks odd"
+  }
+ ],
+ "expect": "C17",
+ "level": "ERROR",
+ "why": "a record problem outside the known list"
+}

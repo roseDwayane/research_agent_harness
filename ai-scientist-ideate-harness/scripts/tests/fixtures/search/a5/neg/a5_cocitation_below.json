@@ -1,0 +1,13 @@
+{
+ "unit": "A5",
+ "ops": [
+  {
+   "op": "set",
+   "path": "papers.1.cocited_with_seeds",
+   "value": 2
+  }
+ ],
+ "expect": "N03",
+ "why": "co-cited fewer times than the threshold",
+ "level": "ERROR"
+}

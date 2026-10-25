@@ -1,0 +1,34 @@
+{
+  "root": "N1",
+  "nodes": [
+    {
+      "id": "N1",
+      "role": "tests",
+      "claims": [
+        "C1"
+      ],
+      "branches": [
+        {
+          "kind": "supported",
+          "leaf": "L1",
+          "prior": "possible"
+        },
+        {
+          "kind": "uninformative",
+          "leaf": "L2",
+          "prior": "likely"
+        }
+      ]
+    }
+  ],
+  "leaves": [
+    {
+      "id": "L1",
+      "paper": "finding"
+    },
+    {
+      "id": "L2",
+      "paper": "methods-caveat"
+    }
+  ]
+}

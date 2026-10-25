@@ -1,0 +1,12 @@
+{
+ "unit": "A5",
+ "ops": [
+  {
+   "op": "delete",
+   "path": "rounds.0.truncated.similar"
+  }
+ ],
+ "expect": "N04",
+ "why": "what the cap cut off must be recorded",
+ "level": "ERROR"
+}

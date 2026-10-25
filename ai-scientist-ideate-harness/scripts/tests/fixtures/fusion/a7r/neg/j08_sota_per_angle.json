@@ -1,0 +1,14 @@
+{
+ "unit": "A7.R",
+ "target": "sota",
+ "ops": [
+  {
+   "op": "replace",
+   "path": "scope: topic",
+   "value": "angle: \"x\""
+  }
+ ],
+ "expect": "J08",
+ "level": "ERROR",
+ "why": "a synthesis written per angle"
+}
