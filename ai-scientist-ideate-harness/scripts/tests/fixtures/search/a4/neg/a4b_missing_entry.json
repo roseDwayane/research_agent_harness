@@ -1,0 +1,12 @@
+{
+ "unit": "A4.b",
+ "target": "bib",
+ "ops": [
+  {
+   "op": "bib_drop_first"
+  }
+ ],
+ "expect": "L01",
+ "why": "an active key with no BibTeX entry",
+ "level": "ERROR"
+}

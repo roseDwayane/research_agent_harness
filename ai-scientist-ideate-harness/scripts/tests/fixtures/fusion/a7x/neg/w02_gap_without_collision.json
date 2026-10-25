@@ -1,0 +1,14 @@
+{
+ "unit": "B3",
+ "target": "gaps",
+ "ops": [
+  {
+   "op": "set",
+   "path": "gaps.0.collisions",
+   "value": []
+  }
+ ],
+ "expect": "W02",
+ "level": "ERROR",
+ "why": "a gap that points at no collision"
+}

@@ -1,0 +1,8 @@
+{
+  "kind": "query",
+  "id": "Q1",
+  "complete": true,
+  "papers": [
+    "paper_001"
+  ]
+}

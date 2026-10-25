@@ -1,0 +1,417 @@
+{
+ "schema": "ideate-harness-recipes/1",
+ "block": "search",
+ "note": "How each Unit is executed (harness/recipes.py). status draft = not yet run on a real topic.",
+ "recipes": [
+  {
+   "unit": "A1.p",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "write": {
+       "task": "Frame the literature search for the topic file $TOPIC (A1.p, protocol): write the protocol draft $RD/_state/A1/protocol.json with the keys topic, topic_file (= \"$TOPIC\"), depth (= \"$DEPTH\") and protocol, exactly as the rules describe (framework by the question's semantics, slots with operational roles, 2-4 search axes as OR-clusters, outcomes, timeframe, eligibility criteria, completion criterion).",
+       "rules": [
+        "references/search/A1-frame.md#a1p"
+       ],
+       "reads": [
+        "$TOPIC"
+       ],
+       "writes": [
+        "$RD/_state/A1/protocol.json"
+       ]
+      }
+     },
+     {
+      "run": "ideate_tools.py frame set-protocol $RD $RD/_state/A1/protocol.json",
+      "submit": true
+     }
+    ],
+    "revise": [
+     {
+      "write": {
+       "task": "The independent protocol evaluation (A1.e) asked for a revision. Read $RD/step1_protocol_evaluation.md and revise the protocol draft $RD/_state/A1/protocol.json to answer every finding (keep the keys topic, topic_file, depth, protocol).",
+       "rules": [
+        "references/search/A1-frame.md#a1p",
+        "references/search/A1-frame.md#a1e"
+       ],
+       "reads": [
+        "$TOPIC",
+        "$RD/step1_protocol_evaluation.md",
+        "$RD/step1_protocol.md"
+       ],
+       "writes": [
+        "$RD/_state/A1/protocol.json"
+       ]
+      }
+     },
+     {
+      "run": "ideate_tools.py frame set-protocol $RD $RD/_state/A1/protocol.json --note \"A1.e revision\"",
+      "submit": true
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py frame check $RD --unit A1.p --json"
+   ]
+  },
+  {
+   "unit": "A1.q",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "write": {
+       "task": "Write the search strategy draft $RD/_state/A1/strategy.json (A1.q): queries as combinations of the protocol's axes, the variants depth $DEPTH needs, anchor terms, sources and known items, as the rules say.",
+       "rules": [
+        "references/search/A1-frame.md#a1q"
+       ],
+       "reads": [
+        "$TOPIC",
+        "$RD/step1_protocol.md",
+        "$RD/step0_session_config.json"
+       ],
+       "writes": [
+        "$RD/_state/A1/strategy.json"
+       ]
+      }
+     },
+     {
+      "run": "ideate_tools.py frame set-strategy $RD $RD/_state/A1/strategy.json",
+      "submit": true
+     },
+     {
+      "run": "mcp_bridge.py probe $RD",
+      "depth": [
+       "standard",
+       "deep"
+      ]
+     }
+    ],
+    "revise": [
+     {
+      "write": {
+       "task": "The protocol evaluation (A1.e) asked for a revision: bring the strategy draft $RD/_state/A1/strategy.json in line with the revised protocol and the evaluation's findings.",
+       "rules": [
+        "references/search/A1-frame.md#a1q"
+       ],
+       "reads": [
+        "$RD/step1_protocol_evaluation.md",
+        "$RD/step1_protocol.md"
+       ],
+       "writes": [
+        "$RD/_state/A1/strategy.json"
+       ]
+      }
+     },
+     {
+      "run": "ideate_tools.py frame set-strategy $RD $RD/_state/A1/strategy.json",
+      "submit": true
+     },
+     {
+      "run": "mcp_bridge.py probe $RD",
+      "depth": [
+       "standard",
+       "deep"
+      ]
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py frame check $RD --unit A1.q --json"
+   ]
+  },
+  {
+   "unit": "A1.e",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "ideate_tools.py frame eval-brief $RD",
+      "capture": {
+       "name": "N",
+       "regex": "brief_r(\\d+)\\.md"
+      }
+     },
+     {
+      "write": {
+       "task": "Evaluate this research protocol as an independent reader. Follow the brief brief_r$N.md exactly and answer with the JSON it asks for.",
+       "rules": [
+        "references/search/A1-frame.md#a1e"
+       ],
+       "reads": [
+        "$RD/_state/A1e/brief_r$N.md",
+        "$TOPIC",
+        "$RD/step1_protocol.md"
+       ],
+       "writes": [
+        "$RD/_state/A1e/round_$N.json"
+       ],
+       "isolated": true
+      }
+     },
+     {
+      "run": "ideate_tools.py frame set-evaluation $RD $RD/_state/A1e/round_$N.json",
+      "submit": true
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py frame check $RD --unit A1.e --json"
+   ],
+   "note": "LOOP-02 (revision-required -> A1.p, A1.q revise -> A1.e) is driven by the conductor"
+  },
+  {
+   "unit": "A1.v",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "write": {
+       "task": "Write the context draft $RD/_state/A1/context.json (A1.v): target venues, the expert domain and the local environment (artefacts, cached data, packages present and missing - check them, do not guess).",
+       "rules": [
+        "references/search/A1-frame.md#a1v"
+       ],
+       "reads": [
+        "$TOPIC",
+        "$RD/step1_protocol.md"
+       ],
+       "writes": [
+        "$RD/_state/A1/context.json"
+       ],
+       "commands": [
+        "ideate_tools.py env-probe"
+       ]
+      }
+     },
+     {
+      "run": "ideate_tools.py frame set-context $RD $RD/_state/A1/context.json",
+      "submit": true
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py frame check $RD --unit A1.v --json"
+   ]
+  },
+  {
+   "unit": "A2.s",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "mcp_bridge.py search $RD"
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py a2-check $RD --unit A2.s --json"
+   ]
+  },
+  {
+   "unit": "A2.m",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "mcp_bridge.py merge $RD"
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py a2-check $RD --unit A2.m --json"
+   ]
+  },
+  {
+   "unit": "A2.c",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "ideate_tools.py search-check $RD"
+     },
+     {
+      "write": {
+       "task": "Judge every query of the search (A2.c) from the signals search-check computed: ok, replan or accept-weak, each with its reason, and keep / retire every ambiguous term; write the verdicts to $RD/_state/A2c/verdicts.json in the format relevance-set takes.",
+       "rules": [
+        "references/search/A2-search.md#a2c"
+       ],
+       "reads": [
+        "$RD/_state/A2c"
+       ],
+       "writes": [
+        "$RD/_state/A2c/verdicts.json"
+       ],
+       "commands": [
+        "ideate_tools.py search-check",
+        "ideate_tools.py list-papers",
+        "ideate_tools.py trace"
+       ],
+       "forbid": [
+        "$RD/step3_bibliometrics.json"
+       ]
+      }
+     },
+     {
+      "run": "ideate_tools.py relevance-set $RD $RD/_state/A2c/verdicts.json",
+      "submit": true
+     }
+    ],
+    "replan": [
+     {
+      "write": {
+       "task": "Re-plan the queries judged replan in the last round of $RD/step2_relevance_check.json: write each revision (frame query-revise, frame add-terms) and run them, then re-run only the revised queries with `ideate-bridge search <RD> --only <id>`.",
+       "rules": [
+        "references/search/A2-search.md#a2c",
+        "references/search/A1-frame.md#a1q"
+       ],
+       "reads": [
+        "$RD/step2_relevance_check.md"
+       ],
+       "writes": [],
+       "commands": [
+        "ideate_tools.py frame query-revise",
+        "ideate_tools.py frame add-terms",
+        "mcp_bridge.py search",
+        "ideate_tools.py search-check"
+       ]
+      }
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py a2-check $RD --unit A2.c --json"
+   ],
+   "note": "LOOP-01 (replan, at most 2 rounds) is driven by the conductor",
+   "partial_phases": [
+    "replan"
+   ]
+  },
+  {
+   "unit": "A3.b",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "mcp_bridge.py bibliometrics $RD"
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py a3-check $RD --unit A3.b --json"
+   ]
+  },
+  {
+   "unit": "A3.g",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "ideate_tools.py screen-gate $RD"
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py a3-check $RD --unit A3.g --json"
+   ]
+  },
+  {
+   "unit": "A3",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "ideate_tools.py screen-plan $RD"
+     },
+     {
+      "fanout": {
+       "batches": "$RD/_state/fanout/A3/batch_*.in.json",
+       "brief": "$RD/_state/fanout/A3/brief.md",
+       "task": "Read {brief} and {batch}; write {out}.",
+       "out": "field:out",
+       "rules": [
+        "references/search/A3-screen.md#a3"
+       ],
+       "forbid": [
+        "$RD/step3_bibliometrics.json",
+        "$RD/screening_scores.json",
+        "$RD/step3_shortlist.json"
+       ]
+      }
+     },
+     {
+      "run": "ideate_tools.py screen-merge $RD"
+     },
+     {
+      "run": "ideate_tools.py screen-build $RD $RD/screening_scores.json"
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py a3-check $RD --unit A3 --json"
+   ],
+   "note": "scorers are blind to venue and citations: the bibliometrics are denied to them"
+  },
+  {
+   "unit": "A5",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "mcp_bridge.py snowball $RD"
+     }
+    ],
+    "round2": [
+     {
+      "run": "mcp_bridge.py snowball $RD --round 2"
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py a5-check $RD --json"
+   ],
+   "note": "LOOP-04 (the additions screened again; round 2 after >= 10 % growth) is driven by the conductor"
+  },
+  {
+   "unit": "A4.k",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "ideate_tools.py export $RD"
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py a4-check $RD --unit A4.k --json"
+   ]
+  },
+  {
+   "unit": "A4.b",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "mcp_bridge.py bibliography $RD"
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py a4-check $RD --unit A4.b --json"
+   ]
+  }
+ ]
+}

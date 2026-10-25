@@ -1,0 +1,18 @@
+{
+ "unit": "A6.c",
+ "edits": [
+  {
+   "target": "fs",
+   "ops": [
+    {
+     "op": "write",
+     "path": "step5_full_text/smith2020.md",
+     "text": "# smith2020\r\nline one\r\n"
+    }
+   ]
+  }
+ ],
+ "expect": "F12",
+ "level": "ERROR",
+ "why": "a CRLF full text that grep reads wrongly"
+}

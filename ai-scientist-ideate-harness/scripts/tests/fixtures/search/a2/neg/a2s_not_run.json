@@ -1,0 +1,24 @@
+{
+ "unit": "A2.s",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "append",
+   "path": "queries",
+   "value": {
+    "id": "Q6",
+    "strategy": "rigor",
+    "axes": {
+     "C1": "all",
+     "C2": "all"
+    },
+    "flat_query": "EEG artifact rejection",
+    "rationale": "x",
+    "status": "active"
+   }
+  }
+ ],
+ "expect": "S01",
+ "level": "ERROR",
+ "why": "an active query with no instance"
+}

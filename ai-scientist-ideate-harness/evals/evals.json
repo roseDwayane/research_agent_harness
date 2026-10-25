@@ -1,0 +1,23 @@
+{
+  "skill_name": "ai-scientist-ideate",
+  "evals": [
+    {
+      "id": 0,
+      "name": "eeg-quality-biomed",
+      "prompt": "Run ideation on the topic file topic.md in this folder and give me 1 new research idea. Use --depth quick.",
+      "expected_output": "topic.json with one valid 7-key idea; topic_research/ that passes the five literature-search checks (frame check, a2-check, a3-check, a5-check, a4-check) with a biomedical source choice (pubmed/scopus); knowledge cards, a (gap, angle) ledger entry and journal recommendations.",
+      "files": [
+        "ai_scientist/ideas/eeg_quality_vs_accuracy.md"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "flute-compression-ml",
+      "prompt": "Run ideation on the topic file topic.md in this folder and give me 1 new research idea. Use --depth quick.",
+      "expected_output": "The same contract with an ML/engineering source choice (arxiv/ieee) and an idea whose experiments fit CPU / Apple MPS.",
+      "files": [
+        "ai_scientist/ideas/flute_onboard_compression.md"
+      ]
+    }
+  ]
+}

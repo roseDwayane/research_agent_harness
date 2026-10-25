@@ -1,0 +1,25 @@
+{
+ "papers": [
+  {
+   "id": "paper_001",
+   "title": "Artifact rejection and decoding in motor imagery EEG",
+   "year": 2020,
+   "citation_key": "smithetal2020",
+   "abstract": "We show that automated artifact rejection improves decoding accuracy in motor imagery EEG by 4.2 percentage points across 20 subjects."
+  },
+  {
+   "id": "paper_002",
+   "title": "Cleaning MEG recordings with ICA",
+   "year": 2021,
+   "citation_key": "leeetal2021",
+   "abstract": "ICA cleaning of MEG recordings."
+  },
+  {
+   "id": "paper_003",
+   "title": "ICA-based cleaning and class-correlated artifacts",
+   "year": 2019,
+   "citation_key": "parketal2019",
+   "abstract": "Results suggest that ICA-based cleaning may reduce class-correlated artifacts in a public dataset of 9 subjects. We report decoding accuracy before and after cleaning."
+  }
+ ]
+}

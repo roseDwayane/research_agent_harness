@@ -1,0 +1,26 @@
+{
+  "schema": "ideate-search-caveats/1",
+  "at": "2026-10-17T09:00:00+00:00",
+  "caveats": [
+    {
+      "code": "source-failed",
+      "unit": "A2.s",
+      "text": "scopus failed twice",
+      "must_disclose": false
+    },
+    {
+      "code": "accept-weak",
+      "unit": "A2.c",
+      "text": "Q1 accepted weak",
+      "must_disclose": true
+    }
+  ],
+  "must_disclose": [
+    {
+      "code": "accept-weak",
+      "unit": "A2.c",
+      "text": "Q1 accepted weak",
+      "must_disclose": true
+    }
+  ]
+}

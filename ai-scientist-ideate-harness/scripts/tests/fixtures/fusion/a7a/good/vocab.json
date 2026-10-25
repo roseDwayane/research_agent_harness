@@ -1,0 +1,98 @@
+{
+ "concepts": [
+  {
+   "id": "method-family:artifact-rejection",
+   "kind": "method-family",
+   "name": "artifact rejection",
+   "definition": "epochs or channels judged contaminated are dropped before analysis",
+   "variants": [
+    "artifact-rejection",
+    "automated artifact rejection"
+   ]
+  },
+  {
+   "id": "method-family:ica",
+   "kind": "method-family",
+   "name": "ICA cleaning",
+   "definition": "independent components judged artifactual are removed",
+   "variants": [
+    "ICA-based cleaning"
+   ]
+  },
+  {
+   "id": "method:csp-lda",
+   "kind": "method",
+   "name": "CSP + LDA",
+   "definition": "common spatial patterns features into a linear discriminant",
+   "variants": []
+  },
+  {
+   "id": "method:no-cleaning",
+   "kind": "method",
+   "name": "no cleaning",
+   "definition": "the uncleaned signal as the comparison",
+   "variants": []
+  },
+  {
+   "id": "measure:snr-evoked",
+   "kind": "measure",
+   "name": "SNR (evoked / baseline power)",
+   "definition": "evoked power over pre-stimulus baseline power",
+   "variants": [
+    "SNR"
+   ]
+  },
+  {
+   "id": "measure:accuracy",
+   "kind": "measure",
+   "name": "decoding accuracy",
+   "definition": "share of correctly classified trials",
+   "variants": [
+    "accuracy"
+   ]
+  },
+  {
+   "id": "split:trial-kfold",
+   "kind": "split",
+   "name": "k-fold CV over trials",
+   "definition": "folds drawn from trials, subjects mixed across folds",
+   "variants": [
+    "10-fold CV over trials",
+    "10-fold cross-validation over trials"
+   ]
+  },
+  {
+   "id": "dataset:own-mi-eeg",
+   "kind": "dataset",
+   "name": "own MI EEG",
+   "definition": "the authors' own motor-imagery recordings",
+   "variants": [],
+   "not_shared": true
+  },
+  {
+   "id": "dataset:bnci-2a",
+   "kind": "dataset",
+   "name": "BNCI 2014-001",
+   "definition": "public 4-class motor imagery, 9 subjects",
+   "variants": [
+    "public dataset"
+   ]
+  },
+  {
+   "id": "construct:class-correlated-artifacts",
+   "kind": "construct",
+   "name": "class-correlated artifacts",
+   "definition": "artifacts whose occurrence differs between classes",
+   "variants": []
+  },
+  {
+   "id": "construct:label-validity",
+   "kind": "construct",
+   "name": "label validity",
+   "definition": "whether the reference labels measure what they are taken to measure",
+   "variants": []
+  }
+ ],
+ "overrides": {},
+ "unaligned": []
+}

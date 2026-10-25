@@ -1,0 +1,18 @@
+{
+ "unit": "A7.D",
+ "target": "answer:parketal2019",
+ "ops": [
+  {
+   "op": "append",
+   "path": "experiments",
+   "value": {
+    "exp_id": "parketal2019#E2",
+    "citation_key": "parketal2019",
+    "evidence": "abstract"
+   }
+  }
+ ],
+ "expect": "D08",
+ "level": "ERROR",
+ "why": "an abstract-only paper with two matrix rows"
+}

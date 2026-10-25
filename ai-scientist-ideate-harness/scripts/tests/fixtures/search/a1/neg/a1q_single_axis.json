@@ -1,0 +1,15 @@
+{
+ "unit": "A1.q",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "queries.3.axes",
+   "value": {
+    "C3": "all"
+   }
+  }
+ ],
+ "expect": "Q19",
+ "why": "a one-axis query"
+}

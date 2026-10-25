@@ -1,0 +1,14 @@
+{
+ "unit": "A7.R",
+ "target": "question:Q_001.md",
+ "ops": [
+  {
+   "op": "replace",
+   "path": "status: ready",
+   "value": "status: abandoned\nabandoned_reason: settled"
+  }
+ ],
+ "expect": "Y09",
+ "level": "ERROR",
+ "why": "no ready question and none kept"
+}

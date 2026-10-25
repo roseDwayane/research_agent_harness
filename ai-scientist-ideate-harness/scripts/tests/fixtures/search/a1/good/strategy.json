@@ -1,0 +1,81 @@
+{
+ "queries": [
+  {
+   "id": "Q1",
+   "strategy": "primary",
+   "axes": {
+    "C1": "all",
+    "C2": "all"
+   },
+   "flat_query": "EEG automated artifact rejection",
+   "rationale": "both search axes, every synonym"
+  },
+  {
+   "id": "Q2",
+   "strategy": "synonym-swap",
+   "axes": {
+    "C1": [
+     "electroencephalograph*",
+     "scalp recording"
+    ],
+    "C2": [
+     "artefact removal",
+     "automated cleaning"
+    ]
+   },
+   "flat_query": "electroencephalography artefact removal",
+   "rationale": "British spelling and the long form, for ranking engines that see one phrasing at a time"
+  },
+  {
+   "id": "Q3",
+   "strategy": "loosen",
+   "axes": {
+    "C2": "all"
+   },
+   "flat_query": "automated artifact rejection",
+   "rationale": "drops the EEG axis to recover method papers that validate on MEG and EEG together"
+  },
+  {
+   "id": "Q4",
+   "strategy": "anchor-methods",
+   "axes": {
+    "C3": "all",
+    "C1": "all"
+   },
+   "flat_query": "scalp EEG Autoreject",
+   "rationale": "the named pipelines any expert expects to see cited"
+  },
+  {
+   "id": "Q5",
+   "strategy": "contrast",
+   "axes": {
+    "C4": "all",
+    "C1": "all"
+   },
+   "flat_query": "EEG manual expert annotation",
+   "rationale": "the comparison arm, swapped in for the anchor, reaches the annotation literature"
+  }
+ ],
+ "anchor_terms": [
+  "eeg",
+  "electroenceph",
+  "artifact",
+  "artefact"
+ ],
+ "sources": [
+  "semantic_scholar",
+  "openalex",
+  "pubmed",
+  "scopus"
+ ],
+ "known_items": [
+  {
+   "title": "Autoreject: Automated artifact rejection for MEG and EEG data",
+   "why": "the anchor pipeline of the topic"
+  },
+  {
+   "title": "The PREP pipeline: standardized preprocessing for large-scale EEG analysis",
+   "why": "the standard preprocessing pipeline"
+  }
+ ]
+}

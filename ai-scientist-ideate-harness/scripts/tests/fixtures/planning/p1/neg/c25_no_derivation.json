@@ -1,0 +1,6 @@
+{
+ "expect": "C25",
+ "level": "ERROR",
+ "exercised_by": "tests/planning/test_p1_gap2hypo.py::P1.test_derivation_required",
+ "why": "a pointer for units check: the counter-example itself is built in Python in the named test (NEG)"
+}

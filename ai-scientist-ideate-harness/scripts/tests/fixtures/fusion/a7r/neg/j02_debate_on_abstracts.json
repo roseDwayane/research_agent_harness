@@ -1,0 +1,14 @@
+{
+ "unit": "A7.R",
+ "target": "log",
+ "ops": [
+  {
+   "op": "set",
+   "path": "0.evidence_level",
+   "value": "abstract"
+  }
+ ],
+ "expect": "J02",
+ "level": "ERROR",
+ "why": "a debate whose every conflict rests on abstracts"
+}

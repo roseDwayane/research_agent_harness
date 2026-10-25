@@ -1,0 +1,15 @@
+{
+ "unit": "A5",
+ "ops": [
+  {
+   "op": "set",
+   "path": "rounds.0.status.similar",
+   "value": {
+    "status": "skipped"
+   }
+  }
+ ],
+ "expect": "N07",
+ "why": "a skipped direction must say why",
+ "level": "ERROR"
+}

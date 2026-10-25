@@ -1,0 +1,14 @@
+{
+ "unit": "A7.D",
+ "target": "answer:leeetal2021",
+ "ops": [
+  {
+   "op": "set",
+   "path": "eligibility.criteria",
+   "value": []
+  }
+ ],
+ "expect": "D07",
+ "level": "ERROR",
+ "why": "ineligible without naming the protocol criteria"
+}

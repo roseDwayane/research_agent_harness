@@ -1,0 +1,222 @@
+{
+  "A1.e": {
+    "changed": [],
+    "inst": "-",
+    "state": "done",
+    "unverifiable": 2,
+    "why": ""
+  },
+  "A1.p": {
+    "changed": [],
+    "inst": "-",
+    "state": "done",
+    "unverifiable": 1,
+    "why": ""
+  },
+  "A1.q": {
+    "changed": [],
+    "inst": "-",
+    "state": "done",
+    "unverifiable": 1,
+    "why": ""
+  },
+  "A1.v": {
+    "changed": [],
+    "inst": "-",
+    "state": "done",
+    "unverifiable": 0,
+    "why": ""
+  },
+  "A2.c": {
+    "changed": [],
+    "inst": "-",
+    "state": "done",
+    "unverifiable": 1,
+    "why": ""
+  },
+  "A2.m": {
+    "changed": [],
+    "inst": "-",
+    "state": "done",
+    "unverifiable": 0,
+    "why": ""
+  },
+  "A2.s": {
+    "changed": [],
+    "inst": "-",
+    "state": "done",
+    "unverifiable": 1,
+    "why": ""
+  },
+  "A3": {
+    "changed": [
+      "step3_gate.json"
+    ],
+    "inst": "-",
+    "state": "stale",
+    "unverifiable": 3,
+    "why": "input changed: step3_gate.json"
+  },
+  "A3.b": {
+    "changed": [],
+    "inst": "-",
+    "state": "done",
+    "unverifiable": 0,
+    "why": ""
+  },
+  "A3.g": {
+    "changed": [
+      "step3_gate.json"
+    ],
+    "inst": "-",
+    "state": "stale",
+    "unverifiable": 0,
+    "why": "its output changed since done: step3_gate.json"
+  },
+  "A4.b": {
+    "changed": [
+      "step3_gate.json"
+    ],
+    "inst": "-",
+    "state": "stale",
+    "unverifiable": 1,
+    "why": "upstream A4.k is stale"
+  },
+  "A4.k": {
+    "changed": [
+      "step3_gate.json"
+    ],
+    "inst": "-",
+    "state": "stale",
+    "unverifiable": 1,
+    "why": "upstream A3 is stale"
+  },
+  "A5": {
+    "changed": [
+      "step3_gate.json"
+    ],
+    "inst": "-",
+    "state": "stale",
+    "unverifiable": 1,
+    "why": "upstream A3 is stale"
+  },
+  "A6.c": {
+    "changed": [],
+    "inst": null,
+    "state": "todo",
+    "unverifiable": 0,
+    "why": ""
+  },
+  "A6.d": {
+    "changed": [],
+    "inst": null,
+    "state": "todo",
+    "unverifiable": 0,
+    "why": ""
+  },
+  "A7.A1": {
+    "changed": [],
+    "inst": null,
+    "state": "todo",
+    "unverifiable": 0,
+    "why": ""
+  },
+  "A7.A2": {
+    "changed": [],
+    "inst": null,
+    "state": "todo",
+    "unverifiable": 0,
+    "why": ""
+  },
+  "A7.A3": {
+    "changed": [],
+    "inst": null,
+    "state": "todo",
+    "unverifiable": 0,
+    "why": ""
+  },
+  "A7.D": {
+    "changed": [],
+    "inst": null,
+    "state": "todo",
+    "unverifiable": 0,
+    "why": ""
+  },
+  "A7.R1": {
+    "changed": [],
+    "inst": null,
+    "state": "todo",
+    "unverifiable": 0,
+    "why": ""
+  },
+  "A7.R2": {
+    "changed": [],
+    "inst": null,
+    "state": "todo",
+    "unverifiable": 0,
+    "why": ""
+  },
+  "A7.R3": {
+    "changed": [],
+    "inst": null,
+    "state": "todo",
+    "unverifiable": 0,
+    "why": ""
+  },
+  "A7.X1": {
+    "changed": [],
+    "inst": null,
+    "state": "todo",
+    "unverifiable": 0,
+    "why": ""
+  },
+  "A7.X2": {
+    "changed": [],
+    "inst": null,
+    "state": "todo",
+    "unverifiable": 0,
+    "why": ""
+  },
+  "B1": {
+    "changed": [],
+    "inst": null,
+    "state": "todo",
+    "unverifiable": 0,
+    "why": ""
+  },
+  "B2": {
+    "changed": [],
+    "inst": null,
+    "state": "todo",
+    "unverifiable": 0,
+    "why": ""
+  },
+  "B3": {
+    "changed": [],
+    "inst": null,
+    "state": "todo",
+    "unverifiable": 0,
+    "why": ""
+  },
+  "B3.5": {
+    "changed": [],
+    "inst": null,
+    "state": "todo",
+    "unverifiable": 0,
+    "why": ""
+  },
+  "B3.c": {
+    "changed": [],
+    "inst": null,
+    "state": "todo",
+    "unverifiable": 0,
+    "why": ""
+  },
+  "F.9": {
+    "changed": [],
+    "inst": null,
+    "state": "todo",
+    "unverifiable": 0,
+    "why": ""
+  }
+}

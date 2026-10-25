@@ -1,0 +1,13 @@
+{
+ "unit": "B3",
+ "target": "gaps",
+ "ops": [
+  {
+   "op": "del",
+   "path": "gaps.0.supporting.1"
+  }
+ ],
+ "expect": "W03",
+ "level": "ERROR",
+ "why": "a gap one paper supports"
+}

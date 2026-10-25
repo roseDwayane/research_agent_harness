@@ -1,0 +1,13 @@
+{
+ "unit": "A7.D",
+ "target": "note:smithetal2020",
+ "ops": [
+  {
+   "op": "append_text",
+   "value": "Disagrees with: jonesetal2018 - added by hand\n"
+  }
+ ],
+ "expect": "D13",
+ "level": "ERROR",
+ "why": "a note edited instead of its record"
+}

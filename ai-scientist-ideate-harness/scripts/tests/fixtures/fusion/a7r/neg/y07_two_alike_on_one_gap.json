@@ -1,0 +1,8 @@
+{
+ "unit": "A7.R",
+ "target": "add_question:Q_002.md",
+ "ops": [],
+ "expect": "Y07",
+ "level": "ERROR",
+ "why": "two questions on one gap with the same move and axes"
+}

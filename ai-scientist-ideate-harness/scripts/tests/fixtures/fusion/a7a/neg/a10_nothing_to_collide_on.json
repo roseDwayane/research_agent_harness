@@ -1,0 +1,19 @@
+{
+ "unit": "A7.A",
+ "target": "alignment",
+ "ops": [
+  {
+   "op": "set",
+   "path": "coords.parketal2019#C1.axes.construct",
+   "value": "unstated"
+  },
+  {
+   "op": "set",
+   "path": "coords.parketal2019#C1.axes.measure",
+   "value": "unstated"
+  }
+ ],
+ "expect": "A10",
+ "level": "WARN",
+ "why": "a claim with neither construct nor measure"
+}

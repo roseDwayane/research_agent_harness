@@ -1,0 +1,56 @@
+{
+ "citation_key": "parketal2019",
+ "basis": "abstract",
+ "model": "claude-sonnet-5-5",
+ "eligibility": {
+  "verdict": "abstract-only"
+ },
+ "summary": {
+  "problem": "class-correlated artifacts under ICA cleaning",
+  "method": "ICA-based cleaning",
+  "data": "public dataset, 9 subjects",
+  "metrics": "decoding accuracy",
+  "headline": "(TBD)",
+  "builds_on": "(TBD)"
+ },
+ "units": [
+  {
+   "id": "parketal2019#C1",
+   "kind": "claim",
+   "text": "ICA-based cleaning may reduce class-correlated artifacts",
+   "strength": "may",
+   "scope": {
+    "population": "9 subjects",
+    "data": "a public dataset",
+    "conditions": "(TBD)"
+   },
+   "where": "abstract",
+   "quote": "ICA-based cleaning may reduce class-correlated artifacts"
+  }
+ ],
+ "experiments": [
+  {
+   "exp_id": "parketal2019#E1",
+   "citation_key": "parketal2019",
+   "evidence": "abstract",
+   "role": "analysis",
+   "method_family": [
+    "ica"
+   ],
+   "metrics": [
+    "accuracy"
+   ],
+   "stats": "(TBD)"
+  }
+ ],
+ "terms": [
+  {
+   "term": "ICA-based cleaning",
+   "kind": "method"
+  },
+  {
+   "term": "class-correlated artifacts",
+   "kind": "construct"
+  }
+ ]
+}

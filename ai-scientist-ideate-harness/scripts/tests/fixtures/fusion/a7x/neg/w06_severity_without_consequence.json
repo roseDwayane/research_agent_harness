@@ -1,0 +1,14 @@
+{
+ "unit": "B3",
+ "target": "gaps",
+ "ops": [
+  {
+   "op": "set",
+   "path": "gaps.0.consequence_evidence",
+   "value": []
+  }
+ ],
+ "expect": "W06",
+ "level": "ERROR",
+ "why": "severity 4 on opinion"
+}

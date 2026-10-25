@@ -1,0 +1,16 @@
+{
+ "unit": "A1.q",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "queries.1.axes",
+   "value": {
+    "C1": "all",
+    "C2": "all"
+   }
+  }
+ ],
+ "expect": "Q03",
+ "why": "synonym-swap identical to the primary"
+}

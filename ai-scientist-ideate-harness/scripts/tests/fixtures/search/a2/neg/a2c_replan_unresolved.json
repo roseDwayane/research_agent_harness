@@ -1,0 +1,18 @@
+{
+ "unit": "A2.c",
+ "target": "round",
+ "ops": [],
+ "expect": "R03",
+ "level": "ERROR",
+ "why": "a replan from the previous round still active",
+ "prev": {
+  "verdicts": [
+   {
+    "query": "Q2",
+    "verdict": "replan",
+    "reason": "x"
+   }
+  ]
+ },
+ "rounds_before": 1
+}

@@ -1,0 +1,14 @@
+{
+ "unit": "A1.q",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "queries.1.strategy",
+   "value": "angle"
+  }
+ ],
+ "expect": "Q01",
+ "level": "ERROR",
+ "why": "a strategy outside the variant list (a free-form 'angle' query)"
+}

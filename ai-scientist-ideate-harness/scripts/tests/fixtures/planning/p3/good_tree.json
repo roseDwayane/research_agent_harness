@@ -1,0 +1,47 @@
+{
+  "schema": "ai-scientist-decision-tree/1", "idea": "reference_mismatch_geometry", "generation": 1, "question": null,
+  "root": "N0",
+  "nodes": [
+    {"id": "N0", "experiment": "E0", "role": "instrument", "claims": [], "checkpoint": true,
+     "reads": "109 subjects load with their imagery runs and subject ids",
+     "branches": [
+       {"kind": "pass", "if": "all 109 subjects load", "next": "N1", "prior": "likely", "prior_basis": "public data, cached"},
+       {"kind": "fail", "if": "fewer than 100 subjects load", "leaf": "L0", "prior": "unlikely", "prior_basis": "cached"}]},
+    {"id": "N1", "experiment": "E3", "role": "control", "claims": ["C1"], "checkpoint": true,
+     "reads": "the injected 30 degree rotation drops accuracy by about 8 points; the relabelling by none",
+     "branches": [
+       {"kind": "pass", "if": "rotation drop >= 4 points and relabelling drop CI includes 0", "next": "N2", "prior": "likely",
+        "prior_basis": "signed, unclipped statistic"},
+       {"kind": "fail", "if": "rotation drop < 4 points", "leaf": "L1", "prior": "unlikely", "prior_basis": "no condition on the control"}]},
+    {"id": "N2", "experiment": "E2", "role": "tests", "claims": ["C1"],
+     "reads": "mean decoding accuracy drop under mismatch vs matched-reference calibration accuracy, 95% CI",
+     "branches": [
+       {"kind": "supported", "if": "mean drop >= 2 points and the 95% CI excludes 0", "next": "N3", "prior": "possible",
+        "prior_basis": "contested direction"},
+       {"kind": "refuted", "if": "mean drop < 2 points with a 95% CI that includes 0", "leaf": "L3", "prior": "possible",
+        "prior_basis": "contested direction"},
+       {"kind": "uninformative", "if": "the 95% CI excludes 0 but the drop is below 2 points, or spans 0 and 2", "leaf": "L4",
+        "prior": "unlikely", "prior_basis": "power adequate (d >= 0.27)"}]},
+    {"id": "N3", "experiment": "E4", "role": "descriptive", "claims": ["C2"],
+     "reads": "principal angle per operator with its 95% CI",
+     "branches": [
+       {"kind": "precise", "if": "CI total width <= 0.4 SD", "leaf": "L2", "prior": "possible", "prior_basis": "109 subjects"},
+       {"kind": "imprecise", "if": "CI wider than 0.4 SD", "leaf": "L5", "prior": "possible", "prior_basis": "109 subjects"}]}
+  ],
+  "leaves": [
+    {"id": "L0", "claims": {"C1": "undecided"}, "conclusion": "the dataset cannot carry the study", "paper": "not-publishable",
+     "answers_question": "none", "rivals": {"killed": [], "alive": []}, "then": "stop; take the next question"},
+    {"id": "L1", "claims": {"C1": "undecided"}, "conclusion": "the pipeline cannot see a known rotation, so no drop can be read",
+     "paper": "methods-caveat", "answers_question": "none", "rivals": {"killed": [], "alive": ["bias"]}},
+    {"id": "L2", "claims": {"C1": "supported", "C2": "estimated"},
+     "conclusion": "the loss is geometric and its size per operator is known, so it is repairable by re-alignment",
+     "paper": "finding", "answers_question": "whole", "rivals": {"killed": ["bias", "chance"], "alive": []}},
+    {"id": "L5", "claims": {"C1": "supported", "C2": "imprecise"},
+     "conclusion": "the loss is geometric, but how far each operator moves the geometry stays unresolved",
+     "paper": "finding", "answers_question": "part", "rivals": {"killed": ["bias", "chance"], "alive": []}},
+    {"id": "L3", "claims": {"C1": "refuted"}, "conclusion": "a reference mismatch does not lower accuracy by 2 points: the harmless reading holds",
+     "paper": "informative-null", "answers_question": "whole", "rivals": {"killed": ["chance"], "alive": []}},
+    {"id": "L4", "claims": {"C1": "undecided"}, "conclusion": "a drop exists but is smaller than matters, or cannot be told from it",
+     "paper": "methods-caveat", "answers_question": "part", "rivals": {"killed": [], "alive": ["bias"]}}
+  ]
+}

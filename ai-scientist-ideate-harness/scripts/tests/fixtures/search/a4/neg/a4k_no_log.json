@@ -1,0 +1,12 @@
+{
+ "unit": "A4.k",
+ "target": "log",
+ "ops": [
+  {
+   "op": "log_drop_first"
+  }
+ ],
+ "expect": "K01",
+ "why": "a shortlisted paper without a key (its log line lost)",
+ "level": "ERROR"
+}

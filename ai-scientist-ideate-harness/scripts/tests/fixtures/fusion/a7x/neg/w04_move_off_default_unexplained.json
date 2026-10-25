@@ -1,0 +1,14 @@
+{
+ "unit": "B3",
+ "target": "gaps",
+ "ops": [
+  {
+   "op": "set",
+   "path": "gaps.0.move",
+   "value": "development"
+  }
+ ],
+ "expect": "W04",
+ "level": "ERROR",
+ "why": "a move the collisions do not suggest, without a reason"
+}

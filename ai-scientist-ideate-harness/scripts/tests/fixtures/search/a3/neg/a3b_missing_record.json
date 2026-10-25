@@ -1,0 +1,13 @@
+{
+ "unit": "A3.b",
+ "target": "bib",
+ "ops": [
+  {
+   "op": "drop_first",
+   "path": "papers"
+  }
+ ],
+ "expect": "B01",
+ "level": "ERROR",
+ "why": "a candidate without bibliometrics"
+}

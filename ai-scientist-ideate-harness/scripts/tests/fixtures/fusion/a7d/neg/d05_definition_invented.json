@@ -1,0 +1,14 @@
+{
+ "unit": "A7.D",
+ "target": "answer:smithetal2020",
+ "ops": [
+  {
+   "op": "set",
+   "path": "terms.0.definition",
+   "value": "the ratio of signal variance to noise variance"
+  }
+ ],
+ "expect": "D05",
+ "level": "ERROR",
+ "why": "a measure definition that is not the paper's sentence"
+}

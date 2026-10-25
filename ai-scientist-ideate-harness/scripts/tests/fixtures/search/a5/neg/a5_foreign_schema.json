@@ -1,0 +1,12 @@
+{
+ "unit": "A5",
+ "ops": [
+  {
+   "op": "delete",
+   "path": "schema"
+  }
+ ],
+ "expect": "N01",
+ "why": "a snowball file another tool wrote",
+ "level": "ERROR"
+}

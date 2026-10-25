@@ -1,0 +1,13 @@
+{
+ "unit": "A5",
+ "ops": [
+  {
+   "op": "set",
+   "path": "papers.0.cocited_by_included",
+   "value": 2
+  }
+ ],
+ "expect": "N03",
+ "why": "backward with fewer citing papers than the threshold",
+ "level": "ERROR"
+}

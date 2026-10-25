@@ -1,0 +1,17 @@
+{
+ "unit": "A7.A",
+ "target": "decon:smithetal2020",
+ "ops": [
+  {
+   "op": "append",
+   "path": "terms",
+   "value": {
+    "term": "accuracy",
+    "kind": "measure"
+   }
+  }
+ ],
+ "expect": "A08",
+ "level": "ERROR",
+ "why": "the vocabulary predates a record's words"
+}

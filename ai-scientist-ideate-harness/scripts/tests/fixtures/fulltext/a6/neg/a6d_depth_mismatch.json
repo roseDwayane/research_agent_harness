@@ -1,0 +1,18 @@
+{
+ "unit": "A6.d",
+ "edits": [
+  {
+   "target": "step0",
+   "ops": [
+    {
+     "op": "set",
+     "path": "depth",
+     "value": "deep"
+    }
+   ]
+  }
+ ],
+ "expect": "F03",
+ "level": "ERROR",
+ "why": "candidates picked for another depth than the topic's"
+}

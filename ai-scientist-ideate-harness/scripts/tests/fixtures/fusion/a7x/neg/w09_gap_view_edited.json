@@ -1,0 +1,13 @@
+{
+ "unit": "B3",
+ "target": "gaps_md",
+ "ops": [
+  {
+   "op": "append_text",
+   "value": "\n- extra line added by hand\n"
+  }
+ ],
+ "expect": "W09",
+ "level": "ERROR",
+ "why": "the rendered gap analysis edited by hand"
+}

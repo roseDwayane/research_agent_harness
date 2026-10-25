@@ -1,0 +1,27 @@
+{
+ "unit": "A6.c",
+ "edits": [
+  {
+   "target": "fs",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "step5_full_text/patel2018_meta.json"
+    }
+   ]
+  },
+  {
+   "target": "shortlist",
+   "ops": [
+    {
+     "op": "set",
+     "path": "papers.4.access_level",
+     "value": "full-text-plain"
+    }
+   ]
+  }
+ ],
+ "expect": "F15",
+ "level": "WARN",
+ "why": "a full text from pdftotext is said"
+}

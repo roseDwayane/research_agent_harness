@@ -1,0 +1,15 @@
+{
+ "unit": "A5",
+ "ops": [
+  {
+   "op": "set",
+   "path": "rounds.0.status.forward.seeds",
+   "value": [
+    "paper_001"
+   ]
+  }
+ ],
+ "expect": "N05",
+ "why": "forward seeds picked by hand",
+ "level": "ERROR"
+}

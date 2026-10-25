@@ -1,0 +1,25 @@
+{
+ "unit": "A7.X2",
+ "target": "log",
+ "ops": [
+  {
+   "op": "set",
+   "path": "3.sides",
+   "value": [
+    {
+     "id": "smithetal2020#E1",
+     "paper": "smithetal2020",
+     "kind": "row"
+    },
+    {
+     "id": "parketal2019#E1",
+     "paper": "parketal2019",
+     "kind": "row"
+    }
+   ]
+  }
+ ],
+ "expect": "H05",
+ "level": "ERROR",
+ "why": "the later paper listed first"
+}

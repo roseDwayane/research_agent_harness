@@ -1,0 +1,8 @@
+{
+ "unit": "A7.R",
+ "target": "question:Q_001.md",
+ "ops": [{"op": "replace", "path": "smithetal2020#E1\", \"value\"", "value": "smithetal2020#E9\", \"value\""}],
+ "expect": "Y13",
+ "level": "ERROR",
+ "why": "a magnitude that is not a matrix row"
+}

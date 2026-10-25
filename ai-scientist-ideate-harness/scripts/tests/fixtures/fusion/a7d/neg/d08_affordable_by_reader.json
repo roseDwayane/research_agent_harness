@@ -1,0 +1,14 @@
+{
+ "unit": "A7.D",
+ "target": "answer:smithetal2020",
+ "ops": [
+  {
+   "op": "set",
+   "path": "experiments.0.affordable_here",
+   "value": "partial - own data differ"
+  }
+ ],
+ "expect": "D08",
+ "level": "ERROR",
+ "why": "the reader judging affordability, which is the lens's call"
+}

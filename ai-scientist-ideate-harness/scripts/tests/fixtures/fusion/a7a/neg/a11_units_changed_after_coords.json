@@ -1,0 +1,14 @@
+{
+ "unit": "A7.A",
+ "target": "decon:parketal2019",
+ "ops": [
+  {
+   "op": "set",
+   "path": "units.0.text",
+   "value": "ICA-based cleaning reduces class-correlated artifacts"
+  }
+ ],
+ "expect": "A11",
+ "level": "ERROR",
+ "why": "a claim reworded after its coordinates were set"
+}

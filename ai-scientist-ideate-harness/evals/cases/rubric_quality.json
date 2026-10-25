@@ -1,0 +1,15 @@
+{
+  "area": "quality of model judgements (probabilistic; LLM-judged against evals/rubrics/model_units.md)",
+  "note": "These cases are defined but not executed: no judge is configured, and the thresholds are TBD until baselines exist (OQ-11). run_evals.py reports them as not_executed, never as passed.",
+  "cases": [
+    {"case_id": "EV-QUAL-001", "unit_id": "A1.e", "description": "The protocol evaluator finds the planted framework misfit (a PICO forced on a methods topic) and its verdict agrees with its findings.", "tags": ["quality"], "evaluation_method": "llm_rubric", "rubric": "R-A1e", "steps": []},
+    {"case_id": "EV-QUAL-002", "unit_id": "A2.c", "description": "Query verdicts: an off-anchor query is judged replan with a reason grounded in the signals, not accepted.", "tags": ["quality"], "evaluation_method": "llm_rubric", "rubric": "R-A2c", "steps": []},
+    {"case_id": "EV-QUAL-003", "unit_id": "A3", "description": "Screening: every score is preceded by a verbatim quote; inclusion agrees with a labelled set (agreement threshold TBD).", "tags": ["quality"], "evaluation_method": "llm_rubric", "rubric": "R-A3", "steps": []},
+    {"case_id": "EV-QUAL-004", "unit_id": "A7.D", "description": "Deconstruction: claims keep the source's strength and scope; no paraphrased quote; nothing from other papers.", "tags": ["quality"], "evaluation_method": "llm_rubric", "rubric": "R-A7D", "steps": []},
+    {"case_id": "EV-QUAL-005", "unit_id": "A7.X2", "description": "Collision judgements: planted conflict, boundary and incommensurable pairs are judged correctly with the differing axes named.", "tags": ["quality"], "evaluation_method": "llm_rubric", "rubric": "R-A7X2", "steps": []},
+    {"case_id": "EV-QUAL-006", "unit_id": "B3.5", "description": "Research questions survive the four screens honestly; a settled question is not marked ready.", "tags": ["quality"], "evaluation_method": "llm_rubric", "rubric": "R-B35", "steps": []},
+    {"case_id": "EV-QUAL-007", "unit_id": "P1", "description": "The hypothesis form follows the primary collision (derivation table) and rivals come from the field's accounts.", "tags": ["quality"], "evaluation_method": "llm_rubric", "rubric": "R-P1", "steps": []},
+    {"case_id": "EV-QUAL-008", "unit_id": "P4", "description": "Attack plan: each target is a real sentence of its source, the wording is not stronger than the source, and the landing leaf exists.", "tags": ["quality"], "evaluation_method": "llm_rubric", "rubric": "R-P4", "steps": []},
+    {"case_id": "EV-QUAL-009", "unit_id": "P5", "description": "Packaging introduces no decision absent from P1-P4 and promises nothing untested (blind restatement matches).", "tags": ["quality"], "evaluation_method": "llm_rubric", "rubric": "R-P5", "steps": []}
+  ]
+}

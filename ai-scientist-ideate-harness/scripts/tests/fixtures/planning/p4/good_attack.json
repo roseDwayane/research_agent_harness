@@ -1,0 +1,26 @@
+{
+  "schema": "ai-scientist-attack/1", "idea": "reference_mismatch_geometry", "generation": 1, "question": "Q_001",
+  "common_ground": ["X0003"],
+  "targets": [
+    {"id": "T1", "order": 1, "papers": ["smithetal2020"], "claim_units": ["smithetal2020#A1"], "strength": null,
+     "weakness": {"collision": "X0002", "type": "assumption-challenged", "axes": ["measure-definition"]},
+     "evidence_level": "full", "holds": "expert artifact labels can be treated as ground truth for cleaning",
+     "weapon": ["E2"], "lands_on": ["L2"],
+     "if_miss": {"leaf": "L3", "say": "the label premise survives this test: a mismatch costs less than 2 points"},
+     "concede": "the cleaning gain on shared data is real (X0003)"},
+    {"id": "T2", "order": 2, "papers": ["parketal2019"], "claim_units": ["parketal2019#C1"], "strength": "may",
+     "weakness": {"collision": "X0001", "type": "conflict", "axes": ["claim-strength", "method-config"]},
+     "evidence_level": "abstract", "holds": "ICA-based cleaning may reduce class-correlated artifacts",
+     "weapon": ["E3"], "lands_on": ["L2"],
+     "if_miss": {"leaf": "L1", "say": "the pipeline cannot see a known rotation, so the hedge stays untested"},
+     "concede": "it hedges its claim, and its gain replicates (X0003)"}
+  ],
+  "closest": {"papers": ["leeetal2021"], "lookup": "round 1: list-papers --file raw --grep 'reference mismatch' (1 hit)",
+              "distinction": "it cleans MEG with ICA and never crosses the reference between training and test"},
+  "related_work": [
+    {"role": "common-ground", "text": "Cleaning studies score their methods against expert artifact labels and report decoding gains on shared data: automated rejection adds 4.2 points (Smith et al., 2020) [smithetal2020] and ICA cleaning about 3 points (Park et al., 2019) [parketal2019]. Both treat the label and the reference as fixed parts of the pipeline."},
+    {"role": "T1", "text": "Smith et al. (2020) [smithetal2020] treat the expert labels as ground truth, a premise that class-correlated artifacts call into question, because the labels then differ between the classes being decoded. E2 tests this premise directly by crossing the training and the test reference on the same epochs: a drop of 2 points or more with an interval that excludes zero would show that the gain partly rides on how the labels and the reference meet, while a smaller drop would leave the premise standing for this dataset."},
+    {"role": "T2", "text": "Park et al. (2019) [parketal2019] suggest, from the abstract only, that ICA may reduce class-correlated artifacts; their hedge is not tested against a known effect. E3 plants a known rotation and a geometry-preserving relabelling, so that the claim is examined where a pipeline must see the effect before any reading of E2 counts."},
+    {"role": "closest", "text": "The closest retrieved work cleans MEG recordings with ICA (Lee et al., 2021) [leeetal2021] but never crosses the reference between training and test, which is the contrast this study reads. Literature base: 3 screened papers in this fixture."}
+  ]
+}

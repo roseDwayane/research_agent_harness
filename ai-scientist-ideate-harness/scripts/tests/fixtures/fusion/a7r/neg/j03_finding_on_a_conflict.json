@@ -1,0 +1,16 @@
+{
+ "unit": "A7.R",
+ "target": "cards",
+ "ops": [
+  {
+   "op": "set",
+   "path": "points.1.collisions",
+   "value": [
+    "X0001"
+   ]
+  }
+ ],
+ "expect": "J03",
+ "level": "ERROR",
+ "why": "a findings Point built on a conflict"
+}

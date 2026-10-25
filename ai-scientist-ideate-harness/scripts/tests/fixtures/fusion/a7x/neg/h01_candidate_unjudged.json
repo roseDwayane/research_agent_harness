@@ -1,0 +1,13 @@
+{
+ "unit": "A7.X2",
+ "target": "log",
+ "ops": [
+  {
+   "op": "del",
+   "path": "3"
+  }
+ ],
+ "expect": "H01",
+ "level": "ERROR",
+ "why": "a candidate nobody judged"
+}

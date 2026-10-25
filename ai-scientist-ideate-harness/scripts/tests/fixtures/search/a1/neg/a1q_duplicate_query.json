@@ -1,0 +1,22 @@
+{
+ "unit": "A1.q",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "append",
+   "path": "queries",
+   "value": {
+    "id": "Q6",
+    "strategy": "anchor-methods",
+    "axes": {
+     "C3": "all",
+     "C1": "all"
+    },
+    "flat_query": "EEG Autoreject FASTER ICLabel",
+    "rationale": "again"
+   }
+  }
+ ],
+ "expect": "Q17",
+ "why": "the same axes and terms twice"
+}

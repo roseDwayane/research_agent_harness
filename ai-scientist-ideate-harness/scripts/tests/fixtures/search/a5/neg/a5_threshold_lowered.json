@@ -1,0 +1,13 @@
+{
+ "unit": "A5",
+ "ops": [
+  {
+   "op": "set",
+   "path": "rounds.0.threshold",
+   "value": 2
+  }
+ ],
+ "expect": "N03",
+ "why": "the threshold lowered by hand",
+ "level": "ERROR"
+}

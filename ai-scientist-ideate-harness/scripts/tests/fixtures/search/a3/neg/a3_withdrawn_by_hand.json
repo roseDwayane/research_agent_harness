@@ -1,0 +1,27 @@
+{
+ "unit": "A3",
+ "target": "scores",
+ "ops": [
+  {
+   "op": "set",
+   "path": "withdrawn",
+   "value": [
+    {
+     "id": "paper_001",
+     "rel": 2,
+     "qual": 3,
+     "rationale": "moved by hand",
+     "batch": 0,
+     "model": "x",
+     "withdrawn": {
+      "at": "2026-10-17T00:00:00-07:00",
+      "why": "by hand"
+     }
+    }
+   ]
+  }
+ ],
+ "expect": "C15",
+ "level": "ERROR",
+ "why": "an entry hidden as withdrawn although the paper is still a candidate"
+}

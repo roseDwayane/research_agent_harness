@@ -1,0 +1,14 @@
+{
+ "unit": "A7.X2",
+ "target": "log",
+ "ops": [
+  {
+   "op": "set",
+   "path": "0.result",
+   "value": "contradicts"
+  }
+ ],
+ "expect": "H03",
+ "level": "ERROR",
+ "why": "a result outside the list"
+}

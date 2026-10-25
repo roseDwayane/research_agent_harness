@@ -1,0 +1,14 @@
+{
+ "unit": "A7.R",
+ "target": "sota",
+ "ops": [
+  {
+   "op": "replace",
+   "path": "Both papers report a gain on BNCI (X0003, P_draft_Gain_On_BNCI).",
+   "value": "Everyone agrees cleaning helps."
+  }
+ ],
+ "expect": "J08",
+ "level": "ERROR",
+ "why": "a consensus with no collision behind it"
+}

@@ -1,0 +1,64 @@
+{
+  "root": "N0",
+  "nodes": [
+    {
+      "id": "N0",
+      "role": "instrument",
+      "claims": [],
+      "branches": [
+        {
+          "kind": "pass",
+          "next": "N1",
+          "prior": "likely"
+        },
+        {
+          "kind": "fail",
+          "leaf": "L0",
+          "prior": "unlikely"
+        }
+      ]
+    },
+    {
+      "id": "N1",
+      "role": "tests",
+      "claims": [
+        "C1"
+      ],
+      "branches": [
+        {
+          "kind": "supported",
+          "leaf": "L1",
+          "prior": "possible"
+        },
+        {
+          "kind": "refuted",
+          "leaf": "L2",
+          "prior": "possible"
+        },
+        {
+          "kind": "uninformative",
+          "leaf": "L3",
+          "prior": "unlikely"
+        }
+      ]
+    }
+  ],
+  "leaves": [
+    {
+      "id": "L0",
+      "paper": "not-publishable"
+    },
+    {
+      "id": "L1",
+      "paper": "finding"
+    },
+    {
+      "id": "L2",
+      "paper": "informative-null"
+    },
+    {
+      "id": "L3",
+      "paper": "methods-caveat"
+    }
+  ]
+}

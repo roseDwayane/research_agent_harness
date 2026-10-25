@@ -1,0 +1,14 @@
+{
+ "unit": "A7.A",
+ "target": "alignment",
+ "ops": [
+  {
+   "op": "set",
+   "path": "vocab.concepts.0.id",
+   "value": "Artifact Rejection"
+  }
+ ],
+ "expect": "A01",
+ "level": "ERROR",
+ "why": "a concept id outside <kind>:<slug>"
+}

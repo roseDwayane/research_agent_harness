@@ -1,0 +1,16 @@
+{
+ "unit": "A3",
+ "target": "scores",
+ "ops": [
+  {
+   "op": "set",
+   "path": "scores.0.soft_violates",
+   "value": [
+    "EX1"
+   ]
+  }
+ ],
+ "expect": "C16",
+ "level": "ERROR",
+ "why": "soft_violates although A1.e made no criterion soft"
+}

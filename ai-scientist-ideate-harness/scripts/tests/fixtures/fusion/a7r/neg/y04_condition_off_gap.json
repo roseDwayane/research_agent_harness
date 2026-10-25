@@ -1,0 +1,14 @@
+{
+ "unit": "A7.R",
+ "target": "question:Q_001.md",
+ "ops": [
+  {
+   "op": "replace",
+   "path": "meets class-correlated artifacts (X0002)",
+   "value": "meets class-correlated artifacts"
+  }
+ ],
+ "expect": "Y04",
+ "level": "ERROR",
+ "why": "a condition that is not the gap's"
+}

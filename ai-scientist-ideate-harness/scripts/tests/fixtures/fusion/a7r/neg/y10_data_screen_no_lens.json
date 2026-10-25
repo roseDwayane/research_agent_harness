@@ -1,0 +1,14 @@
+{
+ "unit": "A7.R",
+ "target": "question:Q_001.md",
+ "ops": [
+  {
+   "op": "replace",
+   "path": "lens:method-family:artifact-rejection; the labelled epochs",
+   "value": "we have data"
+  }
+ ],
+ "expect": "Y10",
+ "level": "ERROR",
+ "why": "the data screen not read off the lens"
+}

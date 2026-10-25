@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-17T09:00:00+00:00",
+  "target_ready": 5,
+  "ready": 0,
+  "questions": [
+    {
+      "id": "Q_099",
+      "status": "abandoned",
+      "gap_rank": 9
+    }
+  ]
+}

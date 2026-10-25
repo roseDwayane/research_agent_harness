@@ -1,0 +1,26 @@
+{
+ "unit": "A6.d",
+ "edits": [
+  {
+   "target": "fs",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "pdfs/chen2021.pdf"
+    }
+   ]
+  },
+  {
+   "target": "fetch_log",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "attempts.chen2021"
+    }
+   ]
+  }
+ ],
+ "expect": "F01",
+ "level": "ERROR",
+ "why": "a candidate with no PDF and no recorded attempt is not settled"
+}

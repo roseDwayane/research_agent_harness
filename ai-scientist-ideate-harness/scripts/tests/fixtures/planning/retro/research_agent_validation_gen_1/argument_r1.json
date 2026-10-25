@@ -1,0 +1,148 @@
+{
+ "schema": "ai-scientist-argument/1",
+ "idea": "budget_matched_query_formulation", "generation": 1, "gap": "GAP_001",
+ "angle": "retrieval side: query formulation under a matched result budget",
+ "variant": "none",
+ "study_sentence": "A within-question comparison of three query-construction methods (verbatim question, deterministic keyword query set, LLM-written query set) on the set recall of a keyword scholarly-search API at a matched result budget, over the 597 LitSearch literature-search questions.",
+ "question": "How much does an LLM-written query set add to the set recall of a keyword scholarly-search API beyond a deterministic keyword query set at a matched result budget?",
+ "original_question": null,
+ "key_terms": ["query set", "set recall", "result budget", "keyword scholarly-search API", "deterministic keyword query"],
+ "coverage": {
+  "question": "whole",
+  "angle": "whole",
+  "angle_parts": [
+   {"part": "retrieval side", "by": "E2"},
+   {"part": "query formulation", "by": "C1"},
+   {"part": "matched result budget", "by": "E2"}
+  ]
+ },
+ "external_check": {
+  "synthetic": false,
+  "real_data": "not applicable",
+  "datasets": ["LitSearch"],
+  "second_dataset": "E6",
+  "inventory": [
+   "~/mne_data: EEG recordings only, no text-retrieval data",
+   "~/.cache/huggingface/hub: speech and EEG model checkpoints only, no instruct LLM and no dataset",
+   "~/.cache/torch: hub checkpoints only",
+   "LitSearch: not cached, public download needed",
+   "TREC-COVID: not cached, public download needed; serves as the second set with a share-of-relevant outcome"
+  ]
+ },
+ "claims": [
+  {
+   "id": "C1", "hypothesis": "H1", "primary": true, "kind": "fact", "mode": "test",
+   "statement": "Although the recall gain of LLM-written queries over the verbatim question could come from shortening alone, an LLM-written query set exceeds a deterministic keyword query set by at least 0.10 set recall on a keyword scholarly-search API at a matched result budget, which we conjecture is because the LLM supplies terms that are not in the question.",
+   "reasons": ["An LLM can write terms absent from the question (synonyms, method names) that the gold paper's metadata contains", "With the result budget equal, a difference in set recall can only come from the query strings"],
+   "evidence": [
+    {"experiment": "E2",
+     "measure": "set recall difference between the LLM-written query set and the deterministic keyword query set: API result ids per query -> union per question and arm -> h_q in {0,1} (any gold in the union) -> per-question difference -> mean over questions -> limits of the two-sided 90% paired bootstrap interval (10,000 resamples of questions)",
+     "would_show": "lower limit of the interval of the difference at or above 0.10",
+     "refuted_if": "upper limit of the two-sided 90% interval of the difference below 0.10",
+     "can_fail": "yes: the manipulation acts on the query strings and the measure is computed on what the API returns for them; the difference can be negative, zero or positive depending on which terms the gold paper's metadata contains"}
+   ],
+   "construction": {
+    "predictor_formula": "u_qk = f_arm(x_q), k = 1..K  (the K query strings that method arm builds from question x_q)",
+    "outcome_formula": "h_q = 1[G_q intersect UNION_k A(u_qk, R) is non-empty];  Delta = mean_q(h_q^LLM - h_q^DET)  with u_qk = f_arm(x_q)",
+    "shared_terms": ["u_qk", "x_q"],
+    "computable_without_experiment": "no: after substitution h_q = 1[G_q intersect UNION_k A(f_arm(x_q), R) non-empty]; u_qk and x_q stay inside A(.), an external search service, and f_LLM is a model output; neither is available in any existing table",
+    "free_quantity": "which documents the API returns for each query string, and which words the gold paper's title and abstract contain"
+   },
+   "warrant": "When two query-construction methods are given the same number of queries and results on the same index, then a difference in recall of annotated gold papers measures what the query strings contribute.",
+   "warrant_basis": "ajithetal2024#E1",
+   "outcomes": {
+    "if_supported": "we learn that an LLM contributes query content beyond shortening, so a literature agent's first step cannot be replaced by a keyword rule without losing recall",
+    "if_not": "we learn that most of the gain attributed to LLM query generation is reproduced by a deterministic rule, so the step can be made pure code and comparisons that type the question verbatim understate keyword search"
+   },
+   "negation": {"text": "An LLM-written query set adds less than 0.10 set recall over a deterministic keyword query set at a matched budget.", "verdict": "contestable"},
+   "expected_direction": {"direction": "LLM at or above the deterministic keyword set", "basis": "contested: LLM-written expansions are reported to improve sparse retrieval [wangetal2023] (abstract, closed corpus), which predicts a positive increment; the conjunctive-matching account, under which any shortening of an over-long query recovers the loss, predicts an increment near zero"},
+   "estimate_because": null,
+   "smallest_effect_of_interest": "0.10 absolute set recall - design choice: below ten questions in a hundred an LLM call and its nondeterminism are not justified in a stage that can be pure code",
+   "falsifier": "E2: the upper limit of the two-sided 90% paired bootstrap interval of the set recall difference (LLM-written minus deterministic keyword query set) is below 0.10",
+   "rivals": [
+    {"type": "confounding", "how": "more queries or more results return more papers, so recall rises whatever the wording", "ruled_out_by": "E3", "main": true},
+    {"type": "chance", "how": "0/1 outcome per question on a few hundred questions", "ruled_out_by": "E2 paired bootstrap interval"},
+    {"type": "incorporation", "how": "deterministic queries are subsets of the question's words and the LLM may copy the same words, so both arms can issue the same queries and the difference is zero on those questions by construction", "ruled_out_by": "design: the query strings are the manipulation itself; E4 reports the share of questions with identical result sets and the difference outside them"},
+    {"type": "leakage", "how": "the model has seen the gold paper for a LitSearch question and writes its title words", "ruled_out_by": "(not addressed)"},
+    {"type": "selection", "how": "excluding questions whose gold is not indexed keeps the easier questions", "ruled_out_by": "E1"},
+    {"type": "bias", "how": "unlabelled relevant papers count as misses under single-gold recall", "ruled_out_by": "(not addressed)"}
+   ],
+   "controls": {
+    "negative": "E3: deterministic keyword queries of another question (fixed derangement), same K and R; expected mean h close to 0, reported; aimed at the budget rival - above 0.05 means budget alone produces hits",
+    "negative_can_move": "yes: the control issues queries to the same API and h is computed on its results, so a large candidate set could contain the gold by popularity",
+    "positive": "E1: the gold paper's exact title as the query",
+    "positive_expected": "h is a 0/1 indicator averaged with its sign (no absolute value, rank or clip), so the planted effect returns unchanged: mean h at or above 0.95 on questions whose gold resolves to an OpenAlex work, provided title search ranks the work within R = 25; this value is also the ceiling of every arm"
+   },
+   "baseline_predictor": null, "comparator": null,
+   "scope": {
+    "internal": "on LitSearch questions, OpenAlex search, K = 5 and R = 25, with one small open instruct model and the harness's Step 1 prompt, we may claim the size of the LLM increment over a deterministic keyword rule",
+    "external": "generalises to keyword scholarly APIs with similar term matching; does not generalise to dense retrievers, to web search engines, to stronger generators or to agents that revise queries after reading results",
+    "limits": ["the because-clause (terms not in the question) is a conjecture; E4 reports term novelty but no rule tests it", "single-gold recall", "one generator, weaker than the deployed one"]
+   },
+   "power": {"unit": "questions", "n": 550, "clusters": "inline-citation and author-written subsets",
+             "min_detectable": "d >= 0.11 SD at 80% power, one-sided alpha = 0.05; an effect of 0.10 is detectable if the SD of the paired difference is at most 0.94",
+             "literature_effect": "(TBD)", "verdict": "marginal"},
+   "precision_target": null
+  },
+  {
+   "id": "C2", "hypothesis": "H2", "primary": false, "kind": "fact", "mode": "estimate",
+   "statement": "The gain in set recall of the deterministic keyword query set over the verbatim question on LitSearch questions is estimated with a 95% paired bootstrap interval.",
+   "reasons": ["the direction follows from term matching; the size is unknown"],
+   "evidence": [{"experiment": "E4", "measure": "mean over questions of h_q^DET - h_q^VERB at the matched budget, 95% paired bootstrap interval", "would_show": "the size of the gain"}],
+   "warrant": "When the budget is equal, the difference in recall measures the effect of reducing a question to keywords.", "warrant_basis": "(field convention)",
+   "outcomes": {"if_supported": "a large gain means verbatim probing understates keyword search", "if_not": "a small gain means the API tolerates long questions and the query form matters little"},
+   "negation": null, "expected_direction": null,
+   "estimate_because": "size-open: the direction follows from conjunctive term matching (derivability screen); only the size is unknown",
+   "falsifier": null, "rivals": [], "controls": null, "baseline_predictor": null, "comparator": null,
+   "scope": {"internal": "LitSearch, OpenAlex, K = 5, R = 25", "external": "keyword APIs only", "limits": []},
+   "power": null,
+   "precision_target": "half-width of the 95% interval at most 0.05 with about 550 questions (a 0/1 difference has SD below 1, giving a half-width below 0.084 in the worst case; estimated, not timed)"
+  },
+  {
+   "id": "C3", "hypothesis": "H3", "primary": false, "kind": "fact", "mode": "estimate",
+   "statement": "Set recall is estimated as a function of the number of keywords per query (2 to 6) and of the number of queries (1, 2, 5) for each method.",
+   "reasons": ["shows where over-constraint starts and how much of any gain is the number of queries"],
+   "evidence": [{"experiment": "E4", "measure": "mean h_q per arm at each m and K, with 95% bootstrap intervals", "would_show": "the dose curve"}],
+   "warrant": "When only m or K changes, the change in recall measures that factor.", "warrant_basis": "(field convention)",
+   "outcomes": {"if_supported": "a peaked curve gives the keyword count to use", "if_not": "a flat curve means the API ranks rather than filters"},
+   "negation": null, "expected_direction": null,
+   "estimate_because": "descriptive: how recall is distributed over query length and count; no direction is asserted",
+   "falsifier": null, "rivals": [], "controls": null, "baseline_predictor": null, "comparator": null,
+   "scope": {"internal": "LitSearch, OpenAlex", "external": "keyword APIs only", "limits": []},
+   "power": null, "precision_target": "95% interval half-width below 0.05 per cell (estimated)"
+  },
+  {
+   "id": "C4", "hypothesis": "H4", "primary": false, "kind": "fact", "mode": "estimate",
+   "statement": "The spread of set recall of the LLM arm over 3 sampling seeds, and of every arm over two API dates, is estimated on LitSearch questions.",
+   "reasons": ["a difference smaller than the run-to-run spread cannot be read as a method effect"],
+   "evidence": [{"experiment": "E5", "measure": "range and standard deviation of mean h over 3 seeds (temperature 0.7) and the change of mean h between two dates on a 150-question subset", "would_show": "the noise floor next to the E2 difference"}],
+   "warrant": "When the same input is run repeatedly, the spread of the score is its noise floor.", "warrant_basis": "blackwelletal2024",
+   "outcomes": {"if_supported": "a small spread lets single-run differences of this size be trusted", "if_not": "a spread comparable to the difference means E2 must be read with it"},
+   "negation": null, "expected_direction": null,
+   "estimate_because": "descriptive: how large the run-to-run spread is; no direction is asserted",
+   "falsifier": null, "rivals": [], "controls": null, "baseline_predictor": null, "comparator": null,
+   "scope": {"internal": "one model, one API", "external": "not other generators", "limits": []},
+   "power": null, "precision_target": "3 seeds give a range, not an interval; reported as such"
+  }
+ ],
+ "representation": {
+  "sample": {"target": "natural-language literature-search needs of researchers", "accessible": "597 LitSearch questions in ML / NLP, partly LLM-written from citation contexts", "concern": "one field; some questions written by GPT-4"},
+  "predictor": {"phenomenon": "how a literature agent turns a need into queries", "variable": "query-construction method (assigned)", "precision": "assigned", "accuracy": "assigned", "validity": "content: the LLM arm uses the Step 1 prompt of the harness verbatim; the deterministic arm is one fixed rule among many possible"},
+  "outcome": {"phenomenon": "finding the papers the need calls for", "variable": "set recall against annotated gold at K x R results", "precision": "deterministic given cached API responses", "accuracy": "understates when unlabelled relevant papers exist [sharonhope2026]", "validity": "criterion: recall against annotated targets is the field's convention (ajithetal2024#E1)"}
+ },
+ "experiments": [
+  {"id": "E0", "role": "instrument", "claims": []},
+  {"id": "E1", "role": "control", "claims": ["C1"]},
+  {"id": "E2", "role": "tests", "claims": ["C1"]},
+  {"id": "E3", "role": "control", "claims": ["C1"]},
+  {"id": "E4", "role": "descriptive", "claims": ["C2", "C3"]},
+  {"id": "E5", "role": "descriptive", "claims": ["C4"]},
+  {"id": "E6", "role": "descriptive", "claims": ["C1"]}
+ ],
+ "tradeoffs": [
+  {"gate": "none", "ids": [], "change": "the LLM arm uses a small open instruct model instead of the harness's deployed generator (qwen3.8 under Ollama)", "because": "data: no Ollama and no such model on this machine (probe)", "lost": "a direct statement about the deployed generator; the measured increment is a lower bound only if stronger models write better queries, which is not tested", "still_answers_question": true, "covers_gap": true, "covers_angle": true, "why": "the question asks about an LLM-written query set against a deterministic one; any instruct model with the same prompt instantiates it; E5 accepts recorded query sets of the deployed generator"},
+  {"gate": "none", "ids": [], "change": "the verbatim-versus-keyword contrast is an estimate (C2), not a test", "because": "the derivability screen: its direction follows from term matching", "lost": "a pass/fail statement on that contrast", "still_answers_question": true, "covers_gap": true, "covers_angle": true, "why": "the gap is about separating query form from the engine; the interval of C2 does that for the derivable part"},
+  {"gate": "none", "ids": [], "change": "ranked metrics after LLM screening (Recall@5, MRR) are not computed", "because": "they need an LLM relevance scorer per candidate and belong to the ranking side", "lost": "comparability with the Recall@5 figures of the source", "still_answers_question": true, "covers_gap": true, "covers_angle": true, "why": "the question is about set recall"}
+ ],
+ "reader_doubts": []
+}

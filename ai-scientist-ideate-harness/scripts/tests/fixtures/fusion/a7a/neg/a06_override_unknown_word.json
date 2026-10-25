@@ -1,0 +1,18 @@
+{
+ "unit": "A7.A",
+ "target": "alignment",
+ "ops": [
+  {
+   "op": "set",
+   "path": "vocab.overrides",
+   "value": {
+    "parketal2019": {
+     "SNR": "measure:snr-evoked"
+    }
+   }
+  }
+ ],
+ "expect": "A06",
+ "level": "ERROR",
+ "why": "an override for a word the paper never uses"
+}

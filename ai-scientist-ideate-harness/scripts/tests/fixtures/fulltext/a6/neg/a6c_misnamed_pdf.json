@@ -1,0 +1,18 @@
+{
+ "unit": "A6.c",
+ "edits": [
+  {
+   "target": "fs",
+   "ops": [
+    {
+     "op": "copy",
+     "from": "pdfs/smith2020.pdf",
+     "path": "pdfs/downloaded_paper.pdf"
+    }
+   ]
+  }
+ ],
+ "expect": "F14",
+ "level": "ERROR",
+ "why": "a PDF saved by hand under a name that is no citation key"
+}

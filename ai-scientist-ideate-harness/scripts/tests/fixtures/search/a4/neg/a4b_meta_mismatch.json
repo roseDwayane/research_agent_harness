@@ -1,0 +1,17 @@
+{
+ "unit": "A4.b",
+ "target": "meta",
+ "ops": [
+  {
+   "op": "set",
+   "path": "entries.ghost2020",
+   "value": {
+    "id": "x",
+    "source": "crossref"
+   }
+  }
+ ],
+ "expect": "L02",
+ "why": "metadata for a key that is not active",
+ "level": "ERROR"
+}

@@ -1,0 +1,13 @@
+{
+  "rounds": [
+    {
+      "round": 1,
+      "verdict": "approved-with-notes"
+    }
+  ],
+  "final": {
+    "status": "approved-with-notes",
+    "round": 1,
+    "unresolved": []
+  }
+}

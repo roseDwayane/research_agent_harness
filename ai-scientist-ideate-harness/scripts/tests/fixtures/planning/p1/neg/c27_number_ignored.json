@@ -1,0 +1,6 @@
+{
+ "expect": "C27",
+ "level": "ERROR",
+ "exercised_by": "tests/planning/test_p1_gap2hypo.py::P1.test_numbers_reach_direction_and_power",
+ "why": "a pointer for units check: the counter-example itself is built in Python in the named test (NEG)"
+}

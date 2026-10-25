@@ -1,0 +1,14 @@
+{
+ "unit": "A3",
+ "target": "shortlist",
+ "ops": [
+  {
+   "op": "set",
+   "path": "papers.0.screening.decided_by",
+   "value": "human"
+  }
+ ],
+ "expect": "C14",
+ "level": "ERROR",
+ "why": "a person's decision in the shortlist that no override backs"
+}

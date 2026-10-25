@@ -1,0 +1,23 @@
+{
+ "unit": "A3",
+ "target": "shortlist",
+ "ops": [
+  {
+   "op": "set",
+   "path": "papers.0.screening.soft_violates",
+   "value": {
+    "EX1": "meets it under the other reading"
+   }
+  },
+  {
+   "op": "set",
+   "path": "papers.1.screening.soft_violates",
+   "value": {
+    "EX1": "meets it under the other reading"
+   }
+  }
+ ],
+ "expect": "C20",
+ "level": "WARN",
+ "why": "half the shortlist is kept only by a soft criterion"
+}

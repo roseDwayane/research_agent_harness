@@ -1,0 +1,11 @@
+{
+  "papers": [
+    {
+      "id": "paper_001",
+      "citation_key": "smith2020"
+    }
+  ],
+  "summary": {
+    "included": 12
+  }
+}

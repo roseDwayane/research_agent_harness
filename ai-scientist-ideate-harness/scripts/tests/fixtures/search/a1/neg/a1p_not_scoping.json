@@ -1,0 +1,13 @@
+{
+ "unit": "A1.p",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "protocol.review_type",
+   "value": "systematic"
+  }
+ ],
+ "expect": "P01",
+ "why": "Stage A is a scoping review"
+}

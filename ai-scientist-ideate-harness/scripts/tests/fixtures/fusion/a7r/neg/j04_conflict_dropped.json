@@ -1,0 +1,15 @@
+{
+ "unit": "A7.R",
+ "target": "rm_line:D_draft_RejectionVsICA.md",
+ "ops": [
+  {
+   "op": "replace",
+   "target": "body:B_draft_fx_descriptive.md",
+   "path": "D_draft_RejectionVsICA (X0001); ",
+   "value": ""
+  }
+ ],
+ "expect": "J04",
+ "level": "ERROR",
+ "why": "a conflict that lands nowhere"
+}

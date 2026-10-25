@@ -1,0 +1,13 @@
+{
+ "unit": "A1.p",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "protocol.notes",
+   "value": "x"
+  }
+ ],
+ "expect": "P11",
+ "why": "a key nobody owns"
+}

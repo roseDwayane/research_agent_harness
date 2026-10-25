@@ -1,0 +1,14 @@
+{
+ "unit": "A7.R",
+ "target": "question:Q_001.md",
+ "ops": [
+  {
+   "op": "replace",
+   "path": "(X0003, P_draft_Gain_On_BNCI)",
+   "value": "(widely known)"
+  }
+ ],
+ "expect": "Y03",
+ "level": "ERROR",
+ "why": "common ground from memory"
+}

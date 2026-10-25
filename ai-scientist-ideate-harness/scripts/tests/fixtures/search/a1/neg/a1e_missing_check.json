@@ -1,0 +1,12 @@
+{
+ "unit": "A1.e",
+ "target": "evaluation",
+ "ops": [
+  {
+   "op": "delete",
+   "path": "rounds.0.findings.4"
+  }
+ ],
+ "expect": "E02",
+ "why": "E5 not reported"
+}

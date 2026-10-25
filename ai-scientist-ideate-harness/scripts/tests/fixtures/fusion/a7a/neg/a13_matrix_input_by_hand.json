@@ -1,0 +1,14 @@
+{
+ "unit": "A7.A",
+ "target": "matrix_input",
+ "ops": [
+  {
+   "op": "set",
+   "path": "vocab.method_family.ica",
+   "value": "edited by hand"
+  }
+ ],
+ "expect": "A13",
+ "level": "ERROR",
+ "why": "the projection edited by hand"
+}

@@ -1,0 +1,24 @@
+{
+ "unit": "A3",
+ "target": "scores",
+ "ops": [
+  {
+   "op": "set",
+   "path": "superseded",
+   "value": [
+    {
+     "id": "paper_001",
+     "rel": 2,
+     "qual": 3,
+     "rationale": "moved by hand",
+     "batch": 0,
+     "model": "x",
+     "superseded_by": 9
+    }
+   ]
+  }
+ ],
+ "expect": "C12",
+ "level": "ERROR",
+ "why": "an entry replaced by hand, not through screen-rescue + screen-merge"
+}

@@ -1,0 +1,18 @@
+{
+ "unit": "A7.A",
+ "target": "decon:parketal2019",
+ "ops": [
+  {
+   "op": "append",
+   "path": "terms",
+   "value": {
+    "term": "SNR",
+    "kind": "measure",
+    "definition": "We report decoding accuracy before and after cleaning"
+   }
+  }
+ ],
+ "expect": "A05",
+ "level": "ERROR",
+ "why": "two papers define one measure and nobody said they agree"
+}

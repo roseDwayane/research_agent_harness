@@ -1,0 +1,52 @@
+{
+ "unit": "B3",
+ "target": "gaps",
+ "ops": [
+  {
+   "op": "append",
+   "path": "",
+   "target": "log_add",
+   "value": {
+    "collision_id": "X0005",
+    "candidate": "Kemptycell00",
+    "type": "empty-cell",
+    "result": "empty-cell",
+    "sides": [
+     {
+      "id": "cell:BNCI 2014-001|ica",
+      "kind": "cell"
+     }
+    ],
+    "axes_differ": [],
+    "reason": "nobody ran ICA on BNCI",
+    "evidence_level": "n/a",
+    "model": "m",
+    "at": "2026-10-17T00:00:00"
+   }
+  },
+  {
+   "op": "set",
+   "path": "gaps.0.collisions",
+   "value": [
+    "X0005"
+   ]
+  },
+  {
+   "op": "set",
+   "path": "gaps.0.move",
+   "value": "add-evidence"
+  },
+  {
+   "op": "del",
+   "path": "gaps.0.source_check"
+  },
+  {
+   "op": "set",
+   "path": "gaps.0.consequence_evidence",
+   "value": []
+  }
+ ],
+ "expect": "W07",
+ "level": "ERROR",
+ "why": "an absence scored as severe"
+}

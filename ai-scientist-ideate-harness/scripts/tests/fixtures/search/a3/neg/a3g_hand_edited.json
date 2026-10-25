@@ -1,0 +1,13 @@
+{
+ "unit": "A3.g",
+ "target": "gate",
+ "ops": [
+  {
+   "op": "delete",
+   "path": "excluded.0"
+  }
+ ],
+ "expect": "G03",
+ "level": "ERROR",
+ "why": "a gate exclusion removed by hand"
+}

@@ -1,0 +1,20 @@
+{
+ "unit": "B1",
+ "target": "lens",
+ "ops": [
+  {
+   "op": "set",
+   "path": "own_data",
+   "value": [
+    {
+     "name": "golf recordings",
+     "where": "/nonexistent/golf",
+     "what": "26 putting sessions"
+    }
+   ]
+  }
+ ],
+ "expect": "T05",
+ "level": "ERROR",
+ "why": "our own data named at a path this machine does not have"
+}

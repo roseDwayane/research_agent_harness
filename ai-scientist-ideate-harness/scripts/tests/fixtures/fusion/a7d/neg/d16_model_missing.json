@@ -1,0 +1,14 @@
+{
+ "unit": "A7.D",
+ "target": "answer:smithetal2020",
+ "ops": [
+  {
+   "op": "set",
+   "path": "model",
+   "value": ""
+  }
+ ],
+ "expect": "D16",
+ "level": "ERROR",
+ "why": "an answer that does not say which model wrote it"
+}

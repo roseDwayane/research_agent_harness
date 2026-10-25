@@ -1,0 +1,14 @@
+{
+ "unit": "A3",
+ "target": "scores",
+ "ops": [
+  {
+   "op": "set",
+   "path": "scores.0.evidence.method",
+   "value": "a phrase that appears nowhere"
+  }
+ ],
+ "expect": "C03",
+ "level": "ERROR",
+ "why": "evidence that is not in the abstract"
+}
