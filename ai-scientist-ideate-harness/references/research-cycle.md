@@ -112,22 +112,37 @@ toward* as seen from this angle, not what each paper says.
 
 ```markdown
 ---
+session_id: "YYYYMMDD"   step: 6
 topic: "…"   generation: k   angle: "…"   date: YYYY-MM-DD
-total_papers: N   full_text_papers: N   abstract_only_papers: N
+total_papers: N   themes: N   full_text_papers: N   abstract_only_papers: N
 ---
-# State of the art — angle: {angle}
+# State-of-the-art review — angle: {angle}
 ## Executive summary                       2–3 paragraphs
+## Methodology legend                      table: Color | Methodology | Count (the six classes below, 0 when absent)
 ## Theme {n}: {title}                      one section per Plane that matters from this angle
 ### Consensus                              each claim needs ≥ 2 papers and, where available, the numbers
 ### Debates                                both sides with citations → link the D_draft card
 ### Dominant methods
-### Key results                            table: Study | Data | Method | Metric | Result
-## Cross-theme analysis                    trends over time · converging · diverging · bridge papers
+### Key results                            table: Study | N | Data | Method | Primary Outcome | Metric | Result
+## Cross-theme analysis
+### Methodological trends over time
+### Converging findings
+### Diverging findings
+### Theme interactions                     how the themes depend on each other; bridge papers
 ## Experiments in this literature
 ### A. Experimental designs                how the field tests claims
 ### B. Reported numbers                    where the bar currently is
-## Paper–theme mapping                     citation_key | theme | methodology | bridge?
+## Paper–theme mapping                     table: Citation Key | Theme | Methodology | Bridge?
 ```
+
+The `session_id` / `step` / `themes` keys, the methodology legend, the four cross-theme subsections, the `N` and
+`Primary Outcome` columns and the mapping table keep the archived engine's layout of this file
+(`archived/scholar_research`, `it_legacy.py`), so a reader of the old files can read the new one. `session_id` is
+step0's; `N` is the sample size (participants, trials or recordings; `(TBD)` when the row does not say), `Primary
+Outcome` the outcome measure and `Metric` the statistic reported for it. Methodology is one of the archived classes,
+with their colours: experimental (🔴 Red), computational (🟠 Orange), review (🟡 Yellow), observational (🟢 Green),
+engineering (🔵 Cyan), theoretical (🟣 Purple). The mapping table lists every paper the review cites, one row each;
+a pointer to `knowledge/_MANIFEST.md` may follow it but does not replace it.
 
 The two experiment subsections serve different consumers and are kept apart on purpose:
 
@@ -1043,8 +1058,31 @@ scopes change. Recommend 3–5 venues spanning one aspirational, two solid and o
 `Venue | IF or tier (year) | Scope fit — specific | Review timeline | OA option and cost | Why this venue |
 Shortlisted papers published there (citation keys)`
 
-End with a comparison table and a one-paragraph submission strategy. The strategy's **first-named venue is the
-target**: `/ai-scientist-criteria` picks it automatically (no human checkpoint), so name exactly one first choice,
+End with a comparison table and a one-paragraph submission strategy. The file also keeps the archived engine's
+layout (`archived/scholar_research` render/step8.py, `it_legacy.py`), so a reader of the old files can read it:
+
+```markdown
+---
+session_id: "YYYYMMDD"      (step0's)
+topic: "…"
+date: "YYYY-MM-DD"
+step: 8
+journals_recommended: N
+---
+# Journal recommendations — {Name}
+> Topic: …   > Hypothesis: the primary claim in one sentence   > Date: YYYY-MM-DD
+## Selection Criteria          one paragraph: what the venues were chosen for
+## Recommended Journals        the venue table above, then per venue:
+### {n}. {Venue}               "⭐ Top Recommendation" after the first-choice venue's name
+| Field | Details |            rows **Impact Factor**, **Scope Fit**, **Review Timeline**, **Open Access**, **Why This Journal**
+**Papers from our collection published here:** one `- key — …` line each, or "none"
+## Comparison                  the comparison table
+## Journal Comparison          | Rank | Journal | IF | Scope Fit | Review Time | OA Cost | Strategy |
+## Submission strategy
+## Dataset licences
+```
+
+The strategy's **first-named venue is the target**: `/ai-scientist-criteria` picks it automatically (no human checkpoint), so name exactly one first choice,
 spelled as in the table, before any alternative, and put a special article type in the same sentence when it applies
 ("an eNeuro Registered Report", "a JNE Technical Note"). `WebSearch` may be a deferred tool that has to be
 loaded first (via `ToolSearch`); if it is unavailable, write the table from the shortlist's venues alone and mark IF

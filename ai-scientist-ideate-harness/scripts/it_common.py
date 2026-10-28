@@ -50,13 +50,19 @@ def write_text(path: Path, text: str) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
+    tmp.write_text(text, encoding="utf-8", newline="\n")
     _interrupt_point()
     os.replace(tmp, path)
 
 
+def with_legacy(path: Path, data):
+    """`data` plus the archived engine's fields for the files both engines write (it_legacy); others unchanged."""
+    from it_legacy import augment
+    return augment(path, data)
+
+
 def write_json(path: Path, data) -> None:
-    write_text(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    write_text(path, json.dumps(with_legacy(path, data), indent=2, ensure_ascii=False) + "\n")
 
 
 def write_json_stable(path: Path, data: dict, stamps: tuple = ("at",)) -> bool:
@@ -64,6 +70,7 @@ def write_json_stable(path: Path, data: dict, stamps: tuple = ("at",)) -> bool:
     top-level time stamps (`at`, or the keys in `stamps`), it is kept as it is, so an unchanged rerun leaves its hash -
     and the Units downstream - alone."""
     path = Path(path)
+    data = with_legacy(path, data)
     if path.exists():
         try:
             old = json.loads(path.read_text(encoding="utf-8"))

@@ -30,7 +30,8 @@ from datetime import date
 from pathlib import Path
 
 from it_common import (die, http_json, now_iso, preflight_says, quote, read_json, require_protocol, sha256_file,
-                       write_json, write_json_stable, write_text)
+                       with_legacy, write_json, write_json_stable, write_text)
+import it_legacy
 
 BIB_SCHEMA = "ideate-bibliometrics/1"
 SCORES_SCHEMA = "ideate-scores/2"
@@ -52,6 +53,8 @@ NOT_STATED = "not stated"
 BATCH_SIZE = 60
 LOW_SEM_PCT = 25                  # a bulk rule may only touch papers in the bottom quarter by sem_sim
 ROLE_ORDER = ("foundational", "core-method", "emerging", "survey", "supporting")
+TIER_NAMES = {1: "core (>= 4.50)", 2: "strong supporting (4.00-4.49)", 3: "contextual (3.50-3.99)",
+              4: "borderline, auto-included (3.00-3.49)"}                       # tier_of's bands
 
 
 def F(level, code, unit, msg):
@@ -1250,7 +1253,11 @@ def build(rd: Path, scores_file: Path) -> dict:
                                 "soft_relevance_cap": SOFT_RELEVANCE_CAP},
            "summary": summary, "papers": included}
     write_json(rd / "step3_shortlist.json", out)
-    write_text(rd / "step3_screening_results.md", render_results(cfg, scores, out, excluded, last_name))
+    write_json(rd / "step3_screening_all.json",                       # the archived engine's full decision table
+               it_legacy.screening_all(rd, cfg, out, excluded, scores, TIER_NAMES, GATE_CODES))
+    write_text(rd / "step3_screening_results.md",
+               it_legacy.screening_md(render_results(cfg, scores, out, excluded, last_name), cfg,
+                                      with_legacy(rd / "step3_shortlist.json", out), excluded))
     return out
 
 
@@ -1304,8 +1311,7 @@ def render_results(cfg, scores, out, excluded, last_name) -> str:
     L += ["", "## Exclusions by reason (PRISMA screening)", "", "| Reason | Papers |", "|---|---|"]
     L += [f"| {c} | {n} |" for c, n in sorted(s["excluded_by_reason"].items())]
     L += ["", "## Reading roles", "", " · ".join(f"{r}: {s['roles'].get(r, 0)}" for r in ROLE_ORDER), ""]
-    names = {1: "Tier 1 - core (>= 4.50)", 2: "Tier 2 - strong supporting (4.00-4.49)", 3: "Tier 3 - contextual (3.50-3.99)",
-             4: "Tier 4 - borderline, auto-included (3.00-3.49)"}
+    names = {k: f"Tier {k} - {v}" for k, v in TIER_NAMES.items()}
     for k in (1, 2, 3, 4):
         rows = [p for p in out["papers"] if p["screening"]["tier"] == k]
         L += [f"## {names[k]} — {len(rows)} papers", "", "| ID | Title | First author | Year | Roles | Arithmetic | Rationale |",

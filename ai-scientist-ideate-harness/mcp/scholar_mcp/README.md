@@ -32,9 +32,13 @@ All tools are read-only and return a JSON string. A normalised paper:
   "doi": "10.xxx/yyy", "url": "...", "abstract": "...", "citation_count": 42,
   "sources_found_in": ["semantic_scholar", "openalex", "scopus"],
   "semantic_scholar_id": "...", "openalex_id": "W...", "pubmed_id": "...",
-  "arxiv_id": "...", "scopus_id": "...", "ieee_id": "...", "wos_id": "WOS:..."
+  "arxiv_id": "...", "scopus_id": "...", "ieee_id": "...", "wos_id": "WOS:...",
+  "pmc_id": "PMC...", "volume": "...", "issue": "...", "pages": "...", "language": "eng"
 }
 ```
+
+`pmc_id`, `volume`, `issue`, `pages` and `language` are the bibliographic fields the archived engine kept per paper:
+PubMed gives all five, OpenAlex its PMC id when it has one (the merge's OpenAlex enrichment adds the rest by DOI).
 
 `scholar_search` also reports `sources_queried`, `sources_skipped` (a keyed source without its key) and
 `source_errors` (a source that failed, including an inactive IEEE key; any key in a URL is replaced by `REDACTED`). A

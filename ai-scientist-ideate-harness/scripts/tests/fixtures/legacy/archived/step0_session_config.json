@@ -1,0 +1,55 @@
+{
+  "session_id": "20261026",
+  "topic": "EEG neurofeedback for mild cognitive impairment (MCI)",
+  "topic_original": "EEG neurofeedback for MCI",
+  "topic_slug": "eeg-neurofeedback-for-mci",
+  "timestamp": "2026-10-26T12:41:39+08:00",
+  "current_step": 9,
+  "pico": {
+    "population": "Older adults with mild cognitive impairment (amnestic or non-amnestic MCI, including prodromal Alzheimer's disease)",
+    "intervention": "EEG-based neurofeedback training (e.g., alpha, theta, SMR, beta, or theta/beta protocols; individual alpha peak frequency upregulation)",
+    "comparison": "Sham neurofeedback, waitlist/no-intervention control, cognitive training, or other non-pharmacological interventions",
+    "outcome": "Cognitive function (global cognition such as MMSE/MoCA, memory, executive function, attention) and EEG biomarkers (spectral power, peak alpha frequency, connectivity)",
+    "setting": "Clinical, research laboratory, and home-based training settings",
+    "timeframe": "2019-2026"
+  },
+  "source_urls": [],
+  "queries": [
+    {
+      "id": "Q1",
+      "strategy": "Core terms + Population",
+      "query": "\"neurofeedback\" AND \"mild cognitive impairment\"",
+      "rationale": "Broad core query capturing all neurofeedback studies in MCI."
+    },
+    {
+      "id": "Q2",
+      "strategy": "Synonyms + MeSH terminology",
+      "query": "(\"EEG biofeedback\" OR \"Neurofeedback\"[MeSH] OR \"brain-computer interface training\") AND (\"Cognitive Dysfunction\"[MeSH] OR \"prodromal Alzheimer\" OR \"cognitive decline\")",
+      "rationale": "Catches studies using alternative terms for the intervention and the population."
+    },
+    {
+      "id": "Q3",
+      "strategy": "Mechanism + theoretical basis",
+      "query": "neurofeedback alpha theta EEG slowing neuroplasticity cognitive impairment aging",
+      "rationale": "Targets work on the EEG slowing in MCI and the plasticity mechanism neurofeedback is meant to reverse."
+    },
+    {
+      "id": "Q4",
+      "strategy": "Methodology + study design",
+      "query": "neurofeedback randomized controlled trial sham mild cognitive impairment memory",
+      "rationale": "Narrow query for controlled trials and meta-analyses giving the strongest evidence."
+    },
+    {
+      "id": "Q5",
+      "strategy": "Cross-disciplinary + adjacent fields",
+      "query": "closed-loop EEG brain-computer interface cognitive training older adults dementia prevention",
+      "rationale": "Adjacent BCI and closed-loop cognitive-training work that informs neurofeedback design."
+    }
+  ],
+  "field_type": "biomedical",
+  "engine": {
+    "version": "0.1.0",
+    "llm_model": "claude-opus-5-5",
+    "llm_temperature": 0.0
+  }
+}

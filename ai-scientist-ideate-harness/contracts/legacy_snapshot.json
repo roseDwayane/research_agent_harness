@@ -4,9 +4,9 @@
  "source": {
   "file": "ideate_units.json",
   "schema": "ideate-units/1",
-  "sha256": "de276792530066f74acbf390959cb50b4515163c0ec03452f11018e6df3d1225"
+  "sha256": "92fc1f72fbd3c884516539952e2a38414bbbb0368952341e790856c9a41dfb1a"
  },
- "imported_at": "2026-10-22T10:06:42+00:00",
+ "imported_at": "2026-10-27T06:20:20+00:00",
  "infrastructure": {
   "_note": "Shared armour parts (PLAN_ideate_armor.md §7). A condition that depends on one cannot be `yes` while it is false; `units check` enforces this.",
   "ledger": true,
@@ -1763,6 +1763,7 @@
     "screening_scores.json",
     "step3_shortlist.json (all but citation_key, access_level)",
     "step3_screening_results.md",
+    "step3_screening_all.json",
     "_state/fanout/A3/"
    ],
    "revises": [
@@ -1771,7 +1772,8 @@
    "revised_by": [],
    "schemas": {
     "screening_scores.json": "ideate-scores/2: {basis, bulk [{title_regex, rel <= 2, qual, rationale}], criteria_amendments [{change, reason, refs, by, at}], scores [{id, evidence {problem, method, data, code}, rel, qual, rationale, soft_violates? {criterion: reason}, needs_text?, record_problem?, batch, model, brief, text_sha} | {id, violates [EX#], rationale, batch, model} | {id, duplicate_of, carry?, batch, model}]}",
-    "step3_shortlist.json": "ideate-shortlist/2: {summary {candidates, gate_excluded, screened, included, excluded_by_reason, tiers, roles, basis}, papers [search fields + screening {relevance, quality, recency_impact (= impact), composite, tier, arithmetic, rationale, evidence, batch, model} + impact {...} + novelty, novelty_pct, roles]}"
+    "step3_shortlist.json": "ideate-shortlist/2: {summary {candidates, gate_excluded, screened, included, excluded_by_reason, tiers, roles, basis}, papers [search fields + screening {relevance, quality, recency_impact (= impact), composite, tier, arithmetic, rationale, evidence, batch, model} + impact {...} + novelty, novelty_pct, roles]}",
+    "step3_screening_all.json": "ideate-screening-all/1 (the archived engine's ScreeningRecord, it_legacy.screening_all): {session_id, topic, criteria_inclusion [{id, en}], criteria_exclusion [{id, en}], criteria_amendments, tier_names [{tier, en}], summary, papers [every candidate: search fields + the archived Paper fields + screening {relevance, quality, recency_impact, composite (null when excluded before scoring), tier, category included | borderline | excluded, rationale, exclusion_reason, no_abstract, exclusion_code?, stage?, scored?} + manually_included]}"
    },
    "actor": "fanout (subagents) + script (plan, merge, build)",
    "network": "none",
@@ -2057,6 +2059,9 @@
      },
      {
       "file": "step3_screening_results.md"
+     },
+     {
+      "file": "step3_screening_all.json"
      }
     ],
     "scratch": [

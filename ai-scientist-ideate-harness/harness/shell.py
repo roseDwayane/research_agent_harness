@@ -77,7 +77,10 @@ def missing_outputs(ctx: RunContext, unit: str, gen: int | None) -> list[str]:
             base = ctx.rd / f"gen_{gen}" if art["path"].startswith("gen_k/") and gen is not None else ctx.rd
             files = artifact_paths(ctx.reg, art_id, base)
         if not files:
-            out.append(f"{art_id} ({art['path']})")
+            # a collection (pdfs/<key>.pdf, knowledge/lines/*.md) may be legitimately empty - every paper paywalled,
+            # nothing promotable from abstracts; the Unit's own checks judge its coverage (A6.d: F06 warns)
+            if "<key>" not in art["path"] and "*" not in art["path"]:
+                out.append(f"{art_id} ({art['path']})")
             continue
         for f in files[:50]:
             if f.suffix == ".json":

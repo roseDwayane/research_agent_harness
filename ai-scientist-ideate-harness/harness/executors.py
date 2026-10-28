@@ -15,6 +15,7 @@ Retry levels (ideate_v2.retry, decision D-08) - each failure is retried by exact
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -76,7 +77,9 @@ class RecipeExecutor:
         while i < len(steps):
             s = steps[i]
             label = f"{phase}.{i:02d}.{s.kind}"
-            if s.spec.get("when_file") and not Path(ctx.skill.expand(s.spec["when_file"], subs, quote=False)).exists():
+            body = s.spec.get(s.kind) if isinstance(s.spec.get(s.kind), dict) else {}
+            when_file = s.spec.get("when_file") or body.get("when_file")      # the recipes put it inside the write body
+            if when_file and not Path(ctx.skill.expand(when_file, subs, quote=False)).exists():
                 i += 1
                 continue
             if s.kind == "freeze":
@@ -218,7 +221,9 @@ class RecipeExecutor:
         cwd = subs.rd
         if body.get("isolated"):
             kw["add_dirs"] = []                            # an independent reader sees its own folder only
-            cwd = ctx.state_dir / "isolated" / f"{unit}@{inst.replace('/', '_')}.{label}"
+            # a short name: on Windows a deep research folder plus a long label passes MAX_PATH (260)
+            tag = hashlib.sha1(f"{unit}@{inst}.{label}".encode()).hexdigest()[:8]
+            cwd = ctx.state_dir / "isolated" / f"{unit}.{tag}"
             if cwd.exists():
                 shutil.rmtree(cwd)
             cwd.mkdir(parents=True)

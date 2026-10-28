@@ -43,7 +43,8 @@
    "phases": {
     "main": [
      {
-      "run": "bash pdf2md.sh $RD"
+      "run": "bash pdf2md.sh $RD",
+      "optional": true
      },
      {
       "run": "ideate_tools.py figures $RD"

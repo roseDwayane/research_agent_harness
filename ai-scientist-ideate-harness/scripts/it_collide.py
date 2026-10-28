@@ -28,8 +28,9 @@ import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from it_common import (append_jsonl, die, now_iso, read_json, read_jsonl, sha256_json, write_json, write_json_stable,
-                       write_text)
+from it_common import (append_jsonl, die, now_iso, read_json, read_jsonl, sha256_json, with_legacy, write_json,
+                       write_json_stable, write_text)
+import it_legacy
 
 TBD = "(TBD)"
 CANDS = "knowledge/collision_candidates.json"
@@ -767,6 +768,11 @@ def rank(gaps: list[dict]) -> list[dict]:
                                                                        -g["novelty"], -g["feasibility"], g["id"]))]
 
 
+def gaps_view(rd, doc: dict) -> str:
+    """step7_gap_analysis.md: this pipeline's rendering, then the archived engine's layout of the same gaps."""
+    return it_legacy.gap_analysis_md(render_gaps(rd, doc), _cfg(rd), with_legacy(Path(rd) / GAPS, doc))
+
+
 def render_gaps(rd, doc: dict) -> str:
     cur = {r["collision_id"]: r for r in current(log(rd))}
     gaps = rank(doc["gaps"])
@@ -943,7 +949,7 @@ def _cmd_gaps(a):
     if reused:
         die(f"gap id(s) {reused} were retired and are never reused - take the next number", 1)
     write_json_stable(rd / GAPS, doc)
-    write_text(rd / GAPS_MD, render_gaps(rd, doc))
+    write_text(rd / GAPS_MD, gaps_view(rd, doc))
     print(f"gaps-set: {len(doc['gaps'])} gap(s) ranked {doc['ranked']} -> {GAPS}, {GAPS_MD}")
 
 
@@ -958,7 +964,7 @@ def run_checks(rd, unit="all") -> list[dict]:
             doc = read_json(p)
             fs += gaps_problems(rd, doc)
             md = rd / GAPS_MD
-            if not md.exists() or md.read_text(encoding="utf-8") != render_gaps(rd, doc):
+            if not md.exists() or md.read_text(encoding="utf-8") != gaps_view(rd, doc):
                 fs.append(F("ERROR", "W09", "B3", f"{GAPS_MD} is not the rendering of {GAPS} (edited by hand?) - gaps-set again"))
     return fs
 

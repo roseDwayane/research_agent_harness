@@ -1,0 +1,120 @@
+{
+  "session_id": "20261026",
+  "weights": {
+    "severity": 0.4,
+    "novelty": 0.3,
+    "feasibility": 0.3
+  },
+  "gaps": [
+    {
+      "id": "GAP_001",
+      "rank": 1,
+      "composite": 4.3,
+      "gap": {
+        "title_en": "Baseline-EEG prediction of NF responders and responder-adaptive protocols untested in MCI",
+        "gap_type": "population",
+        "secondary_type": "integration",
+        "description_en": "Baseline resting-EEG predictors of self-regulation success (e.g., resting beta1 relative power and alpha node strength) and personalized/adaptive protocols have been studied only in healthy adults aged 41-75 and in subjective cognitive decline. No study has tested, in amnestic MCI, whether pre-registered baseline EEG markers predict who learns to modulate the target band, or whether responder status moderates cognitive benefit versus sham.",
+        "supporting_evidence": [
+          {
+            "citation_key": "MarcosMartinezEtAl2026",
+            "year": 2026,
+            "explanation_en": "48.3% non-responders and baseline beta1 power / alpha node strength predicted self-regulation, but only in healthy 65-75 year olds; authors call for further biomarkers of non-responsiveness."
+          },
+          {
+            "citation_key": "PabanEtAl2024",
+            "year": 2024,
+            "explanation_en": "Identified a non-learner group needing about 5 more sessions and found individualized protocols no better than standard, in SCD rather than MCI."
+          },
+          {
+            "citation_key": "JiangEtAl2022",
+            "year": 2022,
+            "explanation_en": "Review names non-response ('BCI illiteracy') as a central unsolved issue and explicitly calls for NF research in MCI."
+          },
+          {
+            "citation_key": "RogalaEtAl2026",
+            "year": 2026,
+            "explanation_en": "DNN-personalized NF beat sham, but in healthy adults aged 41-64 (abstract-only)."
+          }
+        ],
+        "counter_evidence": [
+          {
+            "citation_key": "JirayucharoensakEtAl2019",
+            "year": 2019,
+            "explanation_en": "Used per-session calibration and adaptive thresholds in aMCI, but did not analyse responders or predictors of learning."
+          },
+          {
+            "citation_key": "LavyEtAl2021",
+            "year": 2021,
+            "explanation_en": "Individualized the band to each patient's PAF, yet reported no learning or responder analysis and no change in PAF."
+          }
+        ],
+        "why_it_matters_en": "If roughly half of older trainees fail to self-regulate, average-effect RCTs in MCI will be diluted and appear null; identifying responders from baseline EEG would allow enrichment, stratified trials and clinically targeted prescription of NF to the MCI patients most likely to benefit.",
+        "severity": 4,
+        "novelty": 5,
+        "feasibility": 4,
+        "severity_rationale_en": "Non-response plausibly explains inconsistent efficacy across trials, but it is not the sole barrier to establishing efficacy.",
+        "novelty_rationale_en": "No MCI study in the collection examines responder prediction or responder-moderated outcomes.",
+        "feasibility_rationale_en": "Requires only baseline resting EEG and session logs added to a standard NF trial; assumes MCI recruitment of about 60-90 patients at a memory clinic."
+      }
+    },
+    {
+      "id": "GAP_002",
+      "rank": 2,
+      "composite": 4.1,
+      "gap": {
+        "title_en": "No sham-controlled MCI trial verifies target engagement of the trained EEG feature",
+        "gap_type": "methodological",
+        "secondary_type": "measurement",
+        "description_en": "Controlled MCI trials report cognitive benefit without showing that the trained EEG feature changed (no PAF or upper-alpha change after sham-controlled alpha NF) or without reporting EEG at all; no study tests whether within-session learning of the target band statistically mediates cognitive change versus sham.",
+        "supporting_evidence": [
+          {
+            "citation_key": "LavyEtAl2021",
+            "year": 2021,
+            "explanation_en": "Memory improved versus sham but PAF (9.32 to 9.36 Hz) and upper-alpha power did not change; authors note the study was underpowered for EEG."
+          },
+          {
+            "citation_key": "JirayucharoensakEtAl2019",
+            "year": 2019,
+            "explanation_en": "Reports CANTAB effects but no analysis of change in the trained beta/alpha ratio."
+          },
+          {
+            "citation_key": "PabanEtAl2024",
+            "year": 2024,
+            "explanation_en": "Learned modulation was not frequency-specific and resting EEG did not change, questioning the specificity assumed by protocols."
+          },
+          {
+            "citation_key": "TrambaiolliEtAl2021",
+            "year": 2021,
+            "explanation_en": "Calls for reporting self-regulation success and its link to clinical outcomes, which included studies rarely did."
+          }
+        ],
+        "counter_evidence": [
+          {
+            "citation_key": "JangEtAl2019",
+            "year": 2019,
+            "explanation_en": "Showed session-wise beta increase (r=0.746) but in an uncontrolled n=5 pilot, so mediation versus sham cannot be tested."
+          },
+          {
+            "citation_key": "MarlatsEtAl2020",
+            "year": 2020,
+            "explanation_en": "Reported resting theta and alpha changes but no control group, and theta moved opposite to the trained direction."
+          }
+        ],
+        "why_it_matters_en": "Without target engagement, cognitive gains in MCI could be placebo or practice effects, undermining the mechanistic rationale of reversing EEG slowing.",
+        "severity": 5,
+        "novelty": 3,
+        "feasibility": 4,
+        "severity_rationale_en": "Attribution of effect to NF is the fundamental validity question for the whole field.",
+        "novelty_rationale_en": "Recognised in reviews but not yet addressed empirically in MCI; partially examined in other populations.",
+        "feasibility_rationale_en": "Standard EEG and mediation analysis; requires adequate sample size and a credible sham."
+      }
+    }
+  ],
+  "summary": {
+    "executive_en": "The collection shows that EEG neurofeedback in MCI yields promising but fragile, domain-specific cognitive gains from small and mostly uncontrolled studies. Three gaps stand out: (1) responder prediction and personalization have been studied only in healthy, middle-aged or subjective-decline samples, never in MCI; (2) no sham-controlled MCI trial has shown that the trained EEG feature actually changes and mediates the cognitive benefit; and (3) no completed MCI trial follows patients beyond about one month or measures clinical progression.",
+    "coverage_en": "Well covered: short-term cognitive effects of classic band protocols (alpha, beta, SMR/theta) in MCI (LavyEtAl2021; JirayucharoensakEtAl2019; MarlatsEtAl2020), multiple systematic and narrative reviews (TrambaiolliEtAl2021; TsaiEtAl2025; Tazaki2024; VilouEtAl2023), and emerging work on self-regulation failure in aging (MarcosMartinezEtAl2026; PabanEtAl2024).",
+    "methodology_en": "9 experimental and 6 review papers; there are no computational, observational, engineering or theoretical papers. Experimental work is dominated by single-arm pilots and small trials; only one sham-controlled RCT in MCI (LavyEtAl2021).",
+    "patterns_en": "All three gaps stem from small, short, single-site designs that report averaged cognitive outcomes. Responder prediction (gap 1) and target-engagement mediation (gap 2) can be addressed jointly in one sham-controlled trial, which is a prerequisite for the long-term progression studies of gap 3."
+  }
+}

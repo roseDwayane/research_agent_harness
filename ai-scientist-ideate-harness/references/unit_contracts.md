@@ -32,7 +32,7 @@ interface. Run `python scripts/validate_contracts.py` after any edit to `contrac
 | A2.c | Per-query check | STEP-S2 | hybrid | A2.m | ART-raw-papers, ART-query-instances, ART-step0.frame, ART-step0.strategy | ART-relevance-check | RP-MODEL-OUTPUT | KEEP |
 | A3.b | Bibliometrics | STEP-S3 | script | A2.s, A2.m, A2.c | ART-raw-papers | ART-bibliometrics | RP-TRANSPORT | KEEP |
 | A3.g | Mechanical gate | STEP-S3 | script | A3.b | ART-bibliometrics, ART-step0.frame | ART-gate | RP-NONE | KEEP |
-| A3 | Scoring and shortlist | STEP-S3 | fanout | A3.g, A3.b | ART-raw-papers, ART-step0.frame, ART-gate, ART-bibliometrics | ART-screening-scores, ART-shortlist, ART-screening-results | RP-FANOUT-BATCH | KEEP |
+| A3 | Scoring and shortlist | STEP-S3 | fanout | A3.g, A3.b | ART-raw-papers, ART-step0.frame, ART-gate, ART-bibliometrics | ART-screening-scores, ART-shortlist, ART-screening-results, ART-screening-all | RP-FANOUT-BATCH | KEEP |
 | A5 | Snowball | STEP-S4 | script | A3 | ART-shortlist, ART-bibliometrics, ART-raw-papers, ART-step0.frame, ART-step0.strategy | ART-snowball, ART-paper-ids | RP-TRANSPORT | KEEP |
 | A4.k | Citation keys | STEP-S5 | script | A3, A5 | ART-shortlist, ART-bibliometrics | ART-citation-keys, ART-shortlist.citation_key | RP-NONE | KEEP |
 | A4.b | BibTeX | STEP-S5 | script | A4.k | ART-citation-keys, ART-shortlist | ART-bib | RP-TRANSPORT | KEEP |

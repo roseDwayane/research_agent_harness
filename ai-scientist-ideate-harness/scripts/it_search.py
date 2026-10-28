@@ -27,8 +27,9 @@ from collections import Counter
 from pathlib import Path
 
 from it_common import (append_jsonl, content_words, die, http_json, norm_title, now_iso, preflight_says, quote,
-                       read_json, read_jsonl, require_protocol, scholar_key, sha256_file, sha256_json, write_json,
-                       write_text, smoke_cap)
+                       read_json, read_jsonl, require_protocol, scholar_key, sha256_file, sha256_json, with_legacy,
+                       write_json, write_text, smoke_cap)
+import it_legacy
 
 RAW_SCHEMA = "ideate-raw/2"
 LIMIT = smoke_cap(50)                        # per source per query (IDEATE_SMOKE_CAP: it_common.smoke_cap)
@@ -500,16 +501,32 @@ def assign_ids(rd: Path, papers: list[dict], minted_by: str = "A2.m") -> int:
 
 
 # ------------------------------------------------------------------------------------------------ enrichment
+def _venue_type(w: dict) -> str | None:
+    """The archived engine's venue_type from an OpenAlex work (providers/openalex.py): conference, journal, preprint."""
+    src_type = ((w.get("primary_location") or {}).get("source") or {}).get("type")
+    if src_type == "conference" or w.get("type") == "proceedings-article":
+        return "conference"
+    if w.get("type") in ("article", "review") and src_type == "journal":
+        return "journal"
+    if src_type == "repository" or w.get("type") == "preprint":
+        return "preprint"
+    return None
+
+
 def openalex_batch(rd: Path, papers: list[dict], mailto: str, fetch=http_json) -> dict:
     """One OpenAlex request per 40 DOIs (instead of one per paper): abstract when missing, openalex_id, the open-access
-    link. Recorded under _state/net/http/."""
-    got = {"abstracts": 0, "oa_links": 0, "failed_batches": 0}
+    link, and the bibliographic fields the archived engine kept (pmc_id, volume, issue, pages, language, venue_type);
+    `refs_in_collection` = the referenced works that are papers of this collection (OpenAlex ids), from which the
+    archived citation network is drawn (it_legacy.raw_papers). Recorded under _state/net/http/."""
+    got = {"abstracts": 0, "oa_links": 0, "failed_batches": 0, "biblio": 0}
     want = [p for p in papers if p.get("doi")]
+    referenced = {}
     for i in range(0, len(want), 40):
         chunk = want[i:i + 40]
         filt = "doi:" + "|".join(str(p["doi"]) for p in chunk)
         url = (f"https://api.openalex.org/works?filter={quote(filt)}&per-page=50&mailto={quote(mailto)}"
-               "&select=id,doi,display_name,publication_year,abstract_inverted_index,open_access,best_oa_location")
+               "&select=id,doi,display_name,publication_year,abstract_inverted_index,open_access,best_oa_location,"
+               "ids,biblio,language,type,primary_location,referenced_works")
         try:
             res = fetch(url, rd)
         except Exception:  # noqa: BLE001 - enrichment is optional; the failure is counted
@@ -535,6 +552,23 @@ def openalex_batch(rd: Path, papers: list[dict], mailto: str, fetch=http_json) -
                 p["abstract"] = " ".join(w for _, w in sorted((i, w) for w, ps in inv.items() for i in ps))
                 p["abstract_source"] = "openalex"
                 got["abstracts"] += 1
+            bib = r.get("biblio") or {}
+            first, last = bib.get("first_page"), bib.get("last_page")
+            pmcid = str((r.get("ids") or {}).get("pmcid") or "").rstrip("/").rsplit("/", 1)[-1]
+            found = {"pmc_id": pmcid or None, "volume": bib.get("volume"), "issue": bib.get("issue"),
+                     "pages": (first + (f"-{last}" if last and last != first else "")) if first else None,
+                     "language": r.get("language"), "venue_type": _venue_type(r)}
+            for k, v in found.items():                   # a value the search already gave stays
+                if p.get(k) in (None, "") and v not in (None, ""):
+                    p[k] = v
+            if any(v not in (None, "") for v in found.values()):
+                got["biblio"] += 1
+            if isinstance(r.get("referenced_works"), list):
+                referenced[id(p)] = [str(w).rsplit("/", 1)[-1] for w in r["referenced_works"] if w]
+    ours = {p["openalex_id"] for p in papers if p.get("openalex_id")}
+    for p in papers:
+        if id(p) in referenced:
+            p["refs_in_collection"] = sorted({w for w in referenced[id(p)] if w in ours and w != p.get("openalex_id")})
     return got
 
 
@@ -755,11 +789,13 @@ async def _run_merge(server, cfg: dict, rd: Path, mailto: str, fetch=http_json, 
     out = {"schema": RAW_SCHEMA, "topic": cfg.get("topic"), "search_timestamp": now_iso(), "search_summary": summary,
            "papers": papers}
     rp = Path(rd) / "step2_raw_papers.json"
+    out = with_legacy(rp, out)                                     # compared as written: with the archived fields
     if rp.exists() and _same_collection(read_json(rp), out):      # an unchanged merge keeps the file as it was (its
         out = read_json(rp)                                        # stamp and minted-id count included), so nothing
     else:                                                          # downstream goes stale
         write_json(rp, out)
-    write_text(Path(rd) / "step2_search_summary.md", render_summary(cfg, out, insts_now))
+    write_text(Path(rd) / "step2_search_summary.md",
+               it_legacy.search_summary_md(render_summary(cfg, out, insts_now), cfg, out, insts_now))
     return out
 
 
@@ -1268,8 +1304,12 @@ def _cmd_relevance_set(a):
         die(f"{len(errors(fs))} error(s) in the verdicts; nothing was written", 2)
     rel["rounds"].append({"round": len(rel["rounds"]), "epoch_round": len(ep["rounds"]),
                           "protocol_sha": ep["protocol_sha"], "at": now_iso(), "raw_sha": sig["raw_sha"],
-                          "signals": {k: sig[k] for k in ("papers", "new_share_latest_round", "known_items", "outcomes", "dense",
-                                                          "term_pull")},
+                          # term_pull is a list in every round (empty when nothing was computed); whether it was
+                          # computed at all (no sem_sim: not) is term_pull_computed
+                          "signals": {**{k: sig[k] for k in ("papers", "new_share_latest_round", "known_items", "outcomes",
+                                                             "dense")},
+                                      "term_pull": sig["term_pull"] or [],
+                                      "term_pull_computed": sig["term_pull"] is not None},
                           **rnd})
     caveats = []
     for v in rnd.get("verdicts") or []:
@@ -1279,6 +1319,11 @@ def _cmd_relevance_set(a):
         if str(k.get("action", "")).startswith("accept-weak"):
             caveats.append({"code": "known-item-missing", "text": f"{k['ref']}: {k['reason']}", "must_disclose": True})
     rel["caveats"] = caveats
+    for r in rel["rounds"]:                       # a round stored before term_pull was always a list: the same shape
+        sg = r.get("signals")
+        if isinstance(sg, dict) and "term_pull_computed" not in sg:
+            sg["term_pull_computed"] = sg.get("term_pull") is not None
+            sg["term_pull"] = sg.get("term_pull") or []
     write_json(relevance_path(rd), rel)
     write_text(rd / "step2_relevance_check.md", render_relevance(rel))
     for t in rnd.get("term_pull") or []:

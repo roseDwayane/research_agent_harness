@@ -1,0 +1,203 @@
+{
+  "session_id": "20261026",
+  "topic": "EEG neurofeedback for mild cognitive impairment (MCI)",
+  "screening_timestamp": "2026-10-26T12:45:04+08:00",
+  "screening_config": {
+    "threshold": 3.5,
+    "borderline_threshold": 3.0,
+    "weights": {
+      "relevance": 0.5,
+      "quality": 0.3,
+      "recency_impact": 0.2
+    }
+  },
+  "summary": {
+    "total_screened": 42,
+    "included": 15,
+    "borderline": 5,
+    "excluded": 22,
+    "inclusion_rate": "36%",
+    "manually_included": 0
+  },
+  "papers": [
+    {
+      "id": "paper_001",
+      "title": "A game-based neurofeedback training system to enhance cognitive performance in healthy elderly subjects and in patients with amnestic mild cognitive impairment",
+      "authors": [
+        "Suwicha Jirayucharoensak",
+        "Pasin Israsena",
+        "Setha Pan-ngum",
+        "Solaphat Hemrungrojn",
+        "Michael H. J. Maes"
+      ],
+      "year": 2019,
+      "journal": "Clinical Interventions in Aging",
+      "doi": "10.2147/cia.s189047",
+      "url": "https://doi.org/10.2147/cia.s189047",
+      "abstract": "INTRODUCTION: This study examines the clinical efficacy of a game-based neurofeedback training (NFT) system to enhance cognitive performance in patients with amnestic mild cognitive impairment (aMCI) and healthy elderly subjects. The NFT system includes five games designed to improve attention span and cognitive performance. The system estimates attention levels by investigating the power spectrum of Beta and Alpha bands. METHODS: We recruited 65 women with aMCI and 54 healthy elderly women. All participants were treated with care as usual (CAU); 58 were treated with CAU + NFT (20 sessions of 30 minutes each, 2-3 sessions per week), 36 with CAU + exergame-based training, while 25 patients had only CAU. Cognitive functions were assessed using the Cambridge Neuropsychological Test Automated Battery both before and after treatment. RESULTS: NFT significantly improved rapid visual processing and spatial working memory (SWM), including strategy, when compared with exergame training and no active treatment. aMCI was characterized by impairments in SWM (including strategy), pattern recognition memory, and delayed matching to samples. CONCLUSION: In conclusion, treatment with NFT improves sustained attention and SWM. Nevertheless, NFT had no significant effect on pattern recognition memory and short-term visual memory, which are the other hallmarks of aMCI. The NFT system used here may selectively improve sustained attention, strategy, and executive functions, but not other cognitive impairments, which characterize aMCI in women.",
+      "citation_count": 118,
+      "sources_found_in": [
+        "openalex"
+      ],
+      "semantic_scholar_id": null,
+      "openalex_id": "W2912800638",
+      "pubmed_id": "30863028",
+      "pmc_id": null,
+      "arxiv_id": null,
+      "references": [],
+      "cited_by": [
+        "paper_003",
+        "paper_005",
+        "paper_010",
+        "paper_016",
+        "paper_025",
+        "paper_031"
+      ],
+      "is_seed_paper": true,
+      "found_via": "Q1",
+      "language": "en",
+      "venue_type": "journal",
+      "volume": "Volume 14",
+      "issue": null,
+      "pages": "347-360",
+      "arxiv_primary_class": null,
+      "citation_network": {
+        "in_degree": 6,
+        "out_degree": 0,
+        "is_hub": true,
+        "cluster": "cluster_A"
+      },
+      "screening": {
+        "relevance": 5,
+        "quality": 4,
+        "recency_impact": 4,
+        "composite": 4.5,
+        "tier": 1,
+        "category": "included",
+        "rationale": "Controlled trial (n=119) of game-based beta/alpha EEG NFT in aMCI vs exergame and CAU with CANTAB outcomes; hub paper, highly cited.",
+        "exclusion_reason": null,
+        "no_abstract": false
+      },
+      "manually_included": false
+    },
+    {
+      "id": "paper_009",
+      "title": "Mild Cognitive Impairment and Neurofeedback: A Randomized Controlled Trial",
+      "authors": [
+        "Yotam Lavy",
+        "Tzvi Dwolatzky",
+        "Zeev Kaplan",
+        "Jonathan Guez",
+        "Doron Todder"
+      ],
+      "year": 2021,
+      "journal": "Frontiers in Aging Neuroscience",
+      "doi": "10.3389/fnagi.2021.657646",
+      "url": "https://doi.org/10.3389/fnagi.2021.657646",
+      "abstract": "Background and Objectives: Mild cognitive impairment (MCI) is often a precursor of dementia, and in particular of Alzheimer's Disease (AD) which is the most common cause of dementia. Individuals with amnestic MCI are several-fold more likely to develop AD than the general population. Therefore, MCI comprises a well-detectable, early stage time-point for therapeutic intervention and strategic prevention. Based on common electroencephalographical (EEG) pattern changes seen in individuals with MCI, we postulated that EEG-based neurofeedback could help improve the memory performance of patients with MCI. Memory performance is of particular importance in these patients, since memory decline is the most prominent symptom in most patients with MCI, and is the most predictive symptom for cognitive deterioration and the development of AD. Methods: In order to improve the memory performance of patients with MCI we used a system of EEG-based neurofeedback in an attempt to reverse alterations of the EEG that are known to be common in patients with MCI. Our protocol comprised the provision of positive feedback in order to enhance the activity level of the upper alpha band. Participants were divided to two groups receiving either neurofeedback training to enhance the upper alpha frequency (Experimental group) or random feedbacks (Sham group) Results: We witnessed a significant improvement in memory performance in subjects in the experimental group compared to those in the sham group. This improvement was maintained for at least 1 month. Conclusions: Neurofeedback may be a promising and affordable novel approach for treating the decline in memory witnessed in patients with MCI.",
+      "citation_count": 20,
+      "sources_found_in": [
+        "openalex",
+        "pubmed"
+      ],
+      "semantic_scholar_id": null,
+      "openalex_id": "W3172141709",
+      "pubmed_id": "34194315",
+      "pmc_id": "PMC8236892",
+      "arxiv_id": null,
+      "references": [],
+      "cited_by": [
+        "paper_007",
+        "paper_025"
+      ],
+      "is_seed_paper": false,
+      "found_via": "Q1",
+      "language": "en",
+      "venue_type": "journal",
+      "volume": "13",
+      "issue": null,
+      "pages": "657646",
+      "arxiv_primary_class": null,
+      "citation_network": {
+        "in_degree": 2,
+        "out_degree": 0,
+        "is_hub": false,
+        "cluster": "cluster_A"
+      },
+      "screening": {
+        "relevance": 5,
+        "quality": 4,
+        "recency_impact": 4,
+        "composite": 4.5,
+        "tier": 1,
+        "category": "included",
+        "rationale": "Sham-controlled RCT of upper-alpha EEG NF in MCI showing memory gains maintained at 1 month.",
+        "exclusion_reason": null,
+        "no_abstract": false
+      },
+      "manually_included": false
+    },
+    {
+      "id": "paper_010",
+      "title": "Neurofeedback and the Aging Brain: A Systematic Review of Training Protocols for Dementia and Mild Cognitive Impairment",
+      "authors": [
+        "Lucas Remoaldo Trambaiolli",
+        "Raymundo Cassani",
+        "David M. A. Mehler",
+        "Tiago Henrique Falk"
+      ],
+      "year": 2021,
+      "journal": "Frontiers in Aging Neuroscience",
+      "doi": "10.3389/fnagi.2021.682683",
+      "url": "https://doi.org/10.3389/fnagi.2021.682683",
+      "abstract": "Dementia describes a set of symptoms that occur in neurodegenerative disorders and that is characterized by gradual loss of cognitive and behavioral functions. Recently, non-invasive neurofeedback training has been explored as a potential complementary treatment for patients suffering from dementia or mild cognitive impairment. Here we systematically reviewed studies that explored neurofeedback training protocols based on electroencephalography or functional magnetic resonance imaging for these groups of patients. From a total of 1,912 screened studies, 10 were included in our final sample ( N = 208 independent participants in experimental and N = 81 in the control groups completing the primary endpoint). We compared the clinical efficacy across studies, and evaluated their experimental designs and reporting quality. In most studies, patients showed improved scores in different cognitive tests. However, data from randomized controlled trials remains scarce, and clinical evidence based on standardized metrics is still inconclusive. In light of recent meta-research developments in the neurofeedback field and beyond, quality and reporting practices of individual studies are reviewed. We conclude with recommendations on best practices for future studies that investigate the effects of neurofeedback training in dementia and cognitive impairment.",
+      "citation_count": 62,
+      "sources_found_in": [
+        "openalex"
+      ],
+      "semantic_scholar_id": null,
+      "openalex_id": "W3162921425",
+      "pubmed_id": "34177558",
+      "pmc_id": null,
+      "arxiv_id": null,
+      "references": [
+        "paper_001",
+        "paper_005",
+        "paper_012",
+        "paper_016"
+      ],
+      "cited_by": [
+        "paper_003",
+        "paper_007",
+        "paper_033",
+        "paper_039"
+      ],
+      "is_seed_paper": false,
+      "found_via": "Q1",
+      "language": "en",
+      "venue_type": "journal",
+      "volume": "13",
+      "issue": null,
+      "pages": "682683",
+      "arxiv_primary_class": null,
+      "citation_network": {
+        "in_degree": 4,
+        "out_degree": 4,
+        "is_hub": true,
+        "cluster": "cluster_A"
+      },
+      "screening": {
+        "relevance": 5,
+        "quality": 4,
+        "recency_impact": 4,
+        "composite": 4.5,
+        "tier": 1,
+        "category": "included",
+        "rationale": "Systematic review of EEG/fMRI NF protocols in dementia and MCI (10 studies) with reporting-quality appraisal; hub paper.",
+        "exclusion_reason": null,
+        "no_abstract": false
+      },
+      "manually_included": false
+    }
+  ]
+}

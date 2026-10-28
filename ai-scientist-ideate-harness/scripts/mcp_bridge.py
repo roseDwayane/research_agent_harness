@@ -65,7 +65,7 @@ def scrub_log(path: Path | None) -> None:
     text = Path(path).read_text(encoding="utf-8", errors="replace")
     clean = SECRET_PARAM.sub(r"\1REDACTED", text)
     if clean != text:
-        Path(path).write_text(clean, encoding="utf-8")
+        Path(path).write_text(clean, encoding="utf-8", newline="\n")
 
 
 class Server:
@@ -114,7 +114,7 @@ class Server:
 
 def write_json(path: Path, data) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
     tmp.replace(path)
 
 
@@ -135,7 +135,7 @@ async def cmd_call(a):
         return
     text = out.get("_text") if set(out) == {"_text"} else json.dumps(out, indent=2, ensure_ascii=False)
     if a.out:
-        Path(a.out).write_text(text + "\n", encoding="utf-8")
+        Path(a.out).write_text(text + "\n", encoding="utf-8", newline="\n")
         print(f"wrote {a.out} ({len(text)} chars)")
     else:
         print(text)

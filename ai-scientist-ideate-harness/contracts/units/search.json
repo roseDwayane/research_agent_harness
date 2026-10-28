@@ -173,7 +173,7 @@
       "trigger": "After A3.g; again incrementally for A5 additions (LOOP-04).",
       "requires": ["A3.g", "A3.b"],
       "inputs": {"required": ["ART-raw-papers", "ART-step0.frame", "ART-gate", "ART-bibliometrics"], "optional": ["ART-snowball", "ART-protocol-eval", "ART-human-overrides"], "context": ["bibliometrics are used only at build, never shown to scorers"]},
-      "outputs": {"artifacts": ["ART-screening-scores", "ART-shortlist", "ART-screening-results"], "side_effects": ["_state/fanout/A3/ batch files and answers", "criteria amendments recorded beside the protocol (LOOP-03)"]},
+      "outputs": {"artifacts": ["ART-screening-scores", "ART-shortlist", "ART-screening-results", "ART-screening-all"], "side_effects": ["_state/fanout/A3/ batch files and answers", "criteria amendments recorded beside the protocol (LOOP-03)"]},
       "commands": ["ideate_tools.py screen-plan $RD", "(one subagent per batch)", "ideate_tools.py screen-merge $RD", "ideate_tools.py screen-build $RD $RD/screening_scores.json"],
       "mcp": [],
       "preconditions": ["A3.g done", "no open human override without a reason"],

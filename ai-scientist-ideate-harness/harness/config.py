@@ -77,6 +77,8 @@ class HarnessConfig:
             env["IDEATE_REPLAY"] = "1"
         if self.smoke_cap:
             env["IDEATE_SMOKE_CAP"] = str(int(self.smoke_cap))
+        if self.model:                           # recorded as step0 engine.llm_model (scripts/it_legacy.py)
+            env.setdefault("IDEATE_LLM_MODEL", self.model)
         return env
 
     @classmethod

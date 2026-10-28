@@ -141,6 +141,12 @@ class StepAgent:
             ph = phase if agent.recipe and phase in agent.recipe.phases else "main"
             r = agent.run(ctx, gen, ph, force=force, strict=blocking)
             res.units.append(r)
+            looped = False
+            if not r.ok and self._replan_pending(ctx, u):
+                # A2.c's own check refuses while a re-plan is pending (R08): LOOP-01 is what resolves it
+                extra = self._loop01(ctx)
+                res.units += extra
+                r, looped = (extra[-1] if extra else r), True
             if not r.ok:
                 res.status = "stopped" if r.status == "stopped" else "failed"
                 res.stopped_by = r.errors[-1].error_id if r.errors else u
@@ -148,7 +154,7 @@ class StepAgent:
                 return self._close(ctx, res, step)
             if r.status == "degraded":
                 res.status = "degraded"
-            for extra in (self.after_unit(ctx, u, gen) if r.status != "skipped" else []):
+            for extra in (self.after_unit(ctx, u, gen) if r.status != "skipped" and not looped else []):
                 res.units.append(extra)
                 if not extra.ok:
                     res.status, res.stopped_by = "failed", extra.errors[-1].error_id if extra.errors else extra.unit
@@ -192,6 +198,10 @@ class StepAgent:
                     return out
             completed += 1
 
+    @staticmethod
+    def _replan_pending(ctx: RunContext, unit: str) -> bool:
+        return unit == "A2.c" and bool(loops.relevance_rounds(ctx.rd)[1])
+
     def _loop01(self, ctx: RunContext) -> list[UnitResult]:
         out, completed = [], 0
         while True:
@@ -203,7 +213,7 @@ class StepAgent:
             for u, ph in (("A2.c", "replan"), ("A2.m", "main"), ("A2.c", "main")):
                 r = self.rerun(ctx, u, phase=ph)
                 out.append(r)
-                if not r.ok:
+                if not r.ok and not (ph == "main" and self._replan_pending(ctx, u)):
                     return out
             completed += 1
 

@@ -40,7 +40,8 @@ from test_a3_screen import FakeVenues, fake_subagent  # noqa: E402
 from test_a4_export import crossref_fetch  # noqa: E402
 from test_a5_snowball import FakeS2, graph_fetch  # noqa: E402
 
-VOLATILE = {"at", "search_timestamp", "written_at", "timestamp", "basis", "raw_sha", "sha", "strategy_sha", "history"}
+VOLATILE = {"at", "search_timestamp", "written_at", "timestamp", "basis", "raw_sha", "sha", "strategy_sha", "history",
+            "screening_timestamp"}       # the archived engine's stamp of the shortlist (it_legacy), set at its first write
 MAIL = "x@example.com"
 STAMP = __import__("re").compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d")
 
@@ -62,8 +63,8 @@ def outputs(rd: Path, unit: str) -> dict:
     out = {}
     cfg = json.loads((rd / "step0_session_config.json").read_text()) if (rd / "step0_session_config.json").exists() else {}
     for spec in it_ledger.io(unit)["owns"]:
-        if "step0" in spec:
-            out[spec["step0"]] = strip(cfg.get(spec["step0"]))
+        if "step0" in spec:              # a wall-clock key (A1.p's `timestamp`) is volatile at the top level too
+            out[spec["step0"]] = None if spec["step0"] in VOLATILE else strip(cfg.get(spec["step0"]))
         elif "glob" in spec:
             out[spec["glob"]] = sorted(json.dumps(strip(json.loads(f.read_text())), sort_keys=True) for f in rd.glob(spec["glob"]))
         else:

@@ -85,11 +85,13 @@ def read_json(path: Path):
 
 
 def write_json(path: Path, data) -> None:
-    """Write-to-temp-then-rename so a crash never leaves a truncated file."""
+    """Write-to-temp-then-rename so a crash never leaves a truncated file (with the archived engine's fields for the
+    files both engines write: it_common.with_legacy)."""
+    from it_common import with_legacy
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    tmp.write_text(json.dumps(with_legacy(path, data), indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
     os.replace(tmp, path)
 
 
@@ -448,9 +450,14 @@ def _cmd_fulltext_status(a):
             "`pdf-only` = PDF fetched but not converted (pdf2md failed or PDF2MD_API_KEY unset). "
             "`abstract-only` papers still feed the knowledge cards, but mark fields they cannot support as `(TBD)`.\n")
     (rd / "step5_full_text").mkdir(exist_ok=True)
+    import it_legacy
+    from it_common import with_legacy
+    view = ("# Full-text access log\n\n" + ", ".join(f"{k}: {v}" for k, v in counts.items()) + "\n\n"
+            "| Citation key | Targeted | PDF | Markdown | access_level | Figure pages |\n|---|---|---|---|---|---|\n" + "\n".join(rows) + "\n" + note + by_hand)
+    fetch_log = read_json(rd / "step5_fetch_log.json") if (rd / "step5_fetch_log.json").exists() else {}
+    cfg = read_json(rd / "step0_session_config.json") if (rd / "step0_session_config.json").exists() else {}
     atomic_text(rd / "step5_full_text" / "_access_log.md",
-        "# Full-text access log\n\n" + ", ".join(f"{k}: {v}" for k, v in counts.items()) + "\n\n"
-        "| Citation key | Targeted | PDF | Markdown | access_level | Figure pages |\n|---|---|---|---|---|---|\n" + "\n".join(rows) + "\n" + note + by_hand)
+                it_legacy.access_log_md(view, cfg, with_legacy(rd / "step3_shortlist.json", data), fetch_log, rd))
     print(f"fulltext-status: {counts} -> step5_full_text/_access_log.md (access_level written back to shortlist)")
     no_fig = [p["citation_key"] for p in data["papers"] if p.get("citation_key") and
               (rd / "pdfs" / f"{p['citation_key']}.pdf").exists() and not figs.get(p["citation_key"])]
@@ -461,6 +468,23 @@ def _cmd_fulltext_status(a):
 
 
 # ---------------------------------------------------------------- concept-index
+def _yaml_scalar(v: str):
+    """One plain YAML scalar typed as PyYAML types it (int, float, bool, null; a quoted value stays a string), so the
+    concept index carries the same types whether PyYAML is installed or not (`year: 2011` is a number either way)."""
+    v = v.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+        return v[1:-1]
+    if v in ("", "~", "null", "Null", "NULL"):
+        return None
+    if v in ("true", "True", "TRUE", "false", "False", "FALSE"):
+        return v.lower() == "true"
+    if re.fullmatch(r"[-+]?(0|[1-9]\d*)", v):
+        return int(v)
+    if re.fullmatch(r"[-+]?(\d+\.\d*|\.\d+)([eE][-+]?\d+)?", v):
+        return float(v)
+    return v
+
+
 def frontmatter(text: str) -> dict:
     m = re.match(r"^---\s*\n(.*?)\n---\s*\n", text, re.S)
     if not m:
@@ -475,8 +499,8 @@ def frontmatter(text: str) -> dict:
             mm = re.match(r"^([A-Za-z_]+):\s*(.*)$", line)
             if mm:
                 v = mm.group(2).strip()
-                out[mm.group(1)] = [x.strip().strip("\"'") for x in v[1:-1].split(",") if x.strip()] \
-                    if v.startswith("[") and v.endswith("]") else v.strip("\"'")
+                out[mm.group(1)] = [_yaml_scalar(x) for x in v[1:-1].split(",") if x.strip()] \
+                    if v.startswith("[") and v.endswith("]") else _yaml_scalar(v)
         return out
 
 
@@ -971,7 +995,7 @@ claim_type: {c.get('claim_type', 'methodological')}
 - **Inspired**:
 {links(c.get('inspired'))}
 """
-        (kd / "points" / f"{pid}.md").write_text(body, encoding="utf-8")
+        (kd / "points" / f"{pid}.md").write_text(body, encoding="utf-8", newline="\n")
         n_pt, n_tbd = n_pt + 1, n_tbd + body.count(TBD)
     for c in spec.get("planes", []):
         fid = f"F_draft_T{c['n']}_" + re.sub(r"[^A-Za-z0-9_]+", "_", c["slug"]).strip("_")
@@ -1011,7 +1035,7 @@ provenance:
 ## Relation to other Planes (與其他 Plane 的關係)
 {_v(c, 'relations')}
 """
-        (kd / "planes" / f"{fid}.md").write_text(body, encoding="utf-8")
+        (kd / "planes" / f"{fid}.md").write_text(body, encoding="utf-8", newline="\n")
         n_pl, n_tbd = n_pl + 1, n_tbd + body.count(TBD)
     # Theme table for the manifest - the paper -> theme mapping is already in the planes' member_papers.
     theme_of = {k: f"T{c['n']} {c.get('name', c['slug'])}" for c in spec.get("planes", []) for k in c.get("member_papers", [])}
@@ -1028,7 +1052,7 @@ provenance:
     text = re.sub(r"<!-- theme-table:start.*?theme-table:end -->", lambda _: block, text, flags=re.S) \
         if "theme-table:start" in text else text.rstrip() + "\n\n" + block + "\n"
     if spec.get("planes"):    # fusion block: concept Points come before any theme exists - no all-UNASSIGNED table then
-        mf.write_text(text, encoding="utf-8")
+        mf.write_text(text, encoding="utf-8", newline="\n")
     unassigned = [k for k in keys if k not in theme_of] if spec.get("planes") else []
     print(f"build-cards: {n_pt} Points, {n_pl} Planes written; {n_tbd} occurrences of {TBD} (omitted fields and inline)")
     if spec.get("planes"):
@@ -1306,7 +1330,7 @@ def cmd_build_methods(a):
                   "compute", "code_data", "affordable_here", "not_done"):
             L.append(f"- **{k}**: {_cell(r[k], 10_000)}")
         L.append("")
-    (kd / "methods_matrix.md").write_text("\n".join(L) + "\n", encoding="utf-8")
+    (kd / "methods_matrix.md").write_text("\n".join(L) + "\n", encoding="utf-8", newline="\n")
     n_tbd = sum(1 for r in out for k in M_TEXT + M_LIST if _tag(r[k]) == TBD)
     print(f"build-methods: {len(out)} experiments / {len(per_paper)} papers ({n_ft} full-text rows) -> "
           f"knowledge/methods_matrix.{{json,md}}; {n_tbd} (TBD) fields")
@@ -1640,6 +1664,9 @@ def check_argument(arg: dict, idea_exps: list[str] | None, ctx: dict | None = No
     for k in ("study_sentence", "question"):
         if k in arg and not _filled(arg[k]):
             err("SCHEMA", f"'{k}' must be a non-empty string")
+    if not _filled(arg.get("idea")):
+        warn("SCHEMA", "'idea' should be the idea's Name (schema: \"idea\": \"<Name>\"): the decision tree, attack plan "
+                       "and packaging copy it, and they carry null otherwise")
     claims = arg.get("claims") if isinstance(arg.get("claims"), list) else []
     if "claims" in arg and not claims:
         err("SCHEMA", "'claims' must be a non-empty list")
@@ -2677,7 +2704,7 @@ def cmd_argument_render(a):
               f"{cell(x.get('how'))} |" for x in doubts]
     else:
         L.append("None recorded.")
-    (gd / "argument.md").write_text("\n".join(L) + "\n", encoding="utf-8")
+    (gd / "argument.md").write_text("\n".join(L) + "\n", encoding="utf-8", newline="\n")
     print(f"argument-render: {len(claims)} claim(s), {len(ls(arg.get('experiments')))} experiment(s) -> {gd / 'argument.md'}")
 
 

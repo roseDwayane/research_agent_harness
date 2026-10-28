@@ -17,6 +17,7 @@ import glob
 import json
 import re
 import shlex
+import shutil
 import subprocess
 import time
 from dataclasses import dataclass, field
@@ -116,14 +117,15 @@ class Skill:
         """`ideate_tools.py a2-check /rd` -> [python, scripts/ideate_tools.py, a2-check, /rd]."""
         words = []
         for w in shlex.split(cmd):                 # no shell runs the command: expand a file glob here
-            hits = sorted(glob.glob(w)) if any(ch in w for ch in "*?[") and w.startswith("/") else []
+            hits = sorted(glob.glob(w)) if any(ch in w for ch in "*?[") and Path(w).is_absolute() else []
             words += hits or [w]
         if not words:
             raise ValueError("empty command")
         if words[0].endswith(".py"):
             return [self.cfg.python, str(self.scripts / words[0]), *words[1:]]
         if words[0] == "bash" and len(words) > 1 and words[1].endswith(".sh"):
-            return ["bash", str(self.scripts / words[1]), *words[2:]]
+            # by PATH: on Windows a bare "bash" finds System32's WSL bash before Git Bash
+            return [shutil.which("bash") or "bash", str(self.scripts / words[1]), *words[2:]]
         raise ValueError(f"not a skill command (expected <script>.py or bash <script>.sh): {cmd}")
 
     def run(self, cmd: str, subs: Subs, timeout: float | None = None) -> CommandResult:

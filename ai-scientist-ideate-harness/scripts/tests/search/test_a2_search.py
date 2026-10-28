@@ -425,6 +425,50 @@ class TestRunAndMerge(unittest.TestCase):
         self.assertEqual(raw["search_summary"]["untitled_records"], 0)
         self.assertEqual(it_frame.errors(it_search.run_checks(cfg, self.rd, "A2.m")), [])
 
+    def test_merge_keeps_the_archived_bibliographic_fields_and_network(self):
+        """The OpenAlex enrichment brings what the archived engine kept per paper (pmc_id, volume, issue, pages,
+        language, venue_type) and the references inside the collection, from which the archived citation network,
+        hubs and clusters are drawn; a value the search already gave stays."""
+        import it_legacy
+        cur = it_search.latest_instance(self.rd, "Q1")
+        inst = json.loads(cur.read_text())
+        for p in inst["papers"]:
+            if p.get("doi") == AUTOREJECT["doi"]:
+                p["volume"] = "152"                                    # PubMed gave it: kept over OpenAlex's
+        cur.write_text(json.dumps(inst))
+        cfg = json.loads((self.rd / "step0_session_config.json").read_text())
+        W = {AUTOREJECT["doi"]: "WA", PREP["doi"]: "WP", FASTER["doi"]: "WF", ICLABEL["doi"]: "WI"}
+        refs = {"WP": ["WA"], "WF": ["WA"], "WI": ["WA", "WP", "W-outside"], "WA": []}
+
+        def fetch(url, rd=None):
+            select = url.split("&select=", 1)[1].split("&")[0].split(",")
+            self.assertTrue({"ids", "biblio", "language", "type", "primary_location", "referenced_works"} <= set(select))
+            out = []
+            for doi, w in W.items():
+                if doi in url or doi.replace("/", "%2F") in url:
+                    out.append({"id": f"https://openalex.org/{w}", "doi": f"https://doi.org/{doi}",
+                                "ids": {"pmcid": "https://www.ncbi.nlm.nih.gov/pmc/articles/4971014"} if w == "WP" else {},
+                                "biblio": {"volume": "999", "issue": "2", "first_page": "417", "last_page": "429"},
+                                "language": "en", "type": "article", "primary_location": {"source": {"type": "journal"}},
+                                "referenced_works": [f"https://openalex.org/{x}" for x in refs[w]]})
+            return {"results": out}
+        raw = asyncio.run(it_search.run_merge(FakeServer(), cfg, self.rd, "x@example.com", fetch=fetch, embedder=None))
+        by_doi = {p.get("doi"): p for p in raw["papers"]}
+        a, prep, ic = by_doi[AUTOREJECT["doi"]], by_doi[PREP["doi"]], by_doi[ICLABEL["doi"]]
+        self.assertEqual((a["volume"], a["issue"], a["pages"], a["language"], a["venue_type"]), ("152", "2", "417-429", "en", "journal"))
+        self.assertEqual((prep["pmc_id"], a["pmc_id"]), ("4971014", None))
+        self.assertEqual(ic["refs_in_collection"], ["WA", "WP"])        # the work outside the collection dropped
+        self.assertEqual(ic["references"], sorted([a["id"], prep["id"]]))
+        self.assertEqual(a["cited_by"], sorted([prep["id"], by_doi[FASTER["doi"]]["id"], ic["id"]]))
+        self.assertTrue(a["citation_network"]["is_hub"])
+        self.assertEqual(raw["search_summary"]["hub_papers"], [a["id"]])
+        self.assertEqual([len(c["paper_ids"]) for c in raw["search_summary"]["clusters"]], [4])
+        for p in raw["papers"]:
+            self.assertEqual((p["citation_network"]["in_degree"], p["citation_network"]["out_degree"]),
+                             (len(p["cited_by"]), len(p["references"])))
+        self.assertEqual(raw["search_summary"]["enrichment"]["biblio"], 4)
+        self.assertEqual(it_legacy.check_json("step2_raw_papers.json", raw), [])
+
     def test_untitled_record_is_no_paper(self):
         cur = it_search.latest_instance(self.rd, "Q1")
         inst = json.loads(cur.read_text())
@@ -534,6 +578,24 @@ class TestRelevanceAndGates(unittest.TestCase):
         q4 = next(q for q in cfg["queries"] if q["id"] == "Q4")             # an anchor query asking one anchor only
         q4["axes"] = {**q4["axes"], "C3": ["Autoreject"]}
         self.assertEqual(set(it_search.signals(cfg, self.rd)["queries"]["Q4"]["anchor_terms_found"]), {"Autoreject"})
+
+    def test_term_pull_is_a_list_in_every_round(self):
+        """Without sem_sim the ambiguous-term signal is not computed: the round stores term_pull [] (an array, as when
+        it is computed) and term_pull_computed false; a round stored with term_pull null is brought to that shape."""
+        rp = self.rd / "step2_relevance_check.json"
+        rel = json.loads(rp.read_text())
+        self.assertEqual((rel["rounds"][0]["signals"]["term_pull"], rel["rounds"][0]["signals"]["term_pull_computed"]),
+                         ([], False))
+        rel["rounds"][0]["signals"]["term_pull"] = None                # a round written before the change
+        del rel["rounds"][0]["signals"]["term_pull_computed"]
+        rp.write_text(json.dumps(rel))
+        f = self.tmp / "verdicts.json"
+        f.write_text(json.dumps({**GOOD_VERDICTS, "summary": "stored again"}))
+        code, out = run("relevance-set", self.rd, f)
+        self.assertEqual(code, 0, out)
+        for r in json.loads(rp.read_text())["rounds"]:
+            self.assertIsInstance(r["signals"]["term_pull"], list)
+            self.assertIs(r["signals"]["term_pull_computed"], False)
 
     def test_screen_build_gated(self):
         (self.rd / "step2_relevance_check.json").unlink()

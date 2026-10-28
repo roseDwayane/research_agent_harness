@@ -151,5 +151,35 @@ class TestPacing(unittest.TestCase):
         self.assertEqual([w for w in waits if w >= 10], [10.0])
 
 
+PUBMED_XML = """<PubmedArticleSet><PubmedArticle><MedlineCitation><PMID>30284663</PMID><Article>
+<Journal><JournalIssue><Volume>44</Volume><Issue>1</Issue><PubDate><Year>2019</Year></PubDate></JournalIssue>
+<Title>Applied Psychophysiology and Biofeedback</Title></Journal>
+<ArticleTitle>Neurofeedback Improves Memory and Peak Alpha Frequency in Individuals with Mild Cognitive Impairment</ArticleTitle>
+<Pagination><MedlinePgn>41-49</MedlinePgn></Pagination><Language>eng</Language></Article></MedlineCitation>
+<PubmedData><ArticleIdList><ArticleId IdType="doi">10.1007/s10484-018-9418-0</ArticleId>
+<ArticleId IdType="pmc">PMC1234567</ArticleId></ArticleIdList></PubmedData></PubmedArticle></PubmedArticleSet>"""
+
+
+@unittest.skipIf(server is None, "scholar server not importable (needs the interpreter with mcp)")
+class TestRecords(unittest.TestCase):
+    def test_pubmed_record_carries_the_archived_bibliographic_fields(self):
+        p = server._parse_pubmed_xml(PUBMED_XML)[0]
+        self.assertEqual({k: p[k] for k in ("pubmed_id", "pmc_id", "volume", "issue", "pages", "language", "doi")},
+                         {"pubmed_id": "30284663", "pmc_id": "PMC1234567", "volume": "44", "issue": "1", "pages": "41-49",
+                          "language": "eng", "doi": "10.1007/s10484-018-9418-0"})
+
+    def test_every_record_has_the_fields_null_or_set(self):
+        self.assertTrue({"pmc_id", "volume", "issue", "pages", "language"} <= set(server._empty_paper()))
+        a, b = server._empty_paper(), dict(server._empty_paper(), pmc_id="PMC1", volume="3")
+        server._merge_two(a, b)
+        self.assertEqual((a["pmc_id"], a["volume"]), ("PMC1", "3"))
+
+    def test_clock_lock_works_on_this_platform(self):
+        """flock where it exists, msvcrt on Windows: a turn records its time either way."""
+        clock = Path(tempfile.mkdtemp()) / "clock"
+        asyncio.run(server._paced_turn(clock, 0.0))
+        self.assertAlmostEqual(float(clock.read_text()), time.time(), delta=5)
+
+
 if __name__ == "__main__":
     unittest.main()

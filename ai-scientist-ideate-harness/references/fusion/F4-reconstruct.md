@@ -92,7 +92,9 @@ frontmatter (no generation, no angle; one key per line, or several on one line a
 findings Points; **Debates** cites `conflict` / `boundary` collisions or debate Lines; Key results, "A. Experimental
 designs" and "B. Reported numbers" come from matrix rows (`exp_id`s) as before. It adds nothing the collisions did not
 find — where there is none, `(TBD)`. Its readers are the planning block (designs, expected magnitudes) and the writeup
-(Related Work). The paper–theme mapping may point to `knowledge/_MANIFEST.md` (generated) instead of repeating it by hand.
+(Related Work). The paper–theme mapping is the table of the template (the archived layout); a pointer to
+`knowledge/_MANIFEST.md` (generated) may follow it but does not replace it. The archived engine's front-matter keys
+(`session_id`, `step: 6`, `themes`), methodology legend and cross-theme subsections are part of the template too.
 `recon-check --unit B2` (J08).
 
 <a id="b35"></a>

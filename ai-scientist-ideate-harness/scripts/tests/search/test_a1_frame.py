@@ -25,6 +25,7 @@ FIX = SCRIPTS / "tests" / "fixtures" / "search" / "a1"
 REPO = SCRIPTS.parents[3]
 sys.path.insert(0, str(SCRIPTS))
 import it_frame  # noqa: E402
+import it_legacy  # noqa: E402
 
 
 def run(*args):
@@ -141,7 +142,8 @@ class TestGoodPath(unittest.TestCase):
     def test_protocol_hash_and_no_copy(self):
         cfg = json.loads((self.rd / "step0_session_config.json").read_text())
         self.assertEqual(cfg["protocol"]["timeframe"], "2013-2026")
-        self.assertNotIn("pico", cfg)
+        # the archived engine's `pico` is a view re-derived from the protocol on every write, never a second copy
+        self.assertEqual(cfg["pico"], it_legacy._pico(cfg))
         self.assertTrue(cfg["protocol"]["topic_sha256"])
 
     def test_view_rendered(self):

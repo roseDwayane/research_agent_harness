@@ -44,8 +44,10 @@ VIEWS = ["STATUS.md", "search_caveats.json", "fulltext_caveats.json", "step1_pro
 IGNORE_DIRS = {"pdfs", "step5_full_text", "knowledge", "report", "_work_ignore"}
 IGNORE_DIRS_BY_BLOCK = {"search": IGNORE_DIRS, "fulltext": {"knowledge", "report", "_work_ignore"},
                         "fusion": {"pdfs", "report", "_work_ignore"}}
-# _state/errors/** and ERRORS.md: the harness's error reports (scholar_research.v2), written beside any open Unit
-IGNORE_GLOBS = ["_state/net/**", "_state/ledger*", "_state/ledger_snap/**", "_state/errors/**", "ERRORS.md", "gen_*/**",
+# _state/errors/** and ERRORS.md: the harness's error reports (scholar_research.v2), written beside any open Unit;
+# _state/harness/**: the conductor's own logs, shims and isolated worker folders, likewise
+IGNORE_GLOBS = ["_state/net/**", "_state/ledger*", "_state/ledger_snap/**", "_state/errors/**", "_state/harness/**",
+                "ERRORS.md", "gen_*/**",
                 "*.tmp", "**/.DS_Store",
                 "**/__pycache__/**"]
 ICON = {"done": "✔", "stale": "↻", "running": "⏳", "waiting": "⏳", "failed": "✖", "todo": "·"}
@@ -284,7 +286,8 @@ def _changed(before: dict, after: dict) -> tuple[set, set]:
     fb, fa = before.get("files") or {}, after.get("files") or {}
     paths = {p for p in set(fb) | set(fa) if fb.get(p) != fa.get(p)} - {"step0_session_config.json"}
     sb, sa = before.get("step0") or {}, after.get("step0") or {}
-    keys = {k for k in set(sb) | set(sa) if sb.get(k) != sa.get(k)}
+    from it_legacy import LEGACY_STEP0_KEYS          # the archived engine's keys: a view re-derived on every write
+    keys = {k for k in set(sb) | set(sa) if sb.get(k) != sa.get(k)} - set(LEGACY_STEP0_KEYS)
     return paths, keys
 
 
@@ -316,7 +319,7 @@ def _append(rd: Path, ev: dict) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     old = p.read_text(encoding="utf-8") if p.exists() else ""
     tmp = p.with_suffix(".jsonl.tmp")
-    tmp.write_text(old + json.dumps(ev, ensure_ascii=False) + "\n", encoding="utf-8")
+    tmp.write_text(old + json.dumps(ev, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
     os.replace(tmp, p)
 
 
@@ -347,7 +350,7 @@ def begin(rd: Path, unit: str, inst: str = "-") -> None:
     p = _snap_path(rd, unit, inst)
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(snap), encoding="utf-8")
+    tmp.write_text(json.dumps(snap), encoding="utf-8", newline="\n")
     os.replace(tmp, p)
     _append(rd, {"ev": "begin", "unit": unit, "inst": inst, "at": now_iso(), "inputs": hashes(rd, io(unit).get("reads") or [])})
 
@@ -903,7 +906,7 @@ def render(rd: Path) -> None:
     if (rd / "knowledge" / "decon").is_dir():
         L += _render_fusion(rd)
     tmp = rd / "STATUS.md.tmp"
-    tmp.write_text("\n".join(L) + "\n", encoding="utf-8")
+    tmp.write_text("\n".join(L) + "\n", encoding="utf-8", newline="\n")
     os.replace(tmp, rd / "STATUS.md")
 
 
@@ -972,7 +975,7 @@ def render_fusion_only(rd: Path) -> None:
     if (rd / "knowledge" / "decon").is_dir() or any(e.get("unit") in FUSION for e in _events(rd)):
         L += _render_fusion(rd)
     tmp = rd / "STATUS.md.tmp"
-    tmp.write_text("\n".join(L) + "\n", encoding="utf-8")
+    tmp.write_text("\n".join(L) + "\n", encoding="utf-8", newline="\n")
     os.replace(tmp, rd / "STATUS.md")
 
 

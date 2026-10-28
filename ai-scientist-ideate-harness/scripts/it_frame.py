@@ -648,7 +648,8 @@ def check_evaluation(cfg: dict, rd: Path) -> list[dict]:
 
 # ------------------------------------------------------------------------------------------------------ ownership
 def check_ownership(cfg: dict) -> list[dict]:
-    owned = {k for ks in OWNERS.values() for k in ks}
+    from it_legacy import LEGACY_STEP0_KEYS      # the archived engine's keys, re-derived on every write: owned by none
+    owned = {k for ks in OWNERS.values() for k in ks} | set(LEGACY_STEP0_KEYS)
     extra = sorted(k for k in cfg if k not in owned)
     return [F("WARN", "X01", "step0", f"step0 keys with no owner: {extra} (a note goes in the writer's own `*_note`)")] \
         if extra else []

@@ -1,0 +1,280 @@
+{
+  "session_id": "20261026",
+  "topic": "EEG neurofeedback for mild cognitive impairment (MCI)",
+  "search_timestamp": "2026-10-26T12:42:04+08:00",
+  "search_summary": {
+    "total_raw_results": 57,
+    "after_dedup": 41,
+    "snowball_additions": 1,
+    "final_count": 42,
+    "sources": {
+      "semantic_scholar": 1,
+      "openalex": 25,
+      "pubmed": 17,
+      "arxiv": 0
+    },
+    "queries": {
+      "Q1": 16,
+      "Q2": 11,
+      "Q3": 5,
+      "Q4": 3,
+      "Q5": 6,
+      "snowball": 1
+    },
+    "doi_coverage": "42/42 (100%)",
+    "hub_papers": [
+      "paper_001",
+      "paper_005",
+      "paper_010",
+      "paper_012",
+      "paper_016",
+      "paper_035"
+    ],
+    "clusters": [
+      {
+        "name": "cluster_A",
+        "paper_ids": [
+          "paper_001",
+          "paper_003",
+          "paper_005",
+          "paper_007",
+          "paper_009",
+          "paper_010",
+          "paper_012",
+          "paper_016",
+          "paper_025",
+          "paper_028",
+          "paper_030",
+          "paper_031",
+          "paper_033",
+          "paper_035",
+          "paper_039"
+        ],
+        "theme": "neurofeedback / cognitive / impairment"
+      },
+      {
+        "name": "cluster_B",
+        "paper_ids": [
+          "paper_029",
+          "paper_032"
+        ],
+        "theme": "alpha / eeg / neurofeedback"
+      },
+      {
+        "name": "cluster_C",
+        "paper_ids": [
+          "paper_037",
+          "paper_042"
+        ],
+        "theme": "brain / computer / attention"
+      }
+    ],
+    "source_failures": [
+      "semantic_scholar/Q1: RuntimeError: semantic_scholar search HTTP 429",
+      "semantic_scholar/Q2: RuntimeError: semantic_scholar search HTTP 429",
+      "semantic_scholar/Q3: RuntimeError: semantic_scholar search HTTP 429",
+      "semantic_scholar/Q4: RuntimeError: semantic_scholar search HTTP 429",
+      "semantic_scholar/Q5: RuntimeError: semantic_scholar search HTTP 429",
+      "arxiv/Q1: RuntimeError: arxiv HTTP 400",
+      "arxiv/Q2: RuntimeError: arxiv HTTP 400",
+      "arxiv/Q3: RuntimeError: arxiv HTTP 400",
+      "arxiv/Q4: RuntimeError: arxiv HTTP 400",
+      "arxiv/Q5: RuntimeError: arxiv HTTP 400"
+    ]
+  },
+  "papers": [
+    {
+      "id": "paper_001",
+      "title": "A game-based neurofeedback training system to enhance cognitive performance in healthy elderly subjects and in patients with amnestic mild cognitive impairment",
+      "authors": [
+        "Suwicha Jirayucharoensak",
+        "Pasin Israsena",
+        "Setha Pan-ngum",
+        "Solaphat Hemrungrojn",
+        "Michael H. J. Maes"
+      ],
+      "year": 2019,
+      "journal": "Clinical Interventions in Aging",
+      "doi": "10.2147/cia.s189047",
+      "url": "https://doi.org/10.2147/cia.s189047",
+      "abstract": "INTRODUCTION: This study examines the clinical efficacy of a game-based neurofeedback training (NFT) system to enhance cognitive performance in patients with amnestic mild cognitive impairment (aMCI) and healthy elderly subjects. The NFT system includes five games designed to improve attention span and cognitive performance. The system estimates attention levels by investigating the power spectrum of Beta and Alpha bands. METHODS: We recruited 65 women with aMCI and 54 healthy elderly women. All participants were treated with care as usual (CAU); 58 were treated with CAU + NFT (20 sessions of 30 minutes each, 2-3 sessions per week), 36 with CAU + exergame-based training, while 25 patients had only CAU. Cognitive functions were assessed using the Cambridge Neuropsychological Test Automated Battery both before and after treatment. RESULTS: NFT significantly improved rapid visual processing and spatial working memory (SWM), including strategy, when compared with exergame training and no active treatment. aMCI was characterized by impairments in SWM (including strategy), pattern recognition memory, and delayed matching to samples. CONCLUSION: In conclusion, treatment with NFT improves sustained attention and SWM. Nevertheless, NFT had no significant effect on pattern recognition memory and short-term visual memory, which are the other hallmarks of aMCI. The NFT system used here may selectively improve sustained attention, strategy, and executive functions, but not other cognitive impairments, which characterize aMCI in women.",
+      "citation_count": 118,
+      "sources_found_in": [
+        "openalex"
+      ],
+      "semantic_scholar_id": null,
+      "openalex_id": "W2912800638",
+      "pubmed_id": "30863028",
+      "pmc_id": null,
+      "arxiv_id": null,
+      "references": [],
+      "cited_by": [
+        "paper_003",
+        "paper_005",
+        "paper_010",
+        "paper_016",
+        "paper_025",
+        "paper_031"
+      ],
+      "is_seed_paper": true,
+      "found_via": "Q1",
+      "language": "en",
+      "venue_type": "journal",
+      "volume": "Volume 14",
+      "issue": null,
+      "pages": "347-360",
+      "arxiv_primary_class": null,
+      "citation_network": {
+        "in_degree": 6,
+        "out_degree": 0,
+        "is_hub": true,
+        "cluster": "cluster_A"
+      }
+    },
+    {
+      "id": "paper_003",
+      "title": "A review: effects of neurofeedback on patients with mild cognitive impairment (MCI), and Alzheimer’s disease (AD)",
+      "authors": [
+        "Miyako Tazaki"
+      ],
+      "year": 2024,
+      "journal": "Frontiers in Human Neuroscience",
+      "doi": "10.3389/fnhum.2023.1331436",
+      "url": "https://doi.org/10.3389/fnhum.2023.1331436",
+      "abstract": "Neurofeedback training (NFT) is a non-invasive method and has been shown to be effective for attention deficit/hyperactivity disorder (ADHD) and various psychiatric disorders. The aim of this paper is to evaluate the effectiveness of NFT for patients with Mild Cognitive Impairment (MCI) and Alzheimer's disease (AD) or Vascular Diseases (VD), so that we searched research articles from four databases, using the keywords neurofeedback, elderly, MCI, AD, VD, and dementia. As a result, 13 articles were identified regarding the effectiveness of NFT in patients with MCI and AD. Although each study differed in study design, training protocol, electroencephalogram (EEG) electrode placement, and reward and inhibition frequency bands, all were shown to enhance memory, attention, and other cognitive abilities. Additional well-designed, randomized studies with sufficient power are needed to further confirm the effectiveness of NFT.",
+      "citation_count": 17,
+      "sources_found_in": [
+        "openalex"
+      ],
+      "semantic_scholar_id": null,
+      "openalex_id": "W4391819901",
+      "pubmed_id": "38420112",
+      "pmc_id": null,
+      "arxiv_id": null,
+      "references": [
+        "paper_001",
+        "paper_005",
+        "paper_010",
+        "paper_012",
+        "paper_028",
+        "paper_035"
+      ],
+      "cited_by": [
+        "paper_039"
+      ],
+      "is_seed_paper": false,
+      "found_via": "Q1",
+      "language": "en",
+      "venue_type": "journal",
+      "volume": "17",
+      "issue": null,
+      "pages": "1331436",
+      "arxiv_primary_class": null,
+      "citation_network": {
+        "in_degree": 1,
+        "out_degree": 6,
+        "is_hub": false,
+        "cluster": "cluster_A"
+      }
+    },
+    {
+      "id": "paper_005",
+      "title": "Beta wave enhancement neurofeedback improves cognitive functions in patients with mild cognitive impairment",
+      "authors": [
+        "Jung-Hee Jang",
+        "Jieun Kim",
+        "Gunhyuk Park",
+        "Haesook Kim",
+        "Eun-Sun Jung",
+        "Jiyun Cha",
+        "Chan Young Kim",
+        "Siyeon Kim",
+        "Jun‐Hwan Lee",
+        "Ho-ryong Yoo"
+      ],
+      "year": 2019,
+      "journal": "Medicine",
+      "doi": "10.1097/md.0000000000018357",
+      "url": "https://doi.org/10.1097/md.0000000000018357",
+      "abstract": "BACKGROUND: Mild cognitive impairment (MCI) is a symptom characterizing cognitive decline and a transitional state between normal aging and dementia; however, there is no definitive diagnosis and treatment for MCI. Neurofeedback (NF), which is a training mechanism that employs operant conditioning to regulate brain activity, has been increasingly investigated concerning its beneficial effects for dementia and MCI. METHODS: This study investigated cognitive improvement and hemodynamic changes in the prefrontal cortex (PFC) following NF training in patients with MCI. Five patients with MCI received NF training for enhanced beta band activity in the dorsolateral PFC-16 sessions for 8 weeks-with each session divided into 9 5-minute trials. The primary outcome measure was a cognitive assessment tool: the Korean version of the Montreal Cognitive Assessment. The secondary outcome measures were the Central Nervous System Vital Signs for neurocognitive testing, hemodynamic changes using functional near-infrared spectroscopy in the PFC during a working-memory task, and Beck Depression Inventory scores. RESULTS: After completing the training, patients' cognitive function significantly improved in domains such as composite memory, cognitive flexibility, complex attention, reaction time, and executive function. Increased electroencephalogram beta power was observed over NF training sessions (Spearman rank correlation test: r = 0.746, P = .001). The threshold value for gaining positive feedback from pre-NF baseline on beta power significantly increased (Spearman rank correlation test: r = 0.805, P = .001). Hemodynamic response in PFC changed after NF training, and individual differences were identified. Specifically, hypoactivation of the hemodynamic response by emotional distraction recovered following NF training. CONCLUSION: We suggest that patients' cognitive processing efficiency was improved by the NF training. These beneficial results suggest that NF training may have potential therapeutic applications to prevent the progression from MCI to dementia. TRIAL REGISTRATION NUMBER: Clinical Research Information Service (KCT0003433).",
+      "citation_count": 37,
+      "sources_found_in": [
+        "openalex"
+      ],
+      "semantic_scholar_id": null,
+      "openalex_id": "W2995365728",
+      "pubmed_id": "31852140",
+      "pmc_id": null,
+      "arxiv_id": null,
+      "references": [
+        "paper_001",
+        "paper_035"
+      ],
+      "cited_by": [
+        "paper_003",
+        "paper_010",
+        "paper_016",
+        "paper_028",
+        "paper_035"
+      ],
+      "is_seed_paper": false,
+      "found_via": "Q1",
+      "language": "en",
+      "venue_type": "journal",
+      "volume": "98",
+      "issue": "50",
+      "pages": "e18357",
+      "arxiv_primary_class": null,
+      "citation_network": {
+        "in_degree": 5,
+        "out_degree": 2,
+        "is_hub": true,
+        "cluster": "cluster_A"
+      }
+    },
+    {
+      "id": "paper_042",
+      "title": "Effects of motor imagery based brain-computer interface on upper limb function and attention in stroke patients with hemiplegia: a randomized controlled trial",
+      "authors": [
+        "Xiaolu Liu",
+        "Wendong Zhang",
+        "Wei-Bo Li",
+        "Shaohua Zhang",
+        "Pei-Yuan Lv",
+        "Yu Yin"
+      ],
+      "year": 2023,
+      "journal": "BMC Neurology",
+      "doi": "10.1186/s12883-023-03150-5",
+      "url": "https://www.semanticscholar.org/paper/7545cf69231ca78cdd52f0f30e8ba01bd7c57ace",
+      "abstract": "Background Seeking positive and comprehensive rehabilitation methods after stroke is an urgent problem to be solved, which is very important to improve the dysfunction of stroke. The aim of this study was to investigate the effects of motor imagery-based brain-computer interface training (MI-BCI) on upper limb function and attention in stroke patients with hemiplegia. Methods Sixty stroke patients with impairment of upper extremity function and decreased attention were randomly assigned to the control group (CR group) or the experimental group (BCI group) in a 1:1 ratio. Patients in the CR group received conventional rehabilitation. Patients in the BCI group received 20 min of MI-BCI training five times a week for 3 weeks (15 sessions) in addition to conventional rehabilitation. The primary outcome measures were the changes in Fugl-Meyer Motor Function Assessment of Upper Extremities (FMA-UE) and Attention Network Test (ANT) from baseline to 3 weeks. Results About 93% of the patients completed the allocated training. Compared with the CR group, among those in the BCI group, FMA-UE was increased by 8.0 points (95%CI, 5.0 to 10.0; P < 0.001). Alert network response time (32.4ms; 95%CI, 58.4 to 85.6; P < 0.001), orienting network response (5.6ms; 95%CI, 29.8 to 55.8; P = 0.010), and corrects number (8.0; 95%CI, 17.0 to 28.0; P < 0.001) also increased in the BCI group compared with the CR group. Additionally, the executive control network response time (− 105.9ms; 95%CI, − 68.3 to − 23.6; P = 0.002), the total average response time (− 244.8ms; 95%CI, − 155.8 to − 66.2; P = 0.002), and total time (− 122.0ms; 95%CI, − 80.0 to − 35.0; P = 0.001) were reduced in the BCI group compared with the CR group. Conclusion MI-BCI combined with conventional rehabilitation training could better enhance upper limb motor function and attention in stroke patients. This training method may be feasible and suitable for individuals with stroke. Trial registration : This study was registered in the Chinese Clinical Trial Registry with Portal Number ChiCTR2100050430(27/08/2021).",
+      "citation_count": 75,
+      "sources_found_in": [
+        "semantic_scholar"
+      ],
+      "semantic_scholar_id": "7545cf69231ca78cdd52f0f30e8ba01bd7c57ace",
+      "openalex_id": null,
+      "pubmed_id": "37003976",
+      "pmc_id": "10064693",
+      "arxiv_id": null,
+      "references": [],
+      "cited_by": [
+        "paper_037"
+      ],
+      "is_seed_paper": false,
+      "found_via": "snowball",
+      "language": null,
+      "venue_type": "journal",
+      "volume": "23",
+      "issue": null,
+      "pages": null,
+      "arxiv_primary_class": null,
+      "citation_network": {
+        "in_degree": 1,
+        "out_degree": 0,
+        "is_hub": false,
+        "cluster": "cluster_C"
+      }
+    }
+  ]
+}

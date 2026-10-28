@@ -38,9 +38,11 @@ Run (stdio transport, the default for local Claude Code use):
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 import json
 import os
+import tempfile
 from pathlib import Path
 import re
 import xml.etree.ElementTree as ET
@@ -175,6 +177,12 @@ def _empty_paper() -> Dict[str, Any]:
         "scopus_id": None,
         "ieee_id": None,
         "wos_id": None,
+        # bibliographic fields the archived engine kept per paper (PubMed gives them all; OpenAlex its PMC id)
+        "pmc_id": None,
+        "volume": None,
+        "issue": None,
+        "pages": None,
+        "language": None,
     }
 
 
@@ -199,14 +207,31 @@ def _hits(papers, total) -> "Hits":
 # ---------------------------------------------------------------------------
 
 
+@contextlib.contextmanager
+def _file_lock(fh):
+    """An exclusive lock on an open file, held until the block ends: flock where it exists, msvcrt on Windows (no
+    fcntl there - importing it made every Semantic Scholar and arXiv call fail)."""
+    if os.name == "nt":
+        import msvcrt
+        fh.seek(0)
+        msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)   # byte 0, which may lie past the end of an empty file
+        try:
+            yield
+        finally:
+            fh.seek(0)
+            msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        import fcntl
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        yield                                            # released when the file closes
+
+
 async def _paced_turn(clock: Path, gap: float) -> None:
     """Wait until `gap` seconds have passed since the last call recorded in `clock`, then record this one. The time
     lives in a lock-guarded file, so the spacing holds across every server process on the machine (parallel research
     dirs each start their own server)."""
-    import fcntl
     while True:
-        with open(clock, "a+") as fh:
-            fcntl.flock(fh, fcntl.LOCK_EX)
+        with open(clock, "a+") as fh, _file_lock(fh):
             fh.seek(0)
             try:
                 last = float(fh.read().strip() or 0)
@@ -217,6 +242,7 @@ async def _paced_turn(clock: Path, gap: float) -> None:
                 fh.seek(0)
                 fh.truncate()
                 fh.write(f"{time.time():.3f}")
+                fh.flush()
                 return
         await asyncio.sleep(min(wait, gap))
 
@@ -224,7 +250,7 @@ async def _paced_turn(clock: Path, gap: float) -> None:
 # Semantic Scholar's key allows about one request a second across all its endpoints; the snowball's recommendations call
 # came straight after other S2 calls and got 429 even with a key (s20: q363, q386, q000). Every S2 request waits its turn.
 S2_GAP = 1.1
-S2_CLOCK = Path(os.environ.get("TMPDIR", "/tmp")) / "ai-scientist-s2-clock"
+S2_CLOCK = Path(os.environ.get("TMPDIR") or tempfile.gettempdir()) / "ai-scientist-s2-clock"
 S2_BACKOFF = (10.0, 30.0, 60.0)        # seconds to wait after a 429 with a key, unless the answer says Retry-After
 S2_BACKOFF_KEYLESS = (3.0, 6.0, 9.0)   # keyless S2 answers 429 most days: fail fast rather than wait a minute per call
 
@@ -412,6 +438,8 @@ async def _search_openalex(query: str, limit: int, year: Optional[str]) -> List[
         p["openalex_id"] = oa_id.rsplit("/", 1)[-1] if oa_id else None
         pmid_url = ids.get("pmid") or ""
         p["pubmed_id"] = pmid_url.rsplit("/", 1)[-1] if pmid_url else None
+        pmcid_url = str(ids.get("pmcid") or "").rstrip("/")
+        p["pmc_id"] = pmcid_url.rsplit("/", 1)[-1] or None
         p["sources_found_in"] = [Source.OPENALEX.value]
         out.append(p)
     return _hits(out, (data.get("meta") or {}).get("count"))
@@ -494,6 +522,12 @@ def _parse_pubmed_xml(xml_text: str) -> List[Dict[str, Any]]:
         for aid in art.findall(".//PubmedData/ArticleIdList/ArticleId"):
             if aid.get("IdType") == "doi":
                 p["doi"] = _normalize_doi(aid.text)
+            elif aid.get("IdType") == "pmc" and (aid.text or "").strip():
+                p["pmc_id"] = aid.text.strip()
+        p["volume"] = art.findtext(".//Article/Journal/JournalIssue/Volume")
+        p["issue"] = art.findtext(".//Article/Journal/JournalIssue/Issue")
+        p["pages"] = art.findtext(".//Article/Pagination/MedlinePgn")
+        p["language"] = art.findtext(".//Article/Language")
         if p["pubmed_id"]:
             p["url"] = f"https://pubmed.ncbi.nlm.nih.gov/{p['pubmed_id']}/"
         p["sources_found_in"] = [Source.PUBMED.value]
@@ -507,7 +541,7 @@ _ARXIV_NS = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/s
 ARXIV_GAP, ARXIV_BACKOFF = 3.5, 20.0       # seconds between arXiv calls; wait after a 429 before the one retry
 # arXiv limits per client machine, so the spacing holds across every server process on it: the time of the last call
 # lives in a lock-guarded file (several searches - parallel research dirs - each start their own server).
-ARXIV_CLOCK = Path(os.environ.get("TMPDIR", "/tmp")) / "ai-scientist-arxiv-clock"
+ARXIV_CLOCK = Path(os.environ.get("TMPDIR") or tempfile.gettempdir()) / "ai-scientist-arxiv-clock"
 
 
 async def _arxiv_turn() -> None:
@@ -847,7 +881,7 @@ def _merge_two(into: Dict[str, Any], other: Dict[str, Any]) -> None:
     # Fill any null scalar field from the other record.
     for key in ("title", "year", "journal", "doi", "url", "abstract",
                 "semantic_scholar_id", "openalex_id", "pubmed_id", "arxiv_id",
-                "scopus_id", "ieee_id", "wos_id"):
+                "scopus_id", "ieee_id", "wos_id", "pmc_id", "volume", "issue", "pages", "language"):
         if not into.get(key) and other.get(key):
             into[key] = other[key]
     # Authors: keep the longer list.
