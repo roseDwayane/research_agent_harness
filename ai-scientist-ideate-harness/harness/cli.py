@@ -1,6 +1,7 @@
 """ideate-harness - run and inspect the ideate stage as a harness of Unit agents.
 
   ideate-harness run <topic.md> [--from S1] [--to B6] [--depth quick|standard|deep] [--generations N]
+                                [--worker claude|ollama [--ollama-url URL --model NAME --num-ctx N]]
                                 [--dry-run [--fixtures DIR] [--inject KEY=TOKEN,...]] [--replay]
                                 [--agent UNIT=package.module:Class] [--config harness.toml] [--no-resume]
   ideate-harness status  <RD>                 every Unit's state (ledger + generations) and what runs next
@@ -49,7 +50,8 @@ def _load_agent(spec: str):
 def cmd_run(a) -> int:
     cfg = HarnessConfig.load(a.config, depth=a.depth, max_num_generations=a.generations,
                              num_reflections=a.reflections, python=a.python, claude=a.claude, model=a.model,
-                             max_parallel=a.max_parallel, smoke_cap=a.smoke_cap)
+                             max_parallel=a.max_parallel, smoke_cap=a.smoke_cap, worker=a.worker,
+                             ollama_url=a.ollama_url, num_ctx=a.num_ctx)
     cfg.dry_run, cfg.replay, cfg.resume = a.dry_run, a.replay, not a.no_resume
     if a.budget:
         cfg.default_budget_usd = a.budget
@@ -189,6 +191,10 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--config", type=Path, help="harness.toml")
     sp.add_argument("--research-dir", help="default: <topic>_research next to the topic")
     sp.add_argument("--python", help="interpreter for scripts/ (needs the mcp package)")
+    sp.add_argument("--worker", choices=("claude", "ollama"), help="who does the model Units (default: claude)")
+    sp.add_argument("--ollama-url", help="worker ollama: the server, e.g. http://127.0.0.1:11434 (OLLAMA_API_KEY in "
+                    "the environment is sent as a Bearer token)")
+    sp.add_argument("--num-ctx", type=int, help="worker ollama: the context the model runs with (default 65536)")
     sp.add_argument("--claude", help="the Claude Code CLI (default: claude)")
     sp.add_argument("--model")
     sp.add_argument("--max-parallel", type=int)

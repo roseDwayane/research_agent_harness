@@ -2,7 +2,9 @@
 
     [harness]
     python = "/path/to/python"          # interpreter for scripts/ (needs the mcp package); default: this one
+    worker = "claude"                   # "claude": claude -p workers | "ollama": an Ollama server, no Claude Code
     claude = "claude"                   # the Claude Code CLI used for the model Units
+    # worker = "ollama": ollama_url = "http://127.0.0.1:11434", model = "qwen3.8", num_ctx = 131072, think = false
     model = "claude-opus-5-5"           # optional; default: the CLI's own
     max_parallel = 4                    # fan-out workers at once
     default_budget_usd = 5.0            # per worker (claude -p --max-budget-usd); unset: no cap
@@ -32,6 +34,7 @@ except ModuleNotFoundError:                      # Python 3.10
 
 MODULE_ROOT = Path(__file__).resolve().parent.parent
 DEPTHS = ("quick", "standard", "deep")
+WORKERS = ("claude", "ollama")
 
 # Conservative bounds for the loops the contracts state no number for (OQ-07). LOOP-11 is bounded by the ready
 # questions that remain and LOOP-12 by max_num_generations; they are not listed here.
@@ -41,8 +44,16 @@ DEFAULT_LOOP_BOUNDS = {"LOOP-03": 2, "LOOP-05": 1, "LOOP-06": 1}
 @dataclass
 class HarnessConfig:
     python: str = sys.executable
+    worker: str = "claude"                       # who does the model Units: "claude" (claude -p) | "ollama" (HTTP API)
     claude: str = "claude"
     model: str | None = None
+    ollama_url: str = "http://127.0.0.1:11434"   # worker = "ollama": the server (OLLAMA_API_KEY -> Bearer header)
+    ollama_api_key_env: str = "OLLAMA_API_KEY"
+    num_ctx: int = 65536                         # the context the model is run with - Ollama cuts longer prompts silently
+    num_predict: int = 16384                     # the longest answer
+    think: bool | None = None                    # a thinking model's reasoning on/off (None: the model's default)
+    temperature: float | None = None             # None: the model's (Modelfile) default
+    max_file_chars: int = 60000                  # a file put into an Ollama prompt is cut beyond this
     max_parallel: int = 4
     default_budget_usd: float | None = None
     unit_budget_usd: dict[str, float] = field(default_factory=dict)
@@ -65,6 +76,10 @@ class HarnessConfig:
             raise ValueError(f"depth must be one of {DEPTHS}, not {self.depth!r}")
         if self.max_parallel < 1:
             raise ValueError("max_parallel must be >= 1")
+        if self.worker not in WORKERS:
+            raise ValueError(f"worker must be one of {WORKERS}, not {self.worker!r}")
+        if self.worker == "ollama" and not self.model:
+            raise ValueError('worker = "ollama" needs a model (e.g. model = "qwen3.8")')
         self.module_root = Path(self.module_root)
 
     def budget(self, unit_id: str) -> float | None:

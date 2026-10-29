@@ -80,6 +80,45 @@ Other options:
 - `--depth quick` runs without full text and with weak evidence.
 - `--replay` returns recorded network answers instead of calling the services.
 
+## Without Claude Code: an Ollama server
+
+The model Units can run on an Ollama server over its HTTP API instead of `claude -p`. Nothing else changes: the same
+recipes, shell, gates and reports. Put this in a `harness.toml`:
+
+```toml
+[harness]
+worker = "ollama"
+ollama_url = "https://ollama.example.org"   # or http://127.0.0.1:11434
+model = "qwen3.8"
+num_ctx = 131072        # use the context the server loads the model with (`ollama ps`), or Ollama reloads the model
+think = false           # optional: a thinking model's reasoning off (faster); leave it out for the model's default
+```
+
+```bash
+export OLLAMA_API_KEY=...        # only if the server sits behind an auth proxy; sent as "Authorization: Bearer ..."
+.venv/bin/ideate-harness run path/to/topic.md --config harness.toml --to F4
+```
+
+The local model gets no tools, so the conductor does what Claude Code's tools did (`harness/ollama_worker.py`):
+
+- It puts into the prompt the files the step may read, and the output of the read-only lookups the recipe allows
+  and checks the recipe allows (`list-papers`, `list-methods`, `env-probe`, `plan-status`, and B5's
+  `argument-check`, `tree-check`, `attack-check`, `pack-check`).
+- The model answers with one JSON object, `{"files": [{"path", "content"}], "note"}`, decoded under a JSON schema.
+- The conductor writes only the files the step may write, and checks that each JSON file parses.
+- A refused submission goes back to the same conversation.
+
+Limits to know:
+
+- **Ollama cuts an over-long prompt silently.** The worker estimates each prompt before sending it and refuses one
+  that does not fit `num_ctx`. It also refuses an answer whose prompt filled the whole context.
+- **A step whose task asks the worker to run a skill command itself is refused at once**, with the command named.
+  Today these are B3.5 (`questions-prefill`, `questions-handover`), A2.c's re-plan (`frame query-revise`,
+  `search --only`) and B6 (`consume`). Their recipes must run these commands as steps of their own before such a
+  step can run on Ollama.
+- B6's journal lookup uses web search, which an Ollama worker does not have.
+- Strict checks (verbatim quotes, schemas) fail more often with smaller models: compare models on the same topic.
+
 ## What a run leaves
 
 | Where | What |

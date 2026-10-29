@@ -4,7 +4,8 @@
                       ``execute(ctx, unit, recipe, phase, gen, attempt) -> ExecResult``
   RecipeExecutor      the default: walks the Unit's recipe step by step
      run step         ScriptStep: a skill command
-     write step       ClaudeStep: one claude -p worker (an isolated one for A1.e)
+     write step       ClaudeStep: one worker - claude -p, or an Ollama server (worker = "ollama", ollama_worker.py) -
+                      an isolated one for A1.e
      fanout step      FanoutStep: one worker per batch file, max_parallel at once, a failed batch re-dispatched once
 
 Retry levels (ideate_v2.retry, decision D-08) - each failure is retried by exactly one owner:
@@ -21,13 +22,14 @@ import re
 import shutil
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Protocol
 
 from ideate_v2 import retry
 
 from . import claude_worker as cw
+from . import ollama_worker as ow
 from .context import CODE_FOR, RunContext, instance_of
 from .recipes import Recipe, Step
 from .skill import CommandResult, Subs, classify_failure
@@ -186,7 +188,62 @@ class RecipeExecutor:
                                   list(body.get("rules") or []), list(body.get("commands") or []))
         return "\n".join(lines), system
 
+    @staticmethod
+    def _tool(ctx: RunContext) -> str:
+        return f"ollama:{ctx.cfg.model}" if ctx.cfg.worker == "ollama" else "claude -p"
+
+    @staticmethod
+    def _output_globs(ctx: RunContext, unit: str, subs: Subs) -> list[str]:
+        """The Unit's contract outputs as research-folder-relative patterns (what else a worker may write)."""
+        out = []
+        for art_id in ctx.reg.units[unit]["outputs"]["artifacts"]:
+            art = ctx.reg.get(art_id)
+            if art.get("kind") not in ("file", "part") or art_id == "ART-ideas-archive":
+                continue
+            path = art["path"].split(",")[0].strip()
+            if path.startswith("gen_k/"):
+                if subs.gen is None:
+                    continue
+                path = f"gen_{subs.gen}/" + path[len("gen_k/"):]
+            for tok in ("<key>", "<id>", "<hash>", "<Name>", "<topic>", "Q_NNN"):
+                path = path.replace(tok, "*")
+            out.append(path)
+        return out
+
+    def _lookups(self, ctx: RunContext, body: dict, subs: Subs) -> tuple[list[tuple[str, str]], list[str]]:
+        """For a worker without tools: run the read-only lookups the recipe allows -> (command, output); and list
+        the state-changing commands the task asks the worker to run itself (it cannot)."""
+        found, unavailable, done = [], [], set()
+        task = str(body.get("task") or "")
+        for c in body.get("commands") or []:
+            words = c.split()
+            key = " ".join(words[:2])
+            if key in ow.LOOKUPS:
+                for inv in ow.LOOKUPS[key]:
+                    if inv in done or ("$GEN" in inv and subs.gen is None):
+                        continue
+                    done.add(inv)
+                    r = ctx.skill.run(inv, subs, timeout=300)
+                    out = r.stdout if r.ok else f"(exit {r.returncode}) {r.tail()}"
+                    found.append((_short(ctx.skill.expand(inv, subs, quote=False)), out[-20000:]))
+            elif key in ow.NEEDS_ARGUMENTS:
+                continue
+            elif len(words) > 1 and words[1] in task:
+                unavailable.append(c)
+        return found, unavailable
+
+    def _scope(self, ctx: RunContext, unit: str, body: dict, subs: Subs) -> ow.FileScope:
+        exp = lambda x: Path(ctx.skill.expand(x, subs, quote=False))       # noqa: E731
+        lookups, unavailable = self._lookups(ctx, body, subs) if ctx.cfg.worker == "ollama" else ([], [])
+        return ow.FileScope(base=subs.rd, reads=[(str(exp(x)), exp(x)) for x in body.get("reads") or []],
+                            writes=[exp(x) for x in body.get("writes") or []],
+                            globs=list(ow.SCRATCH) + self._output_globs(ctx, unit, subs),
+                            forbid=[exp(x) for x in body.get("forbid") or []], lookups=lookups,
+                            unavailable=unavailable, max_file_chars=ctx.cfg.max_file_chars)
+
     def _worker_kw(self, ctx: RunContext, unit: str, body: dict, subs: Subs, log: Path) -> dict:
+        if ctx.cfg.worker == "ollama":
+            return dict(scope=self._scope(ctx, unit, body, subs), log_dir=log)
         bin_dir = cw.write_shims(ctx.state_dir / "bin", ctx.cfg)
         deny = [Path(ctx.skill.expand(p, subs, quote=False)) for p in body.get("forbid") or []]
         return dict(allowed=cw.allowed_bash(list(body.get("commands") or [])) + list(body.get("tools") or []),
@@ -199,7 +256,8 @@ class RecipeExecutor:
         """One worker call with the transport retry (RP-TRANSPORT, owner unit-transport)."""
         attempt = 1
         while True:
-            wr = cw.run_worker(ctx.cfg, label=f"{label}.a{attempt}", **kw)
+            backend = ow.run_worker if ctx.cfg.worker == "ollama" else cw.run_worker
+            wr = backend(ctx.cfg, label=f"{label}.a{attempt}", **kw)
             ctx.add_usage(wr.metrics)
             if wr.ok or wr.error_category not in ("external_service", "timeout"):
                 return wr
@@ -227,26 +285,31 @@ class RecipeExecutor:
             if cwd.exists():
                 shutil.rmtree(cwd)
             cwd.mkdir(parents=True)
+            shown = []
             for x in body.get("reads") or []:
                 src = Path(ctx.skill.expand(x, subs, quote=False))
                 if src.is_file():
                     shutil.copy2(src, cwd / src.name)
+                    shown.append((str(src), cwd / src.name))
+            if ctx.cfg.worker == "ollama":                 # it reads its copies, and writes into its folder only
+                kw["scope"] = ow.FileScope(base=cwd, reads=shown, writes=[cwd / w.name for w in writes],
+                                           max_file_chars=ctx.cfg.max_file_chars)
             task = task.replace(str(subs.rd) + "/", "./")
             task += ("\n\nYou are an independent reader: work only with the files in this folder. Write your answer as "
                      + ", ".join(f"./{w.name}" for w in writes) + ".")
         ctx.say(f"      ✎ {unit}: worker" + (" (isolated)" if body.get("isolated") else ""))
-        ctx.emit("TOOL_CALLED", unit_id=unit, instance=inst, attempt=attempt, tool="claude -p", actor="worker",
+        ctx.emit("TOOL_CALLED", unit_id=unit, instance=inst, attempt=attempt, tool=self._tool(ctx), actor="worker",
                  context={"step": label})
         wr = self._call(ctx, unit, label, task=task, system=system, cwd=cwd, **kw)
         if wr.session_id:
             self._sessions[(unit, inst, label)] = wr.session_id
         if not wr.ok:
-            ctx.emit("TOOL_FAILED", unit_id=unit, instance=inst, attempt=attempt, tool="claude -p", actor="worker",
+            ctx.emit("TOOL_FAILED", unit_id=unit, instance=inst, attempt=attempt, tool=self._tool(ctx), actor="worker",
                      message=wr.error[:300], metrics=wr.metrics)
             code = CODE_FOR.get(wr.error_category, "IDEATE.WORKER.FAILED")
             return False, wr.metrics, ctx.error(code, f"worker failed: {wr.error}", unit=unit, instance=inst,
                                                 attempt=attempt, context={"step": label})
-        ctx.emit("TOOL_RETURNED", unit_id=unit, instance=inst, attempt=attempt, tool="claude -p", actor="worker",
+        ctx.emit("TOOL_RETURNED", unit_id=unit, instance=inst, attempt=attempt, tool=self._tool(ctx), actor="worker",
                  metrics=wr.metrics, message=wr.text[:300])
         if body.get("isolated"):
             for w in writes:
@@ -291,7 +354,7 @@ class RecipeExecutor:
         if wr.session_id:
             self._sessions[key] = wr.session_id
         ctx.emit("TOOL_RETURNED" if wr.ok else "TOOL_FAILED", unit_id=unit, instance=inst, attempt=attempt,
-                 tool="claude -p --resume", actor="worker", metrics=wr.metrics, message=(wr.text or wr.error)[:300])
+                 tool=self._tool(ctx) + " (resumed)", actor="worker", metrics=wr.metrics, message=(wr.text or wr.error)[:300])
         return wr.ok, wr.metrics
 
     # ------------------------------------------------------------------------------------------------ fanout
@@ -343,12 +406,16 @@ class RecipeExecutor:
             out = outs[0] if len(outs) == 1 else ", ".join(str(o) for o in outs)
             task = body["task"].format(batch=b, out=out, brief=brief or "")
             task = ctx.skill.expand(task, subs, quote=False)
-            wr = self._call(ctx, unit, f"{label}.{b.stem}.t{tries}", task=task, system=system, cwd=root, **kw)
+            kw_b = dict(kw)
+            if ctx.cfg.worker == "ollama":
+                shown = ([(str(brief), brief)] if brief else []) + [(str(b), b)] + _named_files(b, root, outs)
+                kw_b["scope"] = replace(kw["scope"], reads=shown, writes=list(outs))
+            wr = self._call(ctx, unit, f"{label}.{b.stem}.t{tries}", task=task, system=system, cwd=root, **kw_b)
             return item, wr
 
         tries = 1
         while todo:
-            ctx.emit("TOOL_CALLED", unit_id=unit, instance=inst, attempt=attempt, tool="claude -p fan-out",
+            ctx.emit("TOOL_CALLED", unit_id=unit, instance=inst, attempt=attempt, tool=self._tool(ctx) + " fan-out",
                      actor="worker", context={"step": label, "batches": len(todo), "try": tries})
             with ThreadPoolExecutor(max_workers=ctx.cfg.max_parallel) as pool:
                 results = list(pool.map(lambda it: one(it, tries), todo))
@@ -357,7 +424,7 @@ class RecipeExecutor:
                 _add(metrics, wr.metrics)
                 if not (wr.ok and all(_valid_answer(o) for o in outs)):
                     failed.append(((b, outs), wr))
-            ctx.emit("TOOL_RETURNED", unit_id=unit, instance=inst, attempt=attempt, tool="claude -p fan-out",
+            ctx.emit("TOOL_RETURNED", unit_id=unit, instance=inst, attempt=attempt, tool=self._tool(ctx) + " fan-out",
                      actor="worker", metrics=metrics, context={"step": label, "failed": len(failed)})
             if not failed:
                 return True, metrics, None
@@ -374,6 +441,32 @@ class RecipeExecutor:
             todo = [it for it, _ in failed]
             tries += 1
         return True, metrics, None
+
+
+def _named_files(batch: Path, root: Path, outs: list[Path], limit: int = 20) -> list[tuple[str, Path]]:
+    """The research-folder files a batch names (A7.D: each paper's full_text), for a worker that cannot open them."""
+    try:
+        data = json.loads(batch.read_text(encoding="utf-8"))
+    except ValueError:
+        return []
+    found: list[tuple[str, Path]] = []
+    skip = {o.resolve() for o in outs}
+
+    def walk(v) -> None:
+        if len(found) >= limit:
+            return
+        if isinstance(v, dict):
+            for x in v.values():
+                walk(x)
+        elif isinstance(v, list):
+            for x in v:
+                walk(x)
+        elif isinstance(v, str) and v.endswith((".md", ".json", ".txt")) and not Path(v).is_absolute():
+            p = root / v
+            if p.is_file() and p.resolve() not in skip and all(p != q for _, q in found):
+                found.append((v, p))
+    walk(data)
+    return found
 
 
 def _valid_answer(path: Path) -> bool:
