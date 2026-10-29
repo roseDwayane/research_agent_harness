@@ -9,6 +9,7 @@ The rules (gates, loop bounds, retry ownership) and the records (events, errors,
   skill.py          the boundary to the Unit implementation (scripts/ideate_tools.py, mcp_bridge.py)
   recipes.py        how each Unit is executed: run / write / fanout steps (contracts/recipes/*.json)
   claude_worker.py  one `claude -p` worker: task, rules, allowed tools, cost
+  ollama_worker.py  the same job over an Ollama server's HTTP API (no Claude Code): files in the prompt, JSON out
   executors.py      RecipeExecutor (script, Claude, fan-out steps) and the Executor protocol
   fake.py           FakeSkill + FakeExecutor: the dry run (fixtures, no network, no tokens)
   context.py        RunContext: the run's ids, events and error records
