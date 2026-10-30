@@ -1,0 +1,14 @@
+{
+ "unit": "A7.D",
+ "target": "answer:parketal2019",
+ "ops": [
+  {
+   "op": "set",
+   "path": "units.0.strength",
+   "value": "shows"
+  }
+ ],
+ "expect": "D17",
+ "level": "WARN",
+ "why": "a hedged sentence upgraded to 'shows'"
+}

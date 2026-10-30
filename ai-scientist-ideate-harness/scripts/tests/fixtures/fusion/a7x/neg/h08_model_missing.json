@@ -1,0 +1,14 @@
+{
+ "unit": "A7.X2",
+ "target": "log",
+ "ops": [
+  {
+   "op": "set",
+   "path": "2.model",
+   "value": ""
+  }
+ ],
+ "expect": "H08",
+ "level": "ERROR",
+ "why": "a judgement that does not say which model made it"
+}

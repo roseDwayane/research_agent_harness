@@ -1,0 +1,13 @@
+{
+ "unit": "A1.p",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "protocol.criteria.exclusion",
+   "value": []
+  }
+ ],
+ "expect": "P07",
+ "why": "no exclusion criteria"
+}

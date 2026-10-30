@@ -1,0 +1,12 @@
+{
+ "unit": "A3",
+ "target": "scores",
+ "ops": [
+  {
+   "op": "copy_rationale"
+  }
+ ],
+ "expect": "C04",
+ "level": "ERROR",
+ "why": "two included-range papers with one rationale"
+}

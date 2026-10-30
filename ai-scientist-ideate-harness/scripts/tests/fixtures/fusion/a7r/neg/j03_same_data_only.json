@@ -1,0 +1,14 @@
+{
+ "unit": "A7.R",
+ "target": "cards",
+ "ops": [
+  {
+   "op": "set",
+   "path": "points.1.claim_type",
+   "value": "empirical"
+  }
+ ],
+ "expect": "J03",
+ "level": "WARN",
+ "why": "a findings Point whose only agreement is two papers on the same dataset"
+}

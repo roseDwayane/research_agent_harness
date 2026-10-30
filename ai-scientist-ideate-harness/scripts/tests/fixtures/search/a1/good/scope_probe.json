@@ -1,0 +1,5 @@
+{"at": "2026-10-16T12:00:00+08:00", "limit": 10,
+ "queries": [{"id": "Q1", "flat_query": "EEG automated artifact rejection", "hits_per_source": {"openalex": 10, "pubmed": 10}, "source_errors": {}, "openalex_total": 2140}],
+ "rough_yield": "OpenAlex totals in the timeframe: Q1~2,140",
+ "known_items": [{"ref": "Autoreject: Automated artifact rejection for MEG and EEG data", "resolved": true, "title": "Autoreject: Automated artifact rejection for MEG and EEG data", "doi": "10.1016/j.neuroimage.2017.06.030", "year": 2017},
+                 {"ref": "The PREP pipeline: standardized preprocessing for large-scale EEG analysis", "resolved": true, "title": "The PREP pipeline: standardized preprocessing for large-scale EEG analysis", "doi": "10.3389/fninf.2015.00016", "year": 2015}]}

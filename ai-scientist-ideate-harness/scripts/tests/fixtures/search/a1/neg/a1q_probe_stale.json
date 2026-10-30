@@ -1,0 +1,14 @@
+{
+ "unit": "A1.q",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "scope_probe.strategy_sha",
+   "value": "0000000000000000000000000000000000000000000000000000000000000000"
+  }
+ ],
+ "expect": "Q20",
+ "level": "ERROR",
+ "why": "the probe answered a different strategy"
+}

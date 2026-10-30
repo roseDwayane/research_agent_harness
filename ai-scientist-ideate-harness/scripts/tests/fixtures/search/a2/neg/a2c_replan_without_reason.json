@@ -1,0 +1,18 @@
+{
+ "unit": "A2.c",
+ "target": "round",
+ "ops": [
+  {
+   "op": "set",
+   "path": "verdicts.0",
+   "value": {
+    "query": "Q1",
+    "verdict": "replan",
+    "reason": ""
+   }
+  }
+ ],
+ "expect": "R06",
+ "level": "ERROR",
+ "why": "a replan without a reason"
+}

@@ -1,0 +1,15 @@
+{
+ "unit": "A1.p",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "protocol.axes.0.terms",
+   "value": [
+    "EEG"
+   ]
+  }
+ ],
+ "expect": "P05",
+ "why": "one synonym per axis"
+}

@@ -1,0 +1,15 @@
+{
+ "unit": "A2.c",
+ "target": "round",
+ "ops": [],
+ "expect": "R05",
+ "level": "ERROR",
+ "why": "a missing known item without an action",
+ "sig_ops": [
+  {
+   "op": "set",
+   "path": "known_items.0.resolved",
+   "value": false
+  }
+ ]
+}

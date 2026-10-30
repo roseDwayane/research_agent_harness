@@ -1,0 +1,567 @@
+{
+ "schema": "ideate-harness-recipes/1",
+ "block": "fusion",
+ "note": "How each Unit is executed (harness/recipes.py). status draft = not yet run on a real topic.",
+ "recipes": [
+  {
+   "unit": "A6.d",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "ideate_tools.py tier1 $RD"
+     },
+     {
+      "run": "mcp_bridge.py download $RD"
+     },
+     {
+      "run": "ideate_tools.py arxiv-pdfs $RD"
+     }
+    ],
+    "topup": [
+     {
+      "run": "ideate_tools.py tier1 $RD --top-up"
+     },
+     {
+      "run": "mcp_bridge.py download $RD"
+     },
+     {
+      "run": "ideate_tools.py arxiv-pdfs $RD"
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py a6-check $RD --unit A6.d --json"
+   ],
+   "note": "LOOP-08 (one top-up pass after paywall losses) is driven by the conductor"
+  },
+  {
+   "unit": "A6.c",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "bash pdf2md.sh $RD",
+      "optional": true
+     },
+     {
+      "run": "ideate_tools.py figures $RD"
+     },
+     {
+      "run": "ideate_tools.py fulltext-status $RD"
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py a6-check $RD --unit A6.c --json"
+   ]
+  },
+  {
+   "unit": "A7.D",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "ideate_tools.py decon-plan $RD"
+     },
+     {
+      "fanout": {
+       "batches": "$RD/knowledge/_work/A7D/batch_*.json",
+       "out": "items:papers.answer",
+       "task": "Read the batch file {batch}. For each paper in it, read only that paper's own source (its full_text file, else the abstract in the batch) and write its record to its answer file ({out}), as the rules say. Never use another paper.",
+       "rules": [
+        "references/fusion/F1-deconstruct.md#a7d"
+       ]
+      }
+     },
+     {
+      "run": "ideate_tools.py decon-merge $RD"
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py decon-check $RD --json"
+   ]
+  },
+  {
+   "unit": "A7.A1",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "ideate_tools.py align-terms $RD"
+     },
+     {
+      "write": {
+       "task": "Write one coherent vocabulary for the papers' terms (A7.A1) from the worklist align-terms wrote, to $RD/knowledge/_work/A7A/vocab.json in the format align-set takes.",
+       "rules": [
+        "references/fusion/F2-align.md#a7a1"
+       ],
+       "reads": [
+        "$RD/knowledge/_work/A7A"
+       ],
+       "writes": [
+        "$RD/knowledge/_work/A7A/vocab.json"
+       ],
+       "commands": [
+        "ideate_tools.py list-papers",
+        "ideate_tools.py trace"
+       ]
+      }
+     },
+     {
+      "run": "ideate_tools.py align-set $RD $RD/knowledge/_work/A7A/vocab.json",
+      "submit": true
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py align-check $RD --unit A7.A1 --json"
+   ]
+  },
+  {
+   "unit": "A7.A2",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "ideate_tools.py align-coords $RD --suggest"
+     },
+     {
+      "run": "ideate_tools.py align-coords $RD --auto"
+     },
+     {
+      "write": {
+       "task": "Settle the coordinates align-coords --auto left ambiguous (A7.A2): write your decisions to $RD/knowledge/_work/A7A/coords.json in the format align-coords --apply takes.",
+       "rules": [
+        "references/fusion/F2-align.md#a7a2"
+       ],
+       "reads": [
+        "$RD/knowledge/_work/A7A/coords_suggest.json"
+       ],
+       "writes": [
+        "$RD/knowledge/_work/A7A/coords.json"
+       ]
+      }
+     },
+     {
+      "run": "ideate_tools.py align-coords $RD --apply $RD/knowledge/_work/A7A/coords.json",
+      "submit": true
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py align-check $RD --unit A7.A2 --json"
+   ]
+  },
+  {
+   "unit": "A7.A3",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "ideate_tools.py unit-begin $RD A7.A3"
+     },
+     {
+      "run": "ideate_tools.py align-points $RD"
+     },
+     {
+      "write": {
+       "task": "Decide which concept candidates become Points (A7.A3) and write their card fields into $RD/knowledge_cards.json (points with origin align), from the papers only.",
+       "rules": [
+        "references/fusion/F2-align.md#a7a3"
+       ],
+       "reads": [
+        "$RD/knowledge/_work/A7A/point_candidates.json"
+       ],
+       "writes": [
+        "$RD/knowledge_cards.json"
+       ],
+       "commands": [
+        "ideate_tools.py list-papers",
+        "ideate_tools.py trace"
+       ]
+      }
+     },
+     {
+      "run": "ideate_tools.py build-cards $RD $RD/knowledge_cards.json",
+      "submit": true
+     },
+     {
+      "run": "ideate_tools.py unit-done $RD A7.A3",
+      "submit": true
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py align-check $RD --unit A7.A3 --json"
+   ]
+  },
+  {
+   "unit": "B1",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "ideate_tools.py env-probe $RD --write"
+     },
+     {
+      "write": {
+       "task": "Write the lens (B1): who is looking and what this machine holds today, on the aligned concepts - the persona text and the verdicts (dataset on disk, method family affordable) - to $RD/knowledge/_work/B1/lens.json in the format lens-set takes.",
+       "rules": [
+        "references/fusion/F2-align.md#b1"
+       ],
+       "reads": [
+        "$RD/step0_session_config.json",
+        "$RD/knowledge/alignment.json"
+       ],
+       "writes": [
+        "$RD/knowledge/_work/B1/lens.json"
+       ]
+      }
+     },
+     {
+      "run": "ideate_tools.py lens-set $RD $RD/knowledge/_work/B1/lens.json",
+      "submit": true
+     },
+     {
+      "run": "ideate_tools.py build-methods $RD $RD/knowledge/methods_matrix_input.json $RD/knowledge/decon/*.json"
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py align-check $RD --unit B1 --json"
+   ]
+  },
+  {
+   "unit": "A7.X1",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "ideate_tools.py collide-candidates $RD"
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py collide-check $RD --unit A7.X1 --json"
+   ]
+  },
+  {
+   "unit": "A7.X2",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "ideate_tools.py collide-plan $RD"
+     },
+     {
+      "fanout": {
+       "batches": "$RD/knowledge/_work/A7X/batch_*.json",
+       "out": "rdfield:answer",
+       "task": "Read the batch file {batch} and judge every candidate in it exactly once, as the rules say; write the answer to {out}.",
+       "rules": [
+        "references/fusion/F3-collide.md#a7x2"
+       ],
+       "commands": [
+        "ideate_tools.py list-papers",
+        "ideate_tools.py trace"
+       ]
+      }
+     },
+     {
+      "run": "ideate_tools.py collide-merge $RD"
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py collide-check $RD --unit A7.X2 --json"
+   ],
+   "note": "LOOP-05 (incommensurable -> align-set --reason) is a declared revision"
+  },
+  {
+   "unit": "B3.c",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "ideate_tools.py collide-plan $RD --lens"
+     },
+     {
+      "write": {
+       "task": "Judge every lens candidate (B3.c) in $RD/knowledge/_work/A7X/lens_batch_*.json and write each batch's answer to the path its `answer` field names.",
+       "rules": [
+        "references/fusion/F3-collide.md#b3c",
+        "references/fusion/F3-collide.md#a7x2"
+       ],
+       "reads": [
+        "$RD/knowledge/_work/A7X"
+       ],
+       "writes": []
+      }
+     },
+     {
+      "run": "ideate_tools.py collide-merge $RD",
+      "submit": true
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py collide-check $RD --unit B3.c --json"
+   ]
+  },
+  {
+   "unit": "B3",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "write": {
+       "task": "Write the gap list (B3), every gap with its collisions, supporting papers, type and move, checked verbatim against the sources, to $RD/knowledge/_work/B3/gaps.json in the format gaps-set takes.",
+       "rules": [
+        "references/fusion/F3-collide.md#b3"
+       ],
+       "reads": [
+        "$RD/knowledge/collisions.jsonl"
+       ],
+       "writes": [
+        "$RD/knowledge/_work/B3/gaps.json"
+       ],
+       "commands": [
+        "ideate_tools.py list-papers",
+        "ideate_tools.py trace",
+        "ideate_tools.py decon-merge"
+       ]
+      }
+     },
+     {
+      "run": "ideate_tools.py gaps-set $RD $RD/knowledge/_work/B3/gaps.json",
+      "submit": true
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py collide-check $RD --unit B3 --json"
+   ],
+   "note": "LOOP-06 (decon-merge --revise) is a declared revision"
+  },
+  {
+   "unit": "A7.R1",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "ideate_tools.py unit-begin $RD A7.R1"
+     },
+     {
+      "run": "ideate_tools.py recon-candidates $RD"
+     },
+     {
+      "write": {
+       "task": "Write the Lines (knowledge/lines/*.md) and the findings Points (in knowledge_cards.json, origin collide) the candidates allow (A7.R1), each citing its collisions.",
+       "rules": [
+        "references/fusion/F4-reconstruct.md#a7r1"
+       ],
+       "reads": [
+        "$RD/knowledge/_work/A7R"
+       ],
+       "writes": [
+        "$RD/knowledge_cards.json"
+       ],
+       "commands": [
+        "ideate_tools.py list-papers",
+        "ideate_tools.py trace"
+       ]
+      }
+     },
+     {
+      "run": "ideate_tools.py unit-done $RD A7.R1",
+      "submit": true
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py recon-check $RD --unit A7.R1 --json"
+   ]
+  },
+  {
+   "unit": "A7.R2",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "ideate_tools.py unit-begin $RD A7.R2"
+     },
+     {
+      "write": {
+       "task": "Group the papers into Planes (A7.R2) after the collisions - each paper in exactly one Plane - in $RD/knowledge_cards.json (planes), Q3/Q5 citing Lines, collisions and the papers' units.",
+       "rules": [
+        "references/fusion/F4-reconstruct.md#a7r2"
+       ],
+       "reads": [],
+       "writes": [
+        "$RD/knowledge_cards.json"
+       ],
+       "commands": [
+        "ideate_tools.py list-papers",
+        "ideate_tools.py trace"
+       ]
+      }
+     },
+     {
+      "run": "ideate_tools.py build-cards $RD $RD/knowledge_cards.json",
+      "submit": true
+     },
+     {
+      "run": "ideate_tools.py build-methods $RD $RD/knowledge/methods_matrix_input.json $RD/knowledge/decon/*.json"
+     },
+     {
+      "run": "ideate_tools.py unit-done $RD A7.R2",
+      "submit": true
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py recon-check $RD --unit A7.R2 --json"
+   ]
+  },
+  {
+   "unit": "A7.R3",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "ideate_tools.py unit-begin $RD A7.R3"
+     },
+     {
+      "write": {
+       "task": "Write the descriptive Body (A7.R3): the field's seven questions from Planes, Lines and collisions only, to knowledge/body/B_draft_<topic>_descriptive.md (the name the rules give).",
+       "rules": [
+        "references/fusion/F4-reconstruct.md#a7r3"
+       ],
+       "reads": [],
+       "writes": []
+      }
+     },
+     {
+      "run": "ideate_tools.py unit-done $RD A7.R3",
+      "submit": true
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py recon-check $RD --unit A7.R3 --json"
+   ]
+  },
+  {
+   "unit": "B2",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "ideate_tools.py unit-begin $RD B2"
+     },
+     {
+      "write": {
+       "task": "Write the topic's SOTA review $RD/step6_sota_review.md (B2): consensus, debates and reported numbers, every statement citing a collision or a matrix-row id, else (TBD).",
+       "rules": [
+        "references/fusion/F4-reconstruct.md#b2"
+       ],
+       "reads": [],
+       "writes": [
+        "$RD/step6_sota_review.md"
+       ],
+       "commands": [
+        "ideate_tools.py list-papers",
+        "ideate_tools.py trace",
+        "ideate_tools.py list-methods"
+       ]
+      }
+     },
+     {
+      "run": "ideate_tools.py unit-done $RD B2",
+      "submit": true
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py recon-check $RD --unit B2 --json"
+   ]
+  },
+  {
+   "unit": "B3.5",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "ideate_tools.py unit-begin $RD B3.5"
+     },
+     {
+      "write": {
+       "task": "Write the research questions (B3.5) in the gaps' rank order: for each gap run `ideate-tool questions-prefill <RD> GAP_NNN`, write questions/Q_NNN.md (common ground, condition, consequence ladder, one question, the four screens, section 9), then `ideate-tool questions-handover <RD> Q_NNN`.",
+       "rules": [
+        "references/fusion/F4-reconstruct.md#b35"
+       ],
+       "reads": [
+        "$RD/step7_gaps.json"
+       ],
+       "writes": [],
+       "commands": [
+        "ideate_tools.py questions-prefill",
+        "ideate_tools.py questions-handover",
+        "ideate_tools.py list-papers",
+        "ideate_tools.py trace"
+       ]
+      }
+     },
+     {
+      "run": "ideate_tools.py unit-done $RD B3.5",
+      "submit": true
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py recon-check $RD --unit B3.5 --json"
+   ],
+   "note": "LOOP-07 (attack targets fetched in full) is a declared re-run of A6"
+  },
+  {
+   "unit": "F.9",
+   "status": "draft",
+   "scope": "topic",
+   "phases": {
+    "main": [
+     {
+      "run": "ideate_tools.py questions-index $RD"
+     },
+     {
+      "run": "ideate_tools.py fusion-map $RD",
+      "optional": true
+     },
+     {
+      "run": "ideate_tools.py concept-index $RD"
+     }
+    ]
+   },
+   "check": [
+    "ideate_tools.py recon-check $RD --unit F.9 --json"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,14 @@
+{
+ "unit": "A3.g",
+ "target": "gate",
+ "ops": [
+  {
+   "op": "set",
+   "path": "bib_sha",
+   "value": "0000000000000000000000000000000000000000000000000000000000000000"
+  }
+ ],
+ "expect": "G01",
+ "level": "ERROR",
+ "why": "a gate on older bibliometrics"
+}

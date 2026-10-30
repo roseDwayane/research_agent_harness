@@ -1,0 +1,14 @@
+{
+ "unit": "A3.g",
+ "target": "gate",
+ "ops": [
+  {
+   "op": "set",
+   "path": "excluded.0.code",
+   "value": "X-FOO"
+  }
+ ],
+ "expect": "G02",
+ "level": "ERROR",
+ "why": "an exclusion code that does not exist"
+}

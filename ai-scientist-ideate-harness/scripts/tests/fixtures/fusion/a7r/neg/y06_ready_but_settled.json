@@ -1,0 +1,14 @@
+{
+ "unit": "A7.R",
+ "target": "question:Q_001.md",
+ "ops": [
+  {
+   "op": "replace",
+   "path": "| Is the answer already settled in the literature? | no |",
+   "value": "| Is the answer already settled in the literature? | yes |"
+  }
+ ],
+ "expect": "Y06",
+ "level": "ERROR",
+ "why": "a settled question marked ready"
+}

@@ -1,0 +1,13 @@
+{
+ "unit": "B1",
+ "target": "lens",
+ "ops": [
+  {
+   "op": "del",
+   "path": "persona.compute"
+  }
+ ],
+ "expect": "T01",
+ "level": "ERROR",
+ "why": "a lens that does not say what compute is available"
+}

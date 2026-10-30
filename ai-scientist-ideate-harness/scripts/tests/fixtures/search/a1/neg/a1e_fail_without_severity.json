@@ -1,0 +1,13 @@
+{
+ "unit": "A1.e",
+ "target": "evaluation",
+ "ops": [
+  {
+   "op": "set",
+   "path": "rounds.0.findings.0.result",
+   "value": "fail"
+  }
+ ],
+ "expect": "E03",
+ "why": "a failed check without severity"
+}

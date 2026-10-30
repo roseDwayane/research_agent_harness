@@ -1,0 +1,14 @@
+{
+ "unit": "B1",
+ "target": "lens",
+ "ops": [
+  {
+   "op": "set",
+   "path": "on_coords.dataset:bnci-2a.where",
+   "value": "somewhere"
+  }
+ ],
+ "expect": "T04",
+ "level": "ERROR",
+ "why": "on disk, but no path the probe saw"
+}

@@ -1,0 +1,23 @@
+{
+ "unit": "A7.A",
+ "target": "cards",
+ "ops": [
+  {
+   "op": "set",
+   "path": "points",
+   "value": [
+    {
+     "slug": "BNCI",
+     "origin": "align",
+     "concept": "dataset:bnci-2a",
+     "unit_refs": [
+      "smithetal2020#C1"
+     ]
+    }
+   ]
+  }
+ ],
+ "expect": "A12",
+ "level": "ERROR",
+ "why": "a concept Point for a concept fewer than two papers reach"
+}

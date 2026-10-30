@@ -1,0 +1,24 @@
+{
+ "unit": "A1.e",
+ "target": "evaluation",
+ "ops": [
+  {
+   "op": "set",
+   "path": "rounds.0.verdict",
+   "value": "approved"
+  },
+  {
+   "op": "set",
+   "path": "rounds.0.findings.0",
+   "value": {
+    "check": "E1",
+    "result": "fail",
+    "severity": "improvable",
+    "fix_target": "A1.q",
+    "evidence": "x"
+   }
+  }
+ ],
+ "expect": "E05",
+ "why": "approved over a failed check"
+}

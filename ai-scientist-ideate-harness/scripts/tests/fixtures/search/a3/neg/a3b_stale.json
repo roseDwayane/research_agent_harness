@@ -1,0 +1,14 @@
+{
+ "unit": "A3.b",
+ "target": "bib",
+ "ops": [
+  {
+   "op": "set",
+   "path": "basis.raw",
+   "value": "0000000000000000000000000000000000000000000000000000000000000000"
+  }
+ ],
+ "expect": "B03",
+ "level": "ERROR",
+ "why": "bibliometrics of an older collection"
+}

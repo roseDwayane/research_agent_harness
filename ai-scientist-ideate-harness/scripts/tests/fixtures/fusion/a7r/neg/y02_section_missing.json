@@ -1,0 +1,14 @@
+{
+ "unit": "A7.R",
+ "target": "question:Q_001.md",
+ "ops": [
+  {
+   "op": "replace",
+   "path": "## 7. Key terms\n",
+   "value": ""
+  }
+ ],
+ "expect": "Y02",
+ "level": "ERROR",
+ "why": "a question without its key terms"
+}

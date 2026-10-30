@@ -239,3 +239,8 @@ eval_runs/
 /_watchdog_*.py
 /_run_remaining*.py
 /_skip*_continue.py
+
+# LitSearch benchmark: HF download, API caches, slimmed corpus (rebuild with benchmarks/litsearch/build.py)
+benchmarks/
+benchmarks/litsearch/raw/
+benchmarks/litsearch/corpus.jsonl.gz

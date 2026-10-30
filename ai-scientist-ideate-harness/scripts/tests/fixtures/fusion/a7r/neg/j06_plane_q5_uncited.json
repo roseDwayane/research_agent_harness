@@ -1,0 +1,14 @@
+{
+ "unit": "A7.R",
+ "target": "cards",
+ "ops": [
+  {
+   "op": "set",
+   "path": "planes.0.q5",
+   "value": "open problems remain"
+  }
+ ],
+ "expect": "J06",
+ "level": "ERROR",
+ "why": "a Plane's open problems from memory"
+}

@@ -1,0 +1,14 @@
+{
+ "unit": "A4.b",
+ "target": "shortlist",
+ "ops": [
+  {
+   "op": "set",
+   "path": "summary.included",
+   "value": 0
+  }
+ ],
+ "expect": "L03",
+ "why": "the shortlist changed after the bibliography was built",
+ "level": "ERROR"
+}

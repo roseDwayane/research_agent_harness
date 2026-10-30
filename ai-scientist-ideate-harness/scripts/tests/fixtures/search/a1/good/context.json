@@ -1,0 +1,3 @@
+{"target_venues": ["Journal of Neural Engineering", "NeuroImage"],
+ "expert_domain": "EEG preprocessing and artifact handling",
+ "local_environment": {"artefacts": [], "cached_data": ["~/mne_data (EEGBCI)"], "packages_present": ["mne"], "packages_missing": ["autoreject"]}}

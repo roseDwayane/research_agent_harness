@@ -1,0 +1,14 @@
+{
+ "unit": "A7.R",
+ "target": "question:Q_001.md",
+ "ops": [
+  {
+   "op": "replace",
+   "path": "move: confirm-assumed",
+   "value": "move: cause"
+  }
+ ],
+ "expect": "Y01",
+ "level": "ERROR",
+ "why": "a question that changed its gap's move"
+}

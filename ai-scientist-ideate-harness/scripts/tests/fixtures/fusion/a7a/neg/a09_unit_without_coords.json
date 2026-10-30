@@ -1,0 +1,13 @@
+{
+ "unit": "A7.A",
+ "target": "alignment",
+ "ops": [
+  {
+   "op": "del",
+   "path": "coords.smithetal2020#C1"
+  }
+ ],
+ "expect": "A09",
+ "level": "ERROR",
+ "why": "a claim with no coordinates"
+}

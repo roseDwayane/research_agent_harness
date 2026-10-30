@@ -1,0 +1,16 @@
+{
+ "unit": "A7.R",
+ "target": "cards",
+ "ops": [
+  {
+   "op": "set",
+   "path": "planes.0.member_papers",
+   "value": [
+    "smithetal2020"
+   ]
+  }
+ ],
+ "expect": "J05",
+ "level": "ERROR",
+ "why": "an evidence paper in no Plane"
+}

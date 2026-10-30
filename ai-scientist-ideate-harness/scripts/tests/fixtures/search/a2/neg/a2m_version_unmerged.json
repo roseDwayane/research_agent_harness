@@ -1,0 +1,12 @@
+{
+ "unit": "A2.m",
+ "target": "raw",
+ "ops": [
+  {
+   "op": "copy_doi"
+  }
+ ],
+ "expect": "M04",
+ "level": "ERROR",
+ "why": "two records share a DOI"
+}

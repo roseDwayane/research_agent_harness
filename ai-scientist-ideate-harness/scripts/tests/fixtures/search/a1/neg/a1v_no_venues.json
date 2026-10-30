@@ -1,0 +1,13 @@
+{
+ "unit": "A1.v",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "target_venues",
+   "value": []
+  }
+ ],
+ "expect": "V01",
+ "why": "no venues"
+}

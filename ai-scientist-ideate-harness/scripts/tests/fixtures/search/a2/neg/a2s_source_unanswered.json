@@ -1,0 +1,14 @@
+{
+ "unit": "A2.s",
+ "target": "instance",
+ "ops": [
+  {
+   "op": "delete",
+   "path": "per_source.pubmed"
+  }
+ ],
+ "expect": "S02",
+ "level": "ERROR",
+ "why": "a planned source with no answer, error or skip",
+ "qid": "Q1"
+}

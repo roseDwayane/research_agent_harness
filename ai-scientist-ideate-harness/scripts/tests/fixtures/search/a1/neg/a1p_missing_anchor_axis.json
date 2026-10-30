@@ -1,0 +1,12 @@
+{
+ "unit": "A1.p",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "delete",
+   "path": "protocol.axes.2"
+  }
+ ],
+ "expect": "P09",
+ "why": "no named-anchor axis"
+}

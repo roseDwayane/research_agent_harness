@@ -1,0 +1,28 @@
+{
+  "$id": "ideate-v2-event/1",
+  "title": "Lifecycle event (ideate_v2.events)",
+  "type": "object",
+  "required": ["schema", "event_id", "event_type", "timestamp", "run_id", "trace_id", "span_id", "instance", "attempt"],
+  "properties": {
+    "schema": {"const": "ideate-v2-event/1"},
+    "event_id": {"type": "string", "pattern": "^EV-[0-9]{8}T[0-9]{6}-[0-9a-f]{8}$"},
+    "event_type": {"enum": ["RUN_STARTED", "RUN_COMPLETED", "RUN_FAILED", "RUN_CANCELLED", "STEP_STARTED", "STEP_COMPLETED", "GATE_CHECKED", "UNIT_STARTED", "TOOL_CALLED", "TOOL_RETURNED", "TOOL_FAILED", "UNIT_COMPLETED", "UNIT_DEGRADED", "UNIT_PENDING", "UNIT_FAILED", "UNIT_CANCELLED", "RETRY_SCHEDULED", "RETRY_EXHAUSTED", "LOOP_ITERATION", "LOOP_BOUND_REACHED", "RECOVERY_STARTED", "RECOVERY_COMPLETED", "ESCALATED"]},
+    "timestamp": {"type": "string"},
+    "run_id": {"type": "string", "pattern": "^r_[0-9]{8}_[0-9]{6}_[0-9a-f]{4}$"},
+    "trace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "span_id": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+    "parent_span_id": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+    "unit_id": {"type": ["string", "null"]},
+    "step_id": {"type": "string"},
+    "instance": {"type": "string"},
+    "attempt": {"type": "integer", "minimum": 1},
+    "actor": {"type": "string"},
+    "tool": {"type": "string"},
+    "status": {"type": "string"},
+    "message": {"type": "string"},
+    "error_id": {"type": "string"},
+    "metrics": {"type": "object", "properties": {"tokens_in": {"type": "number"}, "tokens_out": {"type": "number"}, "cost_usd": {"type": "number"}, "calls": {"type": "number"}, "items": {"type": "number"}, "duration_ms": {"type": "number"}}, "additionalProperties": false},
+    "context": {"type": "object"},
+    "idempotency_key": {"type": "string"}
+  }
+}

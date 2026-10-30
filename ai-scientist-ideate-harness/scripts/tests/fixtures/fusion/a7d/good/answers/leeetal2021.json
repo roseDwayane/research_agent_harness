@@ -1,0 +1,24 @@
+{
+ "citation_key": "leeetal2021",
+ "basis": "full-text",
+ "model": "claude-opus-5-5",
+ "eligibility": {
+  "verdict": "ineligible",
+  "criteria": [
+   "EX1",
+   "IN1"
+  ],
+  "reason": "MEG only - no scalp EEG was recorded"
+ },
+ "summary": {
+  "problem": "(TBD)",
+  "method": "(TBD)",
+  "data": "(TBD)",
+  "metrics": "(TBD)",
+  "headline": "(TBD)",
+  "builds_on": "(TBD)"
+ },
+ "units": [],
+ "experiments": [],
+ "terms": []
+}

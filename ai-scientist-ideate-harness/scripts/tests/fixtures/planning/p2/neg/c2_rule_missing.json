@@ -1,0 +1,6 @@
+{
+ "expect": "C2",
+ "level": "ERROR",
+ "exercised_by": "tests/test_question_tools.py (the coherence gate's own counter-examples)",
+ "why": "a pointer for units check: the counter-example itself is built in Python in the named test (NEG)"
+}

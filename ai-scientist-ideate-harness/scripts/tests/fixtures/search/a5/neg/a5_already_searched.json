@@ -1,0 +1,13 @@
+{
+ "unit": "A5",
+ "ops": [
+  {
+   "op": "set",
+   "path": "papers.0.doi",
+   "value": "10.1016/j.neuroimage.2017.06.030"
+  }
+ ],
+ "expect": "N02",
+ "why": "an addition the search already holds",
+ "level": "ERROR"
+}

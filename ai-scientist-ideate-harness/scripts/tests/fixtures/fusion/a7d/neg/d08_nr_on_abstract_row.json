@@ -1,0 +1,14 @@
+{
+ "unit": "A7.D",
+ "target": "answer:parketal2019",
+ "ops": [
+  {
+   "op": "set",
+   "path": "experiments.0.stats",
+   "value": "(NR) - no test"
+  }
+ ],
+ "expect": "D08",
+ "level": "ERROR",
+ "why": "'not reported' claimed from an abstract"
+}

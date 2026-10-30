@@ -1,0 +1,15 @@
+{
+ "unit": "A2.m",
+ "target": "instance",
+ "ops": [
+  {
+   "op": "set",
+   "path": "at",
+   "value": "changed after the merge"
+  }
+ ],
+ "expect": "M05",
+ "level": "ERROR",
+ "why": "an instance changed after the merge",
+ "qid": "Q1"
+}

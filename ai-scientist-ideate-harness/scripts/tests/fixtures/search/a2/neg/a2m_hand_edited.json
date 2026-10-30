@@ -1,0 +1,12 @@
+{
+ "unit": "A2.m",
+ "target": "raw",
+ "ops": [
+  {
+   "op": "flip_anchor"
+  }
+ ],
+ "expect": "M06",
+ "level": "ERROR",
+ "why": "a computed field edited by hand"
+}

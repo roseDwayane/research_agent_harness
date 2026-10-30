@@ -1,0 +1,14 @@
+{
+ "unit": "A7.R",
+ "target": "index",
+ "ops": [
+  {
+   "op": "set",
+   "path": "ready",
+   "value": 9
+  }
+ ],
+ "expect": "Y08",
+ "level": "ERROR",
+ "why": "the index edited by hand"
+}

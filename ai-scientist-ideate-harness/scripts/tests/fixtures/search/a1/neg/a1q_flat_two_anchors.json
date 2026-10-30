@@ -1,0 +1,13 @@
+{
+ "unit": "A1.q",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "queries.3.flat_query",
+   "value": "EEG Autoreject PREP pipeline"
+  }
+ ],
+ "expect": "Q12",
+ "why": "two anchors in one flat query: the AND-ing backends return nothing (seen in the first live probe, 2026-10-16)"
+}

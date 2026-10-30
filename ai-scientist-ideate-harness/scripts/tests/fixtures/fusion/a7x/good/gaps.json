@@ -1,0 +1,48 @@
+{
+ "topic": "fixture",
+ "gaps": [
+  {
+   "id": "GAP_001",
+   "title": "Expert artifact labels as ground truth under class-correlated artifacts",
+   "description": "no study tests whether expert artifact labels stay valid when artifacts differ between classes",
+   "type": {
+    "primary": "measurement"
+   },
+   "move": "confirm-assumed",
+   "collisions": [
+    "X0002"
+   ],
+   "axes": [
+    "construct",
+    "measure"
+   ],
+   "supporting": [
+    {
+     "key": "smithetal2020",
+     "how": "treats one expert's labels as ground truth (A1)"
+    },
+    {
+     "key": "parketal2019",
+     "how": "reports class-correlated artifacts (C1)"
+    }
+   ],
+   "counter": [],
+   "source_check": {
+    "key": "smithetal2020",
+    "where": "Sec. 1",
+    "quote": "whose labels we treat as ground truth for all comparisons"
+   },
+   "why_it_matters": "every cleaning benchmark scored against expert labels inherits the premise",
+   "consequence_evidence": [
+    "X0002"
+   ],
+   "severity": 4,
+   "novelty": 4,
+   "feasibility": 4,
+   "feasibility_basis": [
+    "lens:method-family:artifact-rejection"
+   ]
+  }
+ ],
+ "not_gaps": []
+}

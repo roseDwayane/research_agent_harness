@@ -1,0 +1,14 @@
+{
+ "unit": "A4.b",
+ "target": "meta",
+ "ops": [
+  {
+   "op": "set",
+   "path": "offline",
+   "value": true
+  }
+ ],
+ "expect": "L04",
+ "level": "WARN",
+ "why": "a bibliography built without Crossref is said"
+}

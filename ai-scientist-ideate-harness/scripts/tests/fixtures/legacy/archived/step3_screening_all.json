@@ -1,0 +1,383 @@
+{
+  "session_id": "20261026",
+  "criteria_inclusion": [
+    {
+      "en": "Participants are adults with MCI (amnestic or non-amnestic) or prodromal Alzheimer's disease, or mixed samples reporting MCI subgroup results"
+    },
+    {
+      "en": "Intervention is EEG-based neurofeedback training (any frequency-band, connectivity, or source-localized protocol)"
+    },
+    {
+      "en": "Reports cognitive outcomes (global cognition, memory, executive function, attention) and/or EEG biomarker outcomes"
+    },
+    {
+      "en": "Empirical study (RCT, controlled or single-arm trial, feasibility study) or systematic review/meta-analysis"
+    },
+    {
+      "en": "Published 2019-2026 with an available abstract"
+    }
+  ],
+  "criteria_exclusion": [
+    {
+      "en": "Population without cognitive impairment (healthy young adults, ADHD, stroke, ALS, MS) unless results are directly transferable to MCI"
+    },
+    {
+      "en": "Non-EEG neurofeedback only (fMRI or fNIRS) or non-neurofeedback interventions (pure cognitive training, tDCS/TMS)"
+    },
+    {
+      "en": "Purely diagnostic or classification EEG studies with no training intervention"
+    },
+    {
+      "en": "Animal studies, editorials, commentaries, or conference abstracts without data"
+    },
+    {
+      "en": "No abstract and an ambiguous title"
+    }
+  ],
+  "tier_names": [
+    {
+      "tier": 1,
+      "en": "Controlled trials of EEG neurofeedback in MCI"
+    },
+    {
+      "tier": 2,
+      "en": "Reviews and single-arm EEG neurofeedback studies in MCI and aging"
+    },
+    {
+      "tier": 3,
+      "en": "Adjacent neurofeedback and BCI work in older adults"
+    }
+  ],
+  "papers": [
+    {
+      "id": "paper_001",
+      "title": "A game-based neurofeedback training system to enhance cognitive performance in healthy elderly subjects and in patients with amnestic mild cognitive impairment",
+      "authors": [
+        "Suwicha Jirayucharoensak",
+        "Pasin Israsena",
+        "Setha Pan-ngum",
+        "Solaphat Hemrungrojn",
+        "Michael H. J. Maes"
+      ],
+      "year": 2019,
+      "journal": "Clinical Interventions in Aging",
+      "doi": "10.2147/cia.s189047",
+      "url": "https://doi.org/10.2147/cia.s189047",
+      "abstract": "INTRODUCTION: This study examines the clinical efficacy of a game-based neurofeedback training (NFT) system to enhance cognitive performance in patients with amnestic mild cognitive impairment (aMCI) and healthy elderly subjects. The NFT system includes five games designed to improve attention span and cognitive performance. The system estimates attention levels by investigating the power spectrum of Beta and Alpha bands. METHODS: We recruited 65 women with aMCI and 54 healthy elderly women. All participants were treated with care as usual (CAU); 58 were treated with CAU + NFT (20 sessions of 30 minutes each, 2-3 sessions per week), 36 with CAU + exergame-based training, while 25 patients had only CAU. Cognitive functions were assessed using the Cambridge Neuropsychological Test Automated Battery both before and after treatment. RESULTS: NFT significantly improved rapid visual processing and spatial working memory (SWM), including strategy, when compared with exergame training and no active treatment. aMCI was characterized by impairments in SWM (including strategy), pattern recognition memory, and delayed matching to samples. CONCLUSION: In conclusion, treatment with NFT improves sustained attention and SWM. Nevertheless, NFT had no significant effect on pattern recognition memory and short-term visual memory, which are the other hallmarks of aMCI. The NFT system used here may selectively improve sustained attention, strategy, and executive functions, but not other cognitive impairments, which characterize aMCI in women.",
+      "citation_count": 118,
+      "sources_found_in": [
+        "openalex"
+      ],
+      "semantic_scholar_id": null,
+      "openalex_id": "W2912800638",
+      "pubmed_id": "30863028",
+      "pmc_id": null,
+      "arxiv_id": null,
+      "references": [],
+      "cited_by": [
+        "paper_003",
+        "paper_005",
+        "paper_010",
+        "paper_016",
+        "paper_025",
+        "paper_031"
+      ],
+      "is_seed_paper": true,
+      "found_via": "Q1",
+      "language": "en",
+      "venue_type": "journal",
+      "volume": "Volume 14",
+      "issue": null,
+      "pages": "347-360",
+      "arxiv_primary_class": null,
+      "citation_network": {
+        "in_degree": 6,
+        "out_degree": 0,
+        "is_hub": true,
+        "cluster": "cluster_A"
+      },
+      "screening": {
+        "relevance": 5,
+        "quality": 4,
+        "recency_impact": 4,
+        "composite": 4.5,
+        "tier": 1,
+        "category": "included",
+        "rationale": "Controlled trial (n=119) of game-based beta/alpha EEG NFT in aMCI vs exergame and CAU with CANTAB outcomes; hub paper, highly cited.",
+        "exclusion_reason": null,
+        "no_abstract": false
+      },
+      "manually_included": false
+    },
+    {
+      "id": "paper_009",
+      "title": "Mild Cognitive Impairment and Neurofeedback: A Randomized Controlled Trial",
+      "authors": [
+        "Yotam Lavy",
+        "Tzvi Dwolatzky",
+        "Zeev Kaplan",
+        "Jonathan Guez",
+        "Doron Todder"
+      ],
+      "year": 2021,
+      "journal": "Frontiers in Aging Neuroscience",
+      "doi": "10.3389/fnagi.2021.657646",
+      "url": "https://doi.org/10.3389/fnagi.2021.657646",
+      "abstract": "Background and Objectives: Mild cognitive impairment (MCI) is often a precursor of dementia, and in particular of Alzheimer's Disease (AD) which is the most common cause of dementia. Individuals with amnestic MCI are several-fold more likely to develop AD than the general population. Therefore, MCI comprises a well-detectable, early stage time-point for therapeutic intervention and strategic prevention. Based on common electroencephalographical (EEG) pattern changes seen in individuals with MCI, we postulated that EEG-based neurofeedback could help improve the memory performance of patients with MCI. Memory performance is of particular importance in these patients, since memory decline is the most prominent symptom in most patients with MCI, and is the most predictive symptom for cognitive deterioration and the development of AD. Methods: In order to improve the memory performance of patients with MCI we used a system of EEG-based neurofeedback in an attempt to reverse alterations of the EEG that are known to be common in patients with MCI. Our protocol comprised the provision of positive feedback in order to enhance the activity level of the upper alpha band. Participants were divided to two groups receiving either neurofeedback training to enhance the upper alpha frequency (Experimental group) or random feedbacks (Sham group) Results: We witnessed a significant improvement in memory performance in subjects in the experimental group compared to those in the sham group. This improvement was maintained for at least 1 month. Conclusions: Neurofeedback may be a promising and affordable novel approach for treating the decline in memory witnessed in patients with MCI.",
+      "citation_count": 20,
+      "sources_found_in": [
+        "openalex",
+        "pubmed"
+      ],
+      "semantic_scholar_id": null,
+      "openalex_id": "W3172141709",
+      "pubmed_id": "34194315",
+      "pmc_id": "PMC8236892",
+      "arxiv_id": null,
+      "references": [],
+      "cited_by": [
+        "paper_007",
+        "paper_025"
+      ],
+      "is_seed_paper": false,
+      "found_via": "Q1",
+      "language": "en",
+      "venue_type": "journal",
+      "volume": "13",
+      "issue": null,
+      "pages": "657646",
+      "arxiv_primary_class": null,
+      "citation_network": {
+        "in_degree": 2,
+        "out_degree": 0,
+        "is_hub": false,
+        "cluster": "cluster_A"
+      },
+      "screening": {
+        "relevance": 5,
+        "quality": 4,
+        "recency_impact": 4,
+        "composite": 4.5,
+        "tier": 1,
+        "category": "included",
+        "rationale": "Sham-controlled RCT of upper-alpha EEG NF in MCI showing memory gains maintained at 1 month.",
+        "exclusion_reason": null,
+        "no_abstract": false
+      },
+      "manually_included": false
+    },
+    {
+      "id": "paper_008",
+      "title": "Is virtual reality-based cognitive training in parallel with functional near-infrared spectroscopy-derived neurofeedback beneficial to improve cognitive function in older adults with mild cognitive impairment?",
+      "authors": [
+        "Jin-Hyuck Park"
+      ],
+      "year": 2024,
+      "journal": "Disability and rehabilitation",
+      "doi": "10.1080/09638288.2024.2380483",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/39033386/",
+      "abstract": "PURPOSE: Cognitive training in parallel with functional near-infrared spectroscopy (fNIRS)-derived neurofeedback has been identified to be beneficial in enhancing cognitive function in patients with mild cognitive impairment (MCI). However, effects of virtual reality (VR)-based cognitive training ensuring ecological validity in parallel with fNIRS-derived neurofeedback on neural efficiency has received little attention. This study investigated effects of VR-based cognitive training in parallel with fNIRS-derived neurofeedback on cognitive function and neural efficiency in patients with MCI. METHOD: Ninety participants were randomly assigned into the active group (AG) receiving VR-based cognitive training in parallel with fNIRS-derived neurofeedback, the sham group (SG), or wait-list group (CG). The AG and SG group performed each intervention for fifteen minutes a session, for eight sessions. The Trail Making Test Part B and Backward Digit Span Test were used for outcomes. In addition, activity in the dorsolateral prefrontal cortex (DLPFC) during cognitive testing using fNIRS was measured. RESULTS: After the eight sessions, the AG achieved greater improvements in all outcomes than the other groups. In addition, the AG showed a lower DLPFC activity during cognitive testing than the other groups. CONCLUSIONS: VR-based cognitive training in parallel with fNIRS-derived neurofeedback is superior to enhancing cognitive function and neural efficiency.",
+      "citation_count": null,
+      "sources_found_in": [
+        "pubmed"
+      ],
+      "semantic_scholar_id": null,
+      "openalex_id": null,
+      "pubmed_id": "39033386",
+      "pmc_id": null,
+      "arxiv_id": null,
+      "references": [],
+      "cited_by": [],
+      "is_seed_paper": false,
+      "found_via": "Q1",
+      "language": "eng",
+      "venue_type": "journal",
+      "volume": "47",
+      "issue": "7",
+      "pages": "1717-1724",
+      "arxiv_primary_class": null,
+      "citation_network": {
+        "in_degree": 0,
+        "out_degree": 0,
+        "is_hub": false,
+        "cluster": null
+      },
+      "screening": {
+        "relevance": 3,
+        "quality": 4,
+        "recency_impact": 3,
+        "composite": 3.3,
+        "tier": null,
+        "category": "borderline",
+        "rationale": "Three-arm RCT (n=90) of VR cognitive training plus fNIRS neurofeedback in MCI; strong design but non-EEG modality.",
+        "exclusion_reason": null,
+        "no_abstract": false
+      },
+      "manually_included": false
+    },
+    {
+      "id": "paper_011",
+      "title": "Neurofeedback-Enhanced Working Memory Training: A Proof-of-Concept for Reversing Age-Related Neural Slowing in Older Adults.",
+      "authors": [
+        "Ziming Liu",
+        "Yang Jiang",
+        "Sylvia Cerel-Suhl",
+        "Xiaopeng Zhao"
+      ],
+      "year": 2025,
+      "journal": "medRxiv : the preprint server for health sciences",
+      "doi": "10.1101/2025.10.08.24316788",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/41282693/",
+      "abstract": "Specific electrophysiological (EEG) brain patterns may serve as neural biomarkers of aging, predicting Mild Cognitive Impairment (MCI) in older adults, while other patterns are more closely associated with preserved brain health, such as improved working memory retrieval. In this pilot feasibility study, we developed and tested a novel visual neurofeedback (NF) protocol designed to reward EEG-based brainwave patterns linked to optimal working memory retrieval. We hypothesize that reinforcing these brainwave patterns could enhance cognitive efficiency by promoting increased alpha power, associated with focused attention, while reducing delta power, which is linked to memory lapses. Three older adults completed 8-16 NF training sessions using the protocol. Resting EEG (eyes-closed) was recorded before and after training to explore changes in brainwave patterns. Preliminary findings suggest a potential increase in alpha oscillations and a reduction in delta waves, providing initial support for the feasibility of this NF approach and motivating further evaluation in larger-scale studies.",
+      "citation_count": null,
+      "sources_found_in": [
+        "pubmed"
+      ],
+      "semantic_scholar_id": null,
+      "openalex_id": null,
+      "pubmed_id": "41282693",
+      "pmc_id": "PMC12633098",
+      "arxiv_id": null,
+      "references": [],
+      "cited_by": [],
+      "is_seed_paper": false,
+      "found_via": "Q1",
+      "language": "eng",
+      "venue_type": "journal",
+      "volume": null,
+      "issue": null,
+      "pages": null,
+      "arxiv_primary_class": null,
+      "citation_network": {
+        "in_degree": 0,
+        "out_degree": 0,
+        "is_hub": false,
+        "cluster": null
+      },
+      "screening": {
+        "relevance": 4,
+        "quality": 2,
+        "recency_impact": 3,
+        "composite": 3.2,
+        "tier": null,
+        "category": "borderline",
+        "rationale": "Pilot (n=3) alpha-up/delta-down EEG NF in older adults at MCI risk; preprint, feasibility only.",
+        "exclusion_reason": null,
+        "no_abstract": false
+      },
+      "manually_included": false
+    },
+    {
+      "id": "paper_002",
+      "title": "A Precision Computational Framework for sLORETA Neurofeedback in Mild Cognitive Impairment: Integration of qEEG Biomarkers and Neuropsychological Metrics.",
+      "authors": [
+        "Viviane Dasilva",
+        "Diana Poli",
+        "Olimpia Pino"
+      ],
+      "year": 2026,
+      "journal": "International journal of environmental research and public health",
+      "doi": "10.3390/ijerph23050624",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/42196716/",
+      "abstract": "This paper proposes a high-precision theoretical and computational neurorehabilitation framework for Mild Cognitive Impairment (MCI), connecting computational neuroscience and clinical practice through qEEG-guided neurofeedback training (NFT). By employing sLORETA to identify putative pathological nodes within the Default Mode Network (DMN)-specifically the Precuneus and the Posterior Cingulate-the model utilizes spectral decomposition to isolate the aperiodic 1/f component, reducing background noise bias and allowing the calculation of a pure individual alpha frequency (IAF) to inform recalibration of Weber's Cognitive Threshold. The core architecture uses Bayesian algorithms and stochastic modeling to drive a Dynamic Weight Change mechanism. To support Long-Term Potentiation (LTP) and Hebbian learning, reward thresholds are modulated in real time to target a 70% success rate, as a strategic rationale to anticipate neural fatigue while maintaining the Reward Prediction Error required for synaptic strengthening. As a prospective validation pathway, future studies may assess clinical value through changes in MoCA and RAVLT scores, as well as by examining normalization of cortical coherence in the Default Mode Network (DMN). By merging computational neuroscience with biological models of synaptic plasticity, this work outlines how individual biology can be mapped into an explicit mathematical model. The proposed framework may inform an individualized protocol that provides an objective model-based measure of cognitive recovery, suggesting a replicable and robust strategy for neurorehabilitation during the prodromal phase of dementia, and providing a new approach to neuroscience-based cognitive rehabilitation. This work is intended as a theoretical and computational framework; no complete empirical dataset is reported in the present manuscript.",
+      "citation_count": null,
+      "sources_found_in": [
+        "pubmed"
+      ],
+      "semantic_scholar_id": null,
+      "openalex_id": null,
+      "pubmed_id": "42196716",
+      "pmc_id": "PMC13207330",
+      "arxiv_id": null,
+      "references": [],
+      "cited_by": [],
+      "is_seed_paper": false,
+      "found_via": "Q1",
+      "language": "eng",
+      "venue_type": "journal",
+      "volume": "23",
+      "issue": "5",
+      "pages": null,
+      "arxiv_primary_class": null,
+      "citation_network": {
+        "in_degree": 0,
+        "out_degree": 0,
+        "is_hub": false,
+        "cluster": null
+      },
+      "screening": {
+        "relevance": 4,
+        "quality": 1,
+        "recency_impact": 3,
+        "composite": 2.9,
+        "tier": null,
+        "category": "excluded",
+        "rationale": "Theoretical sLORETA/IAF neurofeedback framework for MCI; directly on topic but explicitly reports no empirical data.",
+        "exclusion_reason": "Theoretical sLORETA/IAF neurofeedback framework for MCI; directly on topic but explicitly reports no empirical data.",
+        "no_abstract": false
+      },
+      "manually_included": false
+    },
+    {
+      "id": "paper_037",
+      "title": "Brain–computer interfaces: the innovative key to unlocking neurological conditions",
+      "authors": [
+        "Hongyu Zhang",
+        "Le Jiao",
+        "Songxiang Yang",
+        "Haopeng Li",
+        "Xinzhan Jiang",
+        "Jing Feng",
+        "Shuhuai Zou",
+        "Qiang Xu",
+        "Jianheng Gu",
+        "Xuefeng Wang",
+        "Baojian Wei"
+      ],
+      "year": 2024,
+      "journal": "International Journal of Surgery",
+      "doi": "10.1097/js9.0000000000002022",
+      "url": "https://doi.org/10.1097/js9.0000000000002022",
+      "abstract": "Neurological disorders such as Parkinson's disease, stroke, and spinal cord injury can pose significant threats to human mortality, morbidity, and functional independence. Brain-Computer Interface (BCI) technology, which facilitates direct communication between the brain and external devices, emerges as an innovative key to unlocking neurological conditions, demonstrating significant promise in this context. This comprehensive review uniquely synthesizes the latest advancements in BCI research across multiple neurological disorders, offering an interdisciplinary perspective on both clinical applications and emerging technologies. We explore the progress in BCI research and its applications in addressing various neurological conditions, with a particular focus on recent clinical studies and prospective developments. Initially, the review provides an up-to-date overview of BCI technology, encompassing its classification, operational principles, and prevalent paradigms. It then critically examines specific BCI applications in movement disorders, disorders of consciousness, cognitive and mental disorders, as well as sensory disorders, highlighting novel approaches and their potential impact on patient care. This review reveals emerging trends in BCI applications, such as the integration of artificial intelligence and the development of closed-loop systems, which represent significant advancements over previous technologies. The review concludes by discussing the prospects and directions of BCI technology, underscoring the need for interdisciplinary collaboration and ethical considerations. It emphasizes the importance of prioritizing bidirectional and high-performance BCIs, areas that have been underexplored in previous reviews. Additionally, we identify crucial gaps in current research, particularly in long-term clinical efficacy and the need for standardized protocols. The role of neurosurgery in spearheading the clinical translation of BCI research is highlighted. Our comprehensive analysis presents BCI technology as an innovative key to unlocking neurological disorders, offering a transformative approach to diagnosing, treating, and rehabilitating neurological conditions, with substantial potential to enhance patients' quality of life and advance the field of neurotechnology.",
+      "citation_count": 171,
+      "sources_found_in": [
+        "openalex"
+      ],
+      "semantic_scholar_id": null,
+      "openalex_id": "W4401783082",
+      "pubmed_id": "39166947",
+      "pmc_id": null,
+      "arxiv_id": null,
+      "references": [
+        "paper_042"
+      ],
+      "cited_by": [],
+      "is_seed_paper": true,
+      "found_via": "Q5",
+      "language": "en",
+      "venue_type": "journal",
+      "volume": "110",
+      "issue": "9",
+      "pages": "5745-5762",
+      "arxiv_primary_class": null,
+      "citation_network": {
+        "in_degree": 0,
+        "out_degree": 1,
+        "is_hub": false,
+        "cluster": "cluster_C"
+      },
+      "screening": {
+        "relevance": 2,
+        "quality": 3,
+        "recency_impact": 5,
+        "composite": 2.9,
+        "tier": null,
+        "category": "excluded",
+        "rationale": "Highly cited broad BCI review across neurological disorders; only tangential to MCI neurofeedback.",
+        "exclusion_reason": "Highly cited broad BCI review across neurological disorders; only tangential to MCI neurofeedback.",
+        "no_abstract": false
+      },
+      "manually_included": false
+    }
+  ]
+}

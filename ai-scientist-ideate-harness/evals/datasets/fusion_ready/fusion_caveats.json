@@ -1,0 +1,20 @@
+{
+  "schema": "ideate-fusion-caveats/1",
+  "at": "2026-10-17T09:00:00+00:00",
+  "caveats": [
+    {
+      "code": "questions-short",
+      "unit": "B3.5",
+      "text": "3 ready of 5",
+      "must_disclose": true
+    }
+  ],
+  "must_disclose": [
+    {
+      "code": "questions-short",
+      "unit": "B3.5",
+      "text": "3 ready of 5",
+      "must_disclose": true
+    }
+  ]
+}

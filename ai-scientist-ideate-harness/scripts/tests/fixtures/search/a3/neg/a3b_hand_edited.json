@@ -1,0 +1,15 @@
+{
+ "unit": "A3.b",
+ "target": "bib",
+ "ops": [
+  {
+   "op": "set_first",
+   "path": "papers",
+   "field": "impact",
+   "value": 1.1
+  }
+ ],
+ "expect": "B02",
+ "level": "ERROR",
+ "why": "an impact score typed by hand"
+}

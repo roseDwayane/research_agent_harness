@@ -1,0 +1,17 @@
+{
+ "unit": "A5",
+ "ops": [
+  {
+   "op": "append",
+   "path": "caveats",
+   "value": {
+    "code": "snowball-failed",
+    "text": "neither backward nor forward chaining ran",
+    "must_disclose": true
+   }
+  }
+ ],
+ "expect": "N08",
+ "level": "WARN",
+ "why": "a failed snowball is said, not hidden"
+}

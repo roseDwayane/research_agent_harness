@@ -1,0 +1,18 @@
+{
+ "unit": "A1.e",
+ "target": "evaluation",
+ "ops": [
+  {
+   "op": "set",
+   "path": "rounds.0.findings.5",
+   "value": {
+    "check": "E6",
+    "result": "note",
+    "criterion": "EX1",
+    "evidence": "EX1 manual cleaning only"
+   }
+  }
+ ],
+ "expect": "E06",
+ "why": "an E6 note that names the criterion but neither the topic's word nor the other reading"
+}

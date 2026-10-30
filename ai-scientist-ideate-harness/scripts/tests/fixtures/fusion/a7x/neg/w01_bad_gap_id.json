@@ -1,0 +1,14 @@
+{
+ "unit": "B3",
+ "target": "gaps",
+ "ops": [
+  {
+   "op": "set",
+   "path": "gaps.0.id",
+   "value": "GAP-1"
+  }
+ ],
+ "expect": "W01",
+ "level": "ERROR",
+ "why": "a gap id outside GAP_NNN"
+}

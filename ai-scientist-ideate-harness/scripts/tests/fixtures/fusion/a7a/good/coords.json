@@ -1,0 +1,13 @@
+{
+ "smithetal2020#A1": {
+  "axes": {
+   "construct": "construct:label-validity",
+   "measure": "unstated",
+   "population": "unstated",
+   "data": "dataset:own-mi-eeg",
+   "split": "n/a",
+   "method_family": "method-family:artifact-rejection"
+  },
+  "note": "the premise is about the expert labels; the split does not bear on it"
+ }
+}

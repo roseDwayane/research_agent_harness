@@ -1,0 +1,14 @@
+{
+ "unit": "A3",
+ "target": "shortlist",
+ "ops": [
+  {
+   "op": "set",
+   "path": "papers.0.screening.composite",
+   "value": 4.99
+  }
+ ],
+ "expect": "C08",
+ "level": "ERROR",
+ "why": "a shortlist edited by hand"
+}

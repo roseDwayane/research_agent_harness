@@ -1,0 +1,20 @@
+{
+ "unit": "A3",
+ "target": "overrides",
+ "ops": [
+  {
+   "op": "set",
+   "path": "entries",
+   "value": [
+    {
+     "kind": "exclude",
+     "id": "paper_002",
+     "reason": ""
+    }
+   ]
+  }
+ ],
+ "expect": "O01",
+ "level": "ERROR",
+ "why": "an override without a reason"
+}

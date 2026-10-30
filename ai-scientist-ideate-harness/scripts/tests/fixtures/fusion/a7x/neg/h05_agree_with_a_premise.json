@@ -1,0 +1,14 @@
+{
+ "unit": "A7.X2",
+ "target": "log",
+ "ops": [
+  {
+   "op": "set",
+   "path": "1.result",
+   "value": "agree"
+  }
+ ],
+ "expect": "H05",
+ "level": "ERROR",
+ "why": "agree between a premise and a claim (a premise goes to the premise results)"
+}

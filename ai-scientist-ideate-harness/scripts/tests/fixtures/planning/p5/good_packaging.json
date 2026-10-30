@@ -1,0 +1,87 @@
+{
+  "schema": "ai-scientist-packaging/1",
+  "idea": "reference_mismatch_geometry",
+  "generation": 1,
+  "title": "Does a reference mismatch lower motor imagery decoding accuracy through covariance geometry?",
+  "short_hypothesis": [
+    "Why does a reference mismatch between training and test reduce motor imagery decoding accuracy, and is the loss explained by covariance geometry?",
+    "Although re-referencing is treated as harmless, a reference mismatch lowers decoding accuracy because it rotates the covariance geometry the decoder was fitted on.",
+    "The drop itself is tested against matched-reference calibration accuracy; how far each operator moves the geometry is only estimated.",
+    "No table reports how fitted weights meet a rotated covariance, so the drop cannot be computed without running the crossover."
+  ],
+  "abstract": [
+    {
+      "move": "context",
+      "text": "Artifact cleaning in motor imagery decoding is scored against expert labels on shared data, and the reference is treated as a fixed, harmless choice of the pipeline.",
+      "sources": [
+        "X0003",
+        "smithetal2020"
+      ]
+    },
+    {
+      "move": "gap",
+      "text": "Yet expert labels are taken as ground truth although class-correlated artifacts challenge them, and the claim that independent component cleaning removes such artifacts rests on a hedge that has not been tested against a known effect.",
+      "sources": [
+        "T1",
+        "T2",
+        "X0002"
+      ]
+    },
+    {
+      "move": "gap",
+      "text": "While this stays open, a decoding gain cannot be attributed to the signal rather than to how the labels and the reference meet.",
+      "sources": [
+        "X0002"
+      ]
+    },
+    {
+      "move": "approach",
+      "text": "We cross the training and the test reference on the same epochs of 109 subjects and read the accuracy drop against matched-reference calibration, after a planted rotation and a geometry-preserving relabelling show that the pipeline sees a known effect.",
+      "sources": [
+        "E2",
+        "E3"
+      ]
+    },
+    {
+      "move": "approach",
+      "text": "We also estimate how far each reference operator moves the covariance geometry, with its confidence interval.",
+      "sources": [
+        "E4"
+      ]
+    },
+    {
+      "move": "outcomes",
+      "text": "If the drop reaches two points with an interval that excludes zero, the loss is geometric and repairable by re-alignment; if it stays below two points, the harmless reading of re-referencing holds for this dataset.",
+      "sources": [
+        "L2",
+        "L3"
+      ]
+    },
+    {
+      "move": "contribution",
+      "text": "Either outcome tells decoding studies whether the reference must be matched between calibration and use, and gives the size of the shift per operator.",
+      "sources": [
+        "C1",
+        "C2"
+      ]
+    }
+  ],
+  "by_leaf": {
+    "L2": {
+      "title": "A reference mismatch lowers motor imagery decoding through covariance geometry",
+      "result_sentence": "The mismatch lowers accuracy by {{drop}} points (95% CI {{ci}}), and each operator rotates the geometry by {{angle}}."
+    },
+    "L3": {
+      "title": "Reference mismatch does not lower motor imagery decoding accuracy",
+      "result_sentence": "The mismatch changes accuracy by {{drop}} points (95% CI {{ci}}), below the two-point margin."
+    },
+    "L5": {
+      "title": "A reference mismatch lowers motor imagery decoding, by an unresolved geometric shift",
+      "result_sentence": "The mismatch lowers accuracy by {{drop}} points; the geometric shift per operator stays unresolved ({{width}})."
+    },
+    "L1": {
+      "title": "Can a decoding pipeline see a known covariance rotation? A positive-control check for reference studies",
+      "result_sentence": "A planted rotation of {{angle}} degrees changed accuracy by only {{drop}} points, below what the test needs."
+    }
+  }
+}

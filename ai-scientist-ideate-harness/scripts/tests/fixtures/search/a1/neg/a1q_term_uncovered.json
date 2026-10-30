@@ -1,0 +1,22 @@
+{
+ "unit": "A1.q",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "queries.0.axes.C2",
+   "value": [
+    "artifact rejection"
+   ]
+  },
+  {
+   "op": "set",
+   "path": "queries.2.axes.C2",
+   "value": [
+    "artifact rejection"
+   ]
+  }
+ ],
+ "expect": "Q13",
+ "why": "a synonym asked by no query"
+}

@@ -1,0 +1,32 @@
+{
+ "unit": "A6.d",
+ "edits": [
+  {
+   "target": "fs",
+   "ops": [
+    {
+     "op": "delete",
+     "path": "pdfs/lee2023.pdf"
+    }
+   ]
+  },
+  {
+   "target": "fetch_log",
+   "ops": [
+    {
+     "op": "set",
+     "path": "attempts.lee2023.0.status",
+     "value": "failed"
+    },
+    {
+     "op": "set",
+     "path": "attempts.lee2023.0.reason",
+     "value": "no open-access copy found"
+    }
+   ]
+  }
+ ],
+ "expect": "F06",
+ "level": "WARN",
+ "why": "fewer PDFs in hand than the depth asked for is said"
+}

@@ -1,0 +1,17 @@
+{
+ "unit": "A3",
+ "target": "scores",
+ "ops": [
+  {
+   "op": "append",
+   "path": "criteria_amendments",
+   "value": {
+    "change": "widen EX1",
+    "reason": ""
+   }
+  }
+ ],
+ "expect": "C09",
+ "level": "ERROR",
+ "why": "an amendment with no reason"
+}

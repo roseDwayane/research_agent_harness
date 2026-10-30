@@ -1,0 +1,20 @@
+{
+ "unit": "A2.s",
+ "target": "instance",
+ "ops": [
+  {
+   "op": "set",
+   "path": "per_source.semantic_scholar.attempts.0",
+   "value": {
+    "sent_query": "x",
+    "at": "t",
+    "filters": {},
+    "skipped": "no key"
+   }
+  }
+ ],
+ "expect": "S05",
+ "level": "WARN",
+ "why": "dense retrieval skipped",
+ "qid": "D1"
+}

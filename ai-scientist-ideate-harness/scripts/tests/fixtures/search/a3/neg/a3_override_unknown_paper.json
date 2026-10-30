@@ -1,0 +1,20 @@
+{
+ "unit": "A3",
+ "target": "overrides",
+ "ops": [
+  {
+   "op": "set",
+   "path": "entries",
+   "value": [
+    {
+     "kind": "include",
+     "id": "paper_999",
+     "reason": "x"
+    }
+   ]
+  }
+ ],
+ "expect": "O02",
+ "level": "ERROR",
+ "why": "an override naming a paper the collection does not hold"
+}

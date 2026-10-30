@@ -1,0 +1,20 @@
+{
+ "unit": "A2.c",
+ "target": "round",
+ "ops": [],
+ "expect": "R11",
+ "level": "ERROR",
+ "why": "a term the previous round judged retire, still used by the protocol",
+ "prev": {
+  "verdicts": [],
+  "term_pull": [
+   {
+    "axis": "C2",
+    "term": "automated cleaning",
+    "action": "retire",
+    "reason": "brings in solar-panel cleaning"
+   }
+  ]
+ },
+ "rounds_before": 1
+}

@@ -1,0 +1,13 @@
+{
+ "unit": "A3",
+ "target": "scores",
+ "ops": [
+  {
+   "op": "delete",
+   "path": "scores.0"
+  }
+ ],
+ "expect": "C01",
+ "level": "ERROR",
+ "why": "a paper with no screening entry"
+}

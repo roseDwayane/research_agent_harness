@@ -1,0 +1,15 @@
+{
+ "unit": "A2.s",
+ "target": "instance",
+ "ops": [
+  {
+   "op": "set",
+   "path": "complete",
+   "value": false
+  }
+ ],
+ "expect": "S01",
+ "level": "ERROR",
+ "why": "an interrupted instance",
+ "qid": "Q1"
+}

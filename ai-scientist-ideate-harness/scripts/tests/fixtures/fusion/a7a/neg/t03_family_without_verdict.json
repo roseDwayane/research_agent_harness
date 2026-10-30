@@ -1,0 +1,13 @@
+{
+ "unit": "B1",
+ "target": "lens",
+ "ops": [
+  {
+   "op": "del",
+   "path": "on_coords.method-family:ica"
+  }
+ ],
+ "expect": "T03",
+ "level": "ERROR",
+ "why": "a method family the lens does not judge"
+}

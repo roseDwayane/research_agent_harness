@@ -1,0 +1,14 @@
+{
+ "unit": "A7.D",
+ "target": "answer:smithetal2020",
+ "ops": [
+  {
+   "op": "set",
+   "path": "terms.1.kind",
+   "value": "protocol"
+  }
+ ],
+ "expect": "D14",
+ "level": "ERROR",
+ "why": "a term kind outside the list"
+}

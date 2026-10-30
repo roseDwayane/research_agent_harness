@@ -1,0 +1,29 @@
+{
+ "unit": "A7.A",
+ "target": "alignment",
+ "ops": [
+  {
+   "op": "set",
+   "path": "vocab.concepts.2.variants",
+   "value": [
+    "xx-unused"
+   ]
+  },
+  {
+   "op": "set",
+   "path": "vocab.concepts.2.name",
+   "value": "CSP-LDA pipeline"
+  },
+  {
+   "op": "append",
+   "path": "vocab.unaligned",
+   "value": {
+    "paper": "smithetal2020",
+    "string": "CSP + LDA"
+   }
+  }
+ ],
+ "expect": "A07",
+ "level": "ERROR",
+ "why": "a word set aside without saying why"
+}

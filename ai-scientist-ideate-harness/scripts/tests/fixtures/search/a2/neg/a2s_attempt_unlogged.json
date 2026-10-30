@@ -1,0 +1,14 @@
+{
+ "unit": "A2.s",
+ "target": "instance",
+ "ops": [
+  {
+   "op": "delete",
+   "path": "per_source.scopus.attempts.0.sent_query"
+  }
+ ],
+ "expect": "S03",
+ "level": "ERROR",
+ "why": "an attempt without the string sent (PRISMA-S)",
+ "qid": "Q1"
+}

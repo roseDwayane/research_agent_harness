@@ -1,0 +1,14 @@
+{
+ "unit": "all",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "timeframe_note",
+   "value": "free key"
+  }
+ ],
+ "expect": "X01",
+ "level": "WARN",
+ "why": "a step0 key with no owner"
+}

@@ -1,0 +1,130 @@
+{
+  "schema": "ideate-v2-tools/1",
+  "note": "The published contract of every ideate_v2 MCP tool: input arguments and the 'data' object of a successful envelope (envelope.schema.json). Handlers validate both at runtime; tests check that the server's registered signatures match.",
+  "$defs": {
+    "run_dir": {"type": "string", "minLength": 1, "maxLength": 4096, "description": "Research folder <topic>_research/, absolute or relative to the first allowed root"},
+    "run_id": {"type": "string", "pattern": "^r_[0-9]{8}_[0-9]{6}_[0-9a-f]{4}$", "description": "v2 run id from RUN_STARTED"},
+    "trace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "unit_id": {"type": "string", "pattern": "^[A-Z][A-Za-z0-9.]*$", "maxLength": 20},
+    "generation": {"type": "integer", "minimum": 1, "maximum": 999},
+    "finding": {"type": "object", "required": ["level", "code", "message"], "properties": {"level": {"enum": ["ERROR", "WARN", "INFO"]}, "code": {"type": "string"}, "message": {"type": "string"}, "entity": {"type": ["string", "null"]}}}
+  },
+  "tools": {
+    "ideate_list_units": {
+      "description": "List the Units of the v2 architecture, optionally filtered by block, step or kind.",
+      "side_effects": "none",
+      "input": {"type": "object", "additionalProperties": false, "properties": {
+        "block": {"type": "string", "enum": ["BLK-search", "BLK-fusion", "BLK-planning"]},
+        "step": {"type": "string", "pattern": "^STEP-[A-Z0-9]+$"},
+        "kind": {"type": "string", "enum": ["script", "model", "subagent", "fanout", "hybrid"]}}},
+      "output": {"type": "object", "required": ["count", "units"], "properties": {
+        "count": {"type": "integer", "minimum": 0},
+        "units": {"type": "array", "items": {"type": "object", "required": ["id", "name", "step", "block", "kind", "verdict"], "properties": {"id": {"type": "string"}, "verdict": {"enum": ["KEEP", "MERGE", "SPLIT", "REFACTOR", "OPTIONAL", "REMOVE", "TBD"]}}}}}}
+    },
+    "ideate_get_contract": {
+      "description": "Return the contract of any registry entity; for a Unit also its 27-field canonical specification and substeps.",
+      "side_effects": "none",
+      "input": {"type": "object", "additionalProperties": false, "required": ["entity_id"], "properties": {
+        "entity_id": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z@][A-Za-z0-9._/\\-]*$"}}},
+      "output": {"type": "object", "required": ["id", "kind", "entity"], "properties": {
+        "id": {"type": "string"}, "kind": {"type": "string"}, "entity": {"type": "object"},
+        "canonical_spec": {"type": "object"}, "substeps": {"type": "array"}, "classification": {"type": "string"}}}
+    },
+    "ideate_run_status": {
+      "description": "State of every ledger Unit of a research folder (todo, running, waiting, failed, done, stale), the Units to run next, and - with a generation - the planning Units by file presence.",
+      "side_effects": "none (reads the legacy ledger; never writes it)",
+      "input": {"type": "object", "additionalProperties": false, "required": ["run_dir"], "properties": {
+        "run_dir": {"$ref": "#/$defs/run_dir"}, "generation": {"$ref": "#/$defs/generation"}}},
+      "output": {"type": "object", "required": ["run_dir", "ledger", "units", "next"], "properties": {
+        "run_dir": {"type": "string"},
+        "ledger": {"type": "object", "required": ["events", "problems"], "properties": {"events": {"type": "integer"}, "problems": {"type": "array"}}},
+        "units": {"type": "object", "additionalProperties": {"type": "object", "required": ["state"], "properties": {"state": {"enum": ["todo", "running", "waiting", "failed", "done", "stale"]}}}},
+        "next": {"type": "array", "items": {"type": "object", "required": ["unit", "state", "action"]}},
+        "planning": {"type": ["object", "null"]}}}
+    },
+    "ideate_check_gate": {
+      "description": "Evaluate a handover gate at contract level (Units done, artifacts present and parsable, contract rules). With run_id, records a GATE_CHECKED event. The legacy domain check must pass too (D-10).",
+      "side_effects": "with run_id: appends GATE_CHECKED to _state/errors/<run_id>/events.jsonl",
+      "input": {"type": "object", "additionalProperties": false, "required": ["run_dir", "gate_id"], "properties": {
+        "run_dir": {"$ref": "#/$defs/run_dir"}, "gate_id": {"type": "string", "pattern": "^GATE-[a-z0-9-]+$"},
+        "generation": {"$ref": "#/$defs/generation"}, "run_id": {"$ref": "#/$defs/run_id"}, "trace_id": {"$ref": "#/$defs/trace_id"}}},
+      "output": {"type": "object", "required": ["gate", "passed", "counts", "findings", "legacy_check"], "properties": {
+        "gate": {"type": "string"}, "passed": {"type": "boolean"}, "counts": {"type": "object"},
+        "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}}, "legacy_check": {"type": "object"},
+        "recorded_event_id": {"type": "string"}}}
+    },
+    "ideate_check_loop": {
+      "description": "May a declared loop (LOOP-xx) run another iteration? Fails closed when a bound's measurement is missing. With run_dir and run_id, records LOOP_ITERATION or LOOP_BOUND_REACHED.",
+      "side_effects": "with run_dir + run_id: appends one event",
+      "input": {"type": "object", "additionalProperties": false, "required": ["loop_id", "completed"], "properties": {
+        "loop_id": {"type": "string", "pattern": "^LOOP-[0-9]{2}$"}, "completed": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "observed": {"type": "object", "additionalProperties": false, "properties": {"growth": {"type": "number"}, "new_share": {"type": "number"}, "items": {"type": "integer", "minimum": 0}}},
+        "run_dir": {"$ref": "#/$defs/run_dir"}, "run_id": {"$ref": "#/$defs/run_id"}, "trace_id": {"$ref": "#/$defs/trace_id"}, "unit_id": {"$ref": "#/$defs/unit_id"}}},
+      "output": {"type": "object", "required": ["loop", "allowed", "reason"], "properties": {
+        "loop": {"type": "string"}, "allowed": {"type": "boolean"}, "reason": {"type": "string"},
+        "bound": {"type": ["integer", "null"]}, "remaining": {"type": ["integer", "null"]}, "recorded_event_id": {"type": "string"}}}
+    },
+    "ideate_record_event": {
+      "description": "Append a lifecycle event (RUN_STARTED, UNIT_STARTED, TOOL_CALLED, UNIT_COMPLETED, UNIT_FAILED, RETRY_SCHEDULED, ...). The lifecycle is validated under a file lock; an idempotency_key already recorded returns the earlier event. RUN_STARTED without run_id creates one.",
+      "side_effects": "appends to _state/errors/<run_id>/events.jsonl",
+      "input": {"type": "object", "additionalProperties": false, "required": ["run_dir", "event_type"], "properties": {
+        "run_dir": {"$ref": "#/$defs/run_dir"},
+        "event_type": {"enum": ["RUN_STARTED", "RUN_COMPLETED", "RUN_FAILED", "RUN_CANCELLED", "STEP_STARTED", "STEP_COMPLETED", "GATE_CHECKED", "UNIT_STARTED", "TOOL_CALLED", "TOOL_RETURNED", "TOOL_FAILED", "UNIT_COMPLETED", "UNIT_DEGRADED", "UNIT_PENDING", "UNIT_FAILED", "UNIT_CANCELLED", "RETRY_SCHEDULED", "RETRY_EXHAUSTED", "LOOP_ITERATION", "LOOP_BOUND_REACHED", "RECOVERY_STARTED", "RECOVERY_COMPLETED", "ESCALATED"]},
+        "run_id": {"$ref": "#/$defs/run_id"}, "trace_id": {"$ref": "#/$defs/trace_id"}, "unit_id": {"$ref": "#/$defs/unit_id"},
+        "step_id": {"type": "string", "pattern": "^STEP-[A-Z0-9]+$"}, "instance": {"type": "string", "minLength": 1, "maxLength": 120},
+        "attempt": {"type": "integer", "minimum": 1, "maximum": 100}, "actor": {"type": "string", "maxLength": 80},
+        "tool": {"type": "string", "maxLength": 200}, "status": {"type": "string", "maxLength": 40}, "message": {"type": "string", "maxLength": 2000},
+        "error_id": {"type": "string", "maxLength": 64}, "parent_span_id": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+        "metrics": {"type": "object", "additionalProperties": false, "properties": {"tokens_in": {"type": "number", "minimum": 0}, "tokens_out": {"type": "number", "minimum": 0}, "cost_usd": {"type": "number", "minimum": 0}, "calls": {"type": "number", "minimum": 0}, "items": {"type": "number", "minimum": 0}, "duration_ms": {"type": "number", "minimum": 0}}},
+        "context": {"type": "object"}, "idempotency_key": {"type": "string", "pattern": "^[A-Za-z0-9._:@/\\-]{1,200}$"}}},
+      "output": {"type": "object", "required": ["event", "deduplicated", "run_id", "trace_id"], "properties": {
+        "event": {"type": "object"}, "deduplicated": {"type": "boolean"}, "run_id": {"type": "string"}, "trace_id": {"type": "string"}}}
+    },
+    "ideate_record_error": {
+      "description": "Record a structured error (category, severity and retryability default from the code). Unit check codes are '<unit>:<code>'. An idempotency_key already recorded for the Unit instance returns the earlier record.",
+      "side_effects": "appends to _state/errors/<run_id>/units/<unit>@<instance>.jsonl",
+      "input": {"type": "object", "additionalProperties": false, "required": ["run_dir", "run_id", "trace_id", "error_code", "error_message"], "properties": {
+        "run_dir": {"$ref": "#/$defs/run_dir"}, "run_id": {"$ref": "#/$defs/run_id"}, "trace_id": {"$ref": "#/$defs/trace_id"},
+        "error_code": {"type": "string", "minLength": 3, "maxLength": 80}, "error_message": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "severity": {"enum": ["fatal", "error", "degraded", "warning"]}, "retryable": {"type": "boolean"},
+        "unit_id": {"$ref": "#/$defs/unit_id"}, "step_id": {"type": "string", "pattern": "^STEP-[A-Z0-9]+$"},
+        "instance": {"type": "string", "minLength": 1, "maxLength": 120}, "attempt": {"type": "integer", "minimum": 1, "maximum": 100},
+        "parent_error_id": {"type": "string", "maxLength": 64}, "context": {"type": "object"},
+        "recovery_action": {"enum": ["none", "retry", "rerun-upstream", "degrade", "stop", "escalate", "fix-input", "revise"]},
+        "caveat": {"type": "string", "maxLength": 80}, "must_disclose": {"type": "boolean"}, "origin": {"type": "object"},
+        "idempotency_key": {"type": "string", "pattern": "^[A-Za-z0-9._:@/\\-]{1,200}$"}}},
+      "output": {"type": "object", "required": ["error", "deduplicated"], "properties": {"error": {"type": "object", "required": ["error_id", "error_code", "error_category", "severity", "retryable"]}, "deduplicated": {"type": "boolean"}}}
+    },
+    "ideate_retry_decision": {
+      "description": "Decide whether the requesting level may retry an error under a retry policy: bounded attempts, deterministic full-jitter backoff, and refusal of nested retries (a level that does not own the policy). With record=true, records RETRY_SCHEDULED, RETRY_EXHAUSTED or ESCALATED.",
+      "side_effects": "with record=true: appends one event",
+      "input": {"type": "object", "additionalProperties": false, "required": ["policy_id", "attempts_done", "requested_by", "error"], "properties": {
+        "policy_id": {"type": "string", "pattern": "^RP-[A-Z-]+$"}, "attempts_done": {"type": "integer", "minimum": 1, "maximum": 100},
+        "requested_by": {"enum": ["orchestrator", "unit", "unit-tool", "unit-transport"]},
+        "error": {"type": "object", "required": ["error_category"], "additionalProperties": false, "properties": {
+          "error_category": {"type": "string"}, "severity": {"enum": ["fatal", "error", "degraded", "warning"]}, "retryable": {"type": "boolean"}, "error_id": {"type": "string", "maxLength": 64}}},
+        "record": {"type": "boolean"}, "run_dir": {"$ref": "#/$defs/run_dir"}, "run_id": {"$ref": "#/$defs/run_id"},
+        "trace_id": {"$ref": "#/$defs/trace_id"}, "unit_id": {"$ref": "#/$defs/unit_id"}, "instance": {"type": "string", "maxLength": 120}}},
+      "output": {"type": "object", "required": ["action", "policy", "owner", "delay_s", "reason"], "properties": {
+        "action": {"enum": ["retry", "stop", "degrade", "escalate", "error", "continue", "refuse"]}, "policy": {"type": "string"}, "owner": {"type": "string"},
+        "attempt_next": {"type": ["integer", "null"]}, "delay_s": {"type": "number", "minimum": 0}, "reason": {"type": "string"}, "code": {"type": "string"}, "recorded_event_id": {"type": "string"}}}
+    },
+    "ideate_build_report": {
+      "description": "Aggregate error records, ledger states and caveat files into step reports and the overall report (status, stopped_at, root causes, must-disclose caveats). With write=true (default) writes steps/*.json, overall.json, latest.json and ERRORS.md.",
+      "side_effects": "with write=true: writes under _state/errors/ and ERRORS.md",
+      "input": {"type": "object", "additionalProperties": false, "required": ["run_dir", "run_id"], "properties": {
+        "run_dir": {"$ref": "#/$defs/run_dir"}, "run_id": {"$ref": "#/$defs/run_id"}, "generation": {"$ref": "#/$defs/generation"}, "write": {"type": "boolean"}}},
+      "output": {"type": "object", "required": ["status", "by_step", "root_causes", "must_disclose", "counts", "written"], "properties": {
+        "status": {"enum": ["todo", "done", "degraded", "incomplete", "failed", "stopped"]}, "stopped_at": {"type": ["string", "null"]},
+        "by_step": {"type": "object"}, "root_causes": {"type": "array"}, "must_disclose": {"type": "array", "items": {"type": "string"}},
+        "counts": {"type": "object"}, "written": {"type": "array", "items": {"type": "string"}}}}
+    },
+    "ideate_trace": {
+      "description": "Trace a Unit (contract, ledger events, v2 events and errors) or an error (chain to its root cause and the Units it reaches downstream).",
+      "side_effects": "none",
+      "input": {"type": "object", "additionalProperties": false, "required": ["run_dir"], "properties": {
+        "run_dir": {"$ref": "#/$defs/run_dir"}, "unit_id": {"$ref": "#/$defs/unit_id"}, "error_id": {"type": "string", "maxLength": 64}, "run_id": {"$ref": "#/$defs/run_id"}}},
+      "output": {"type": "object"}
+    }
+  }
+}

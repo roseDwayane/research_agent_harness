@@ -1,0 +1,139 @@
+{
+ "topic": "Automated EEG artifact handling and downstream decoding",
+ "topic_file": "topic.md",
+ "depth": "standard",
+ "protocol": {
+  "framework": {
+   "name": "PICO",
+   "rationale": "The researcher applies a cleaning method (an intervention) and asks how its output compares with expert annotation and what it does to decoding - an effect question, so PICO; not PECO (nothing is an exposure) and not PCC (the question is not an inventory).",
+   "slots": [
+    {
+     "slot": "population",
+     "value": "scalp EEG recordings from human participants, any paradigm",
+     "operational_role": "search-and-eligibility",
+     "reason": "nameable (authors write EEG) and it separates the topic from MEG / fMRI"
+    },
+    {
+     "slot": "intervention",
+     "value": "automated artifact rejection or removal pipelines",
+     "operational_role": "search-and-eligibility",
+     "reason": "the anchor concept; always searched"
+    },
+    {
+     "slot": "comparison",
+     "value": "manual expert annotation or visual inspection",
+     "operational_role": "eligibility-only",
+     "reason": "control arms are rarely named in titles; AND-ing them would drop most papers - applied at screening and reached by the contrast variant"
+    },
+    {
+     "slot": "outcome",
+     "value": "agreement with expert labels; decoding accuracy after cleaning",
+     "operational_role": "eligibility-only",
+     "reason": "outcome metrics are often unstated in titles and abstracts; applied at screening"
+    }
+   ]
+  },
+  "axes": [
+   {
+    "id": "C1",
+    "kind": "search",
+    "slot": "population",
+    "name": "EEG",
+    "terms": [
+     "EEG",
+     "electroencephalograph*",
+     "scalp recording"
+    ]
+   },
+   {
+    "id": "C2",
+    "kind": "search",
+    "slot": "intervention",
+    "name": "automated cleaning",
+    "terms": [
+     "artifact rejection",
+     "artefact removal",
+     "automated cleaning",
+     "artifact detection"
+    ]
+   },
+   {
+    "id": "C3",
+    "kind": "anchor",
+    "name": "named pipelines",
+    "terms": [
+     "Autoreject",
+     "PREP pipeline",
+     "FASTER",
+     "ICLabel"
+    ]
+   },
+   {
+    "id": "C4",
+    "kind": "contrast",
+    "name": "expert reference",
+    "terms": [
+     "manual annotation",
+     "expert annotation",
+     "visual inspection"
+    ]
+   }
+  ],
+  "outcomes": [
+   {
+    "id": "O1",
+    "text": "agreement between automated and expert artifact labels"
+   },
+   {
+    "id": "O2",
+    "text": "change in downstream decoding accuracy after cleaning"
+   }
+  ],
+  "timeframe": "2013-2026",
+  "timeframe_reason": "the reference pipelines (FASTER 2010, PREP 2015, Autoreject 2017) are still the baselines; the snowball recovers anything older",
+  "setting": "CPU / Apple MPS, minutes-to-hours per experiment",
+  "criteria": {
+   "inclusion": [
+    {
+     "id": "IN1",
+     "text": "applies an automated artifact rejection or removal method to scalp EEG",
+     "refs": [
+      "population",
+      "intervention"
+     ]
+    },
+    {
+     "id": "IN2",
+     "text": "reports agreement with expert or manual labels",
+     "refs": [
+      "comparison",
+      "O1"
+     ]
+    },
+    {
+     "id": "IN3",
+     "text": "or reports a downstream decoding or classification result before and after cleaning",
+     "refs": [
+      "O2"
+     ]
+    }
+   ],
+   "exclusion": [
+    {
+     "id": "EX1",
+     "text": "intracranial, MEG-only or non-human recordings",
+     "refs": [
+      "population"
+     ]
+    },
+    {
+     "id": "EX2",
+     "text": "hardware or electrode design without any artifact-handling evaluation",
+     "refs": [
+      "intervention"
+     ]
+    }
+   ]
+  }
+ }
+}

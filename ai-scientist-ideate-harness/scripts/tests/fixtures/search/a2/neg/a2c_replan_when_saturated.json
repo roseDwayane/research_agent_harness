@@ -1,0 +1,26 @@
+{
+ "unit": "A2.c",
+ "target": "round",
+ "ops": [
+  {
+   "op": "set",
+   "path": "verdicts.0",
+   "value": {
+    "query": "Q1",
+    "verdict": "replan",
+    "reason": "more"
+   }
+  }
+ ],
+ "expect": "R09",
+ "level": "ERROR",
+ "why": "re-planning a saturated search",
+ "sig_ops": [
+  {
+   "op": "set",
+   "path": "new_share_latest_round",
+   "value": 0.01
+  }
+ ],
+ "rounds_before": 1
+}

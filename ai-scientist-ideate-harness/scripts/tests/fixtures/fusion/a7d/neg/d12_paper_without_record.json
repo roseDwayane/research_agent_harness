@@ -1,0 +1,8 @@
+{
+ "unit": "A7.D",
+ "target": "remove:parketal2019",
+ "ops": [],
+ "expect": "D12",
+ "level": "ERROR",
+ "why": "a shortlisted paper never deconstructed"
+}

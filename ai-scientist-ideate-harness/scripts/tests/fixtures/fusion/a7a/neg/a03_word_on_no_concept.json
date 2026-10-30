@@ -1,0 +1,14 @@
+{
+ "unit": "A7.A",
+ "target": "alignment",
+ "ops": [
+  {
+   "op": "set",
+   "path": "vocab.concepts.4.variants",
+   "value": []
+  }
+ ],
+ "expect": "A03",
+ "level": "ERROR",
+ "why": "a word the records use that sits nowhere"
+}

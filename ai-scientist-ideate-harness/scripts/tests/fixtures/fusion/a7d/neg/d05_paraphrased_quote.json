@@ -1,0 +1,14 @@
+{
+ "unit": "A7.D",
+ "target": "answer:smithetal2020",
+ "ops": [
+  {
+   "op": "set",
+   "path": "units.0.quote",
+   "value": "automatic removal of artifacts raises the decoding accuracy"
+  }
+ ],
+ "expect": "D05",
+ "level": "ERROR",
+ "why": "a paraphrase passed off as a quote"
+}

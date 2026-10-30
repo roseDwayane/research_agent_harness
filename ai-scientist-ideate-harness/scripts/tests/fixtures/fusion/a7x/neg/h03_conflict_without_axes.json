@@ -1,0 +1,14 @@
+{
+ "unit": "A7.X2",
+ "target": "log",
+ "ops": [
+  {
+   "op": "set",
+   "path": "0.axes_differ",
+   "value": []
+  }
+ ],
+ "expect": "H03",
+ "level": "ERROR",
+ "why": "a conflict that does not say where the sides differ"
+}

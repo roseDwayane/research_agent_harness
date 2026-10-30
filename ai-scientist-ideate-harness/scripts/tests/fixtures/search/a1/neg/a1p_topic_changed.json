@@ -1,0 +1,14 @@
+{
+ "unit": "A1.p",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "protocol.topic_sha256",
+   "value": "0000000000000000000000000000000000000000000000000000000000000000"
+  }
+ ],
+ "expect": "P10",
+ "level": "WARN",
+ "why": "the topic file changed after A1.p"
+}

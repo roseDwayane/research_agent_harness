@@ -1,0 +1,14 @@
+{
+ "unit": "A1.q",
+ "target": "step0",
+ "ops": [
+  {
+   "op": "set",
+   "path": "protocol.timeframe",
+   "value": "2015-2026"
+  }
+ ],
+ "expect": "Q21",
+ "level": "ERROR",
+ "why": "the protocol changed after the strategy was written"
+}

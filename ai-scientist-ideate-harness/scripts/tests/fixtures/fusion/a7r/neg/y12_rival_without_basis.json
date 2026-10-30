@@ -1,0 +1,8 @@
+{
+ "unit": "A7.R",
+ "target": "question:Q_001.md",
+ "ops": [{"op": "replace", "path": "\"basis\": [\"X0001\"]", "value": "\"basis\": []"}],
+ "expect": "Y12",
+ "level": "ERROR",
+ "why": "a rival account with no record behind it"
+}

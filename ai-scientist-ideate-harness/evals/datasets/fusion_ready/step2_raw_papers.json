@@ -1,0 +1,27 @@
+{
+  "papers": [
+    {
+      "id": "paper_001",
+      "title": "Paper 1"
+    },
+    {
+      "id": "paper_002",
+      "title": "Paper 2"
+    },
+    {
+      "id": "paper_003",
+      "title": "Paper 3"
+    },
+    {
+      "id": "paper_004",
+      "title": "Paper 4"
+    },
+    {
+      "id": "paper_005",
+      "title": "Paper 5"
+    }
+  ],
+  "search_summary": {
+    "caveats": []
+  }
+}

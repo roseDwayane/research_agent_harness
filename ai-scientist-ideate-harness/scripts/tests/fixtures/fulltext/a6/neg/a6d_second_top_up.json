@@ -1,0 +1,18 @@
+{
+ "unit": "A6.d",
+ "edits": [
+  {
+   "target": "candidates",
+   "ops": [
+    {
+     "op": "set",
+     "path": "top_ups",
+     "value": 2
+    }
+   ]
+  }
+ ],
+ "expect": "F04",
+ "level": "ERROR",
+ "why": "one top-up pass per candidate list"
+}

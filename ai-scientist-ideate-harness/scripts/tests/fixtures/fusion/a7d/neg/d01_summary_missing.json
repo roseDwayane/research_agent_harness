@@ -1,0 +1,13 @@
+{
+ "unit": "A7.D",
+ "target": "answer:smithetal2020",
+ "ops": [
+  {
+   "op": "del",
+   "path": "summary.headline"
+  }
+ ],
+ "expect": "D01",
+ "level": "ERROR",
+ "why": "a summary line left out instead of written (TBD)"
+}

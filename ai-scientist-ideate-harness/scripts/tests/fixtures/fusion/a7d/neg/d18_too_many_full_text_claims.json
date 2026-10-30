@@ -1,0 +1,213 @@
+{
+ "unit": "A7.D",
+ "target": "answer:smithetal2020",
+ "ops": [
+  {
+   "op": "append",
+   "path": "units",
+   "value": {
+    "id": "smithetal2020#C2",
+    "kind": "claim",
+    "text": "restated result 2",
+    "strength": "shows",
+    "scope": {
+     "population": "20 subjects",
+     "data": "(TBD)",
+     "conditions": "(TBD)"
+    },
+    "where": "Abstract",
+    "quote": "automated artifact rejection improves decoding accuracy in motor imagery EEG"
+   }
+  },
+  {
+   "op": "append",
+   "path": "units",
+   "value": {
+    "id": "smithetal2020#C3",
+    "kind": "claim",
+    "text": "restated result 3",
+    "strength": "shows",
+    "scope": {
+     "population": "20 subjects",
+     "data": "(TBD)",
+     "conditions": "(TBD)"
+    },
+    "where": "Abstract",
+    "quote": "automated artifact rejection improves decoding accuracy in motor imagery EEG"
+   }
+  },
+  {
+   "op": "append",
+   "path": "units",
+   "value": {
+    "id": "smithetal2020#C4",
+    "kind": "claim",
+    "text": "restated result 4",
+    "strength": "shows",
+    "scope": {
+     "population": "20 subjects",
+     "data": "(TBD)",
+     "conditions": "(TBD)"
+    },
+    "where": "Abstract",
+    "quote": "automated artifact rejection improves decoding accuracy in motor imagery EEG"
+   }
+  },
+  {
+   "op": "append",
+   "path": "units",
+   "value": {
+    "id": "smithetal2020#C5",
+    "kind": "claim",
+    "text": "restated result 5",
+    "strength": "shows",
+    "scope": {
+     "population": "20 subjects",
+     "data": "(TBD)",
+     "conditions": "(TBD)"
+    },
+    "where": "Abstract",
+    "quote": "automated artifact rejection improves decoding accuracy in motor imagery EEG"
+   }
+  },
+  {
+   "op": "append",
+   "path": "units",
+   "value": {
+    "id": "smithetal2020#C6",
+    "kind": "claim",
+    "text": "restated result 6",
+    "strength": "shows",
+    "scope": {
+     "population": "20 subjects",
+     "data": "(TBD)",
+     "conditions": "(TBD)"
+    },
+    "where": "Abstract",
+    "quote": "automated artifact rejection improves decoding accuracy in motor imagery EEG"
+   }
+  },
+  {
+   "op": "append",
+   "path": "units",
+   "value": {
+    "id": "smithetal2020#C7",
+    "kind": "claim",
+    "text": "restated result 7",
+    "strength": "shows",
+    "scope": {
+     "population": "20 subjects",
+     "data": "(TBD)",
+     "conditions": "(TBD)"
+    },
+    "where": "Abstract",
+    "quote": "automated artifact rejection improves decoding accuracy in motor imagery EEG"
+   }
+  },
+  {
+   "op": "append",
+   "path": "units",
+   "value": {
+    "id": "smithetal2020#C8",
+    "kind": "claim",
+    "text": "restated result 8",
+    "strength": "shows",
+    "scope": {
+     "population": "20 subjects",
+     "data": "(TBD)",
+     "conditions": "(TBD)"
+    },
+    "where": "Abstract",
+    "quote": "automated artifact rejection improves decoding accuracy in motor imagery EEG"
+   }
+  },
+  {
+   "op": "append",
+   "path": "units",
+   "value": {
+    "id": "smithetal2020#C9",
+    "kind": "claim",
+    "text": "restated result 9",
+    "strength": "shows",
+    "scope": {
+     "population": "20 subjects",
+     "data": "(TBD)",
+     "conditions": "(TBD)"
+    },
+    "where": "Abstract",
+    "quote": "automated artifact rejection improves decoding accuracy in motor imagery EEG"
+   }
+  },
+  {
+   "op": "append",
+   "path": "units",
+   "value": {
+    "id": "smithetal2020#C10",
+    "kind": "claim",
+    "text": "restated result 10",
+    "strength": "shows",
+    "scope": {
+     "population": "20 subjects",
+     "data": "(TBD)",
+     "conditions": "(TBD)"
+    },
+    "where": "Abstract",
+    "quote": "automated artifact rejection improves decoding accuracy in motor imagery EEG"
+   }
+  },
+  {
+   "op": "append",
+   "path": "units",
+   "value": {
+    "id": "smithetal2020#C11",
+    "kind": "claim",
+    "text": "restated result 11",
+    "strength": "shows",
+    "scope": {
+     "population": "20 subjects",
+     "data": "(TBD)",
+     "conditions": "(TBD)"
+    },
+    "where": "Abstract",
+    "quote": "automated artifact rejection improves decoding accuracy in motor imagery EEG"
+   }
+  },
+  {
+   "op": "append",
+   "path": "units",
+   "value": {
+    "id": "smithetal2020#C12",
+    "kind": "claim",
+    "text": "restated result 12",
+    "strength": "shows",
+    "scope": {
+     "population": "20 subjects",
+     "data": "(TBD)",
+     "conditions": "(TBD)"
+    },
+    "where": "Abstract",
+    "quote": "automated artifact rejection improves decoding accuracy in motor imagery EEG"
+   }
+  },
+  {
+   "op": "append",
+   "path": "units",
+   "value": {
+    "id": "smithetal2020#C13",
+    "kind": "claim",
+    "text": "restated result 13",
+    "strength": "shows",
+    "scope": {
+     "population": "20 subjects",
+     "data": "(TBD)",
+     "conditions": "(TBD)"
+    },
+    "where": "Abstract",
+    "quote": "automated artifact rejection improves decoding accuracy in motor imagery EEG"
+   }
+  }
+ ],
+ "expect": "D18",
+ "level": "WARN",
+ "why": "statistics recorded one claim each"
+}

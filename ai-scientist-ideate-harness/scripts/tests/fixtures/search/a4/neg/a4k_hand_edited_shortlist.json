@@ -1,0 +1,14 @@
+{
+ "unit": "A4.k",
+ "target": "shortlist",
+ "ops": [
+  {
+   "op": "set",
+   "path": "papers.0.citation_key",
+   "value": "smith2020"
+  }
+ ],
+ "expect": "K05",
+ "why": "a key edited in the shortlist, not minted",
+ "level": "ERROR"
+}

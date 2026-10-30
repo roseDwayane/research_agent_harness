@@ -1,0 +1,6 @@
+{
+ "expect": "K04",
+ "level": "WARN",
+ "exercised_by": "tests/planning/test_p5_package.py::Package.test_every_counter_example_fails_with_its_code",
+ "why": "a pointer for units check: the counter-example itself is built in Python in the named test (NEG)"
+}
