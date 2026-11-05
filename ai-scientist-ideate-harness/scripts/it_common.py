@@ -141,6 +141,36 @@ def sha256_json(data) -> str:
 STOP_WORDS = {"a", "an", "the", "of", "for", "and", "or", "in", "on", "to", "with", "by", "from", "under", "via", "using"}
 
 
+def repair_quote(quote, text: str, min_ratio: float = 0.88) -> str | None:
+    """The span of `text` a near-verbatim quote was meant to copy, or None. Quoting is copying - the choice of the
+    passage is the reader's judgement, the letters are not: a quote that drops a word, adds an ellipsis or changes a
+    hyphen is replaced by the source's own words when one contiguous span matches it closely (difflib ratio >=
+    min_ratio over the lower-cased words); with an ellipsis the longest part is taken. Never invents text."""
+    from difflib import SequenceMatcher
+    q = str(quote or "")
+    parts = [x for x in re.split(r"\s*(?:\.\.\.|…|\[\.\.\.\])\s*", q) if x.strip()]
+    q = " ".join(max(parts, key=len).split()) if parts else ""
+    if len(q.split()) < 3 or not text:
+        return None
+    ql, tl = q.lower(), text.lower()
+    m = SequenceMatcher(None, tl, ql, autojunk=False).find_longest_match(0, len(tl), 0, len(ql))
+    if m.size < 12:
+        return None
+    lo, hi = max(0, m.a - m.b - 60), min(len(text), m.a + (len(ql) - m.b) + 60)
+    words = [(x.start() + lo, x.end() + lo) for x in re.finditer(r"\S+", text[lo:hi])]
+    n, best = len(q.split()), (0.0, None)
+    for i in range(len(words)):
+        for k in range(max(1, n - 3), n + 4):
+            j = i + k - 1
+            if j >= len(words):
+                break
+            cand = text[words[i][0]:words[j][1]]
+            r = SequenceMatcher(None, " ".join(cand.lower().split()), ql, autojunk=False).ratio()
+            if r > best[0]:
+                best = (r, cand)
+    return " ".join(best[1].split()) if best[0] >= min_ratio else None
+
+
 def content_words(text: str) -> list[str]:
     return [w for w in re.findall(r"[^\s\"()]+", str(text or "")) if w.lower() not in STOP_WORDS]
 
@@ -151,13 +181,14 @@ def norm_title(title) -> str:
 
 def resolve_topic_file(rd: Path, topic_file: str | None) -> Path | None:
     """step0 stores topic_file relative to the repo (ai_scientist/ideas/x.md) or absolute; the research dir sits next
-    to the topic file, so its sibling is the fallback."""
+    to the topic file, so its sibling is the fallback. The research dir's own parents are tried before the working
+    directory: a stray topic.md where the command runs must not stand in for the topic."""
     if not topic_file:
         return None
     p = Path(topic_file).expanduser()
     if p.is_absolute() and p.exists():
         return p
-    for base in (Path.cwd(), *Path(rd).resolve().parents):
+    for base in (*Path(rd).resolve().parents, Path.cwd()):
         if (base / p).exists():
             return base / p
     sib = Path(rd).resolve().parent / p.name
@@ -267,6 +298,17 @@ def http_json(url: str, rd: Path | None = None, timeout: int = 30):
                              timeout=timeout) as r:
                 return json.loads(r.read().decode("utf-8"))
         except Exception as e:  # noqa: BLE001 - re-raised without the URL, which may carry a key
+            raise RuntimeError(f"GET {url[:120]} failed: {type(e).__name__}: {getattr(e, 'code', '') or ''}".strip()) from None
+    return recorded(rd, "http", {"url": url}, live)
+
+
+def http_text(url: str, rd: Path | None = None, timeout: int = 60) -> str:
+    """GET a text document (XML, a listing), recorded like http_json."""
+    def live():
+        try:
+            with _ur.urlopen(_ur.Request(url, headers={"User-Agent": "ai-scientist-ideate/1.0"}), timeout=timeout) as r:
+                return r.read().decode("utf-8", errors="replace")
+        except Exception as e:  # noqa: BLE001
             raise RuntimeError(f"GET {url[:120]} failed: {type(e).__name__}: {getattr(e, 'code', '') or ''}".strip()) from None
     return recorded(rd, "http", {"url": url}, live)
 

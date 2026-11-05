@@ -158,6 +158,12 @@ class Flow(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp)
 
+    def test_nothing_judged_leaves_the_log_empty(self):
+        """A quick run judges no paper candidates: the merge still leaves the log A7.X2 owns, empty."""
+        out = it_collide.merge(self.rd)
+        self.assertEqual(out["written"], 0)
+        self.assertEqual((self.rd / it_collide.LOG).read_text(), "")
+
     def test_refused_judgement_writes_nothing(self):
         ok("collide-plan", self.rd)
         batch = json.loads((self.rd / it_collide.WORK / "batch_001.json").read_text())
@@ -169,6 +175,25 @@ class Flow(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("H04", out)
         self.assertEqual(it_collide.log(self.rd), [])
+
+    def test_a_refused_candidate_is_asked_again_with_the_reason(self):
+        """The merge keeps what it accepts; the next plan holds only the refused candidate, with why it was refused."""
+        ok("collide-plan", self.rd)
+        batch = json.loads((self.rd / it_collide.WORK / "batch_001.json").read_text())
+        by_type = {c["type"]: c["id"] for c in batch["candidates"]}
+        good = json.loads((FIX / "good" / "judgements_by_type.json").read_text())["numbers"]
+        ans = {"model": "m", "judgements": [
+            {"candidate": by_type["numbers"], "relations": good},
+            {"candidate": by_type["same-coords"], "relations": [
+                {"result": "conflict", "sides": ["parketal2019#C1", "smithetal2020#C1"], "axes_differ": ["none"], "reason": "x"}]}]}
+        (self.rd / it_collide.WORK / "answers" / "batch_001.json").write_text(json.dumps(ans))
+        code, out = run("collide-merge", self.rd, tool=TOOLS)
+        self.assertEqual(code, 1, out)
+        ok("collide-plan", self.rd)
+        again = {c["id"]: c for c in json.loads((self.rd / it_collide.WORK / "batch_001.json").read_text())["candidates"]}
+        self.assertNotIn(by_type["numbers"], again)
+        self.assertIn("H04", again[by_type["same-coords"]]["refused_before"][0])
+        self.assertNotIn("refused_before", again[by_type["lineage"]])
 
     def test_revision_supersedes(self):
         answer_all(self.rd)
@@ -218,6 +243,66 @@ class Flow(unittest.TestCase):
         code, out = run("gaps-set", self.rd, p, tool=TOOLS)
         self.assertEqual(code, 1, out)
         self.assertIn("retired", out)
+
+
+class GapsSet(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = Path(tempfile.mkdtemp())
+        cls.base = build_good(cls.tmp / "base")
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp)
+
+    def setUp(self):
+        self.rd = Path(tempfile.mkdtemp(dir=self.tmp)) / self.base.name
+        shutil.copytree(self.base, self.rd)
+        self.gaps = json.loads((FIX / "good" / "gaps.json").read_text())
+
+    def submit(self):
+        p = self.rd.parent / "gaps.json"
+        p.write_text(json.dumps(self.gaps))
+        return run("gaps-set", self.rd, p, tool=TOOLS)
+
+    def test_a_feasibility_above_its_cap_is_lowered_to_it(self):
+        lens = json.loads((self.rd / "lens.json").read_text())
+        lens["on_coords"]["method-family:artifact-rejection"]["affordable"] = "no"
+        (self.rd / "lens.json").write_text(json.dumps(lens))
+        code, out = self.submit()
+        self.assertEqual(code, 0, out)
+        self.assertIn("GAP_001: feasibility 4 -> 2, the cap of lens:method-family:artifact-rejection", out)
+        self.assertEqual(json.loads((self.rd / it_collide.GAPS).read_text())["gaps"][0]["feasibility"], 2)
+
+    def test_a_wrong_shape_is_one_finding_not_a_crash(self):
+        self.gaps["gaps"][0].update(type="measurement", axes="construct", collisions=[{"id": "X0002"}])
+        code, out = self.submit()
+        self.assertEqual(code, 1, out)
+        self.assertNotIn("Traceback", out)
+        self.assertIn("`type` is an object", out)
+        self.assertEqual(out.count("`axes` must be a list"), 1)
+        self.assertNotIn("axis 'c'", out)
+
+    def test_the_schema_takes_a_good_list_and_only_this_runs_ids(self):
+        """recon-digest B3 writes the answer's schema: a well-formed list passes it; a code or id that does not exist
+        (an axis as a type, X019) cannot be decoded at all."""
+        try:
+            import jsonschema
+        except ImportError:
+            self.skipTest("jsonschema not installed")
+        ok("recon-digest", self.rd, "B3")
+        schema = json.loads((self.rd / "knowledge" / "_work" / "digest" / "B3.schema.json").read_text())
+        jsonschema.validate(self.gaps, schema)
+        for bad in ({"type": {"primary": "methodological", "secondary": "data"}}, {"collisions": ["X019"]}):
+            g = {**self.gaps, "gaps": [{**self.gaps["gaps"][0], **bad}]}
+            with self.assertRaises(jsonschema.ValidationError):
+                jsonschema.validate(g, schema)
+
+    def test_not_gaps_naming_no_collision_is_said(self):
+        self.gaps["not_gaps"] = [{"collision": "X02", "why": "no study could close it"}]
+        code, out = self.submit()
+        self.assertEqual(code, 1, out)
+        self.assertIn("not_gaps names ['X02']", out)
 
 
 class PlansApart(unittest.TestCase):
@@ -338,6 +423,29 @@ class Units(unittest.TestCase):
         b = g("GAP_002", "cause", 4, 4, 3)             # 3.70, contradiction, within 0.3
         c = g("GAP_003", "add-evidence", 5, 5, 5)      # 5.00
         self.assertEqual([x["id"] for x in it_collide.rank([a, b, c])], ["GAP_003", "GAP_002", "GAP_001"])
+
+
+class GapHint(unittest.TestCase):
+    """The `gap:` line of B3's digest: what the rules settle for a collision, so the model only judges."""
+    I = {"rows": {"e1": {"citation_key": "a", "data": [{"name": "SEED"}], "method_family": ["cnn"]},
+                  "e2": {"citation_key": "b", "data": [{"name": "DEAP"}], "method_family": ["lstm"]}},
+         "recs": {"a": {"basis": "abstract"}, "b": {"basis": "full-text"}},
+         "lens": {"on_coords": {"method-family:lstm": {"affordable": "no"}}},
+         "al": {"vocab": {"concepts": [{"id": "method-family:lstm", "kind": "method-family", "name": "LSTM"}]}}}
+
+    def test_an_empty_cell_names_its_papers_and_its_cap(self):
+        h = it_collide.gap_hint(self.I, {"result": "empty-cell", "sides": [{"id": "cell:SEED|lstm"}]})
+        self.assertIn("supporting from: SEED - a; lstm - b", h)
+        self.assertIn("feasibility at most 2 (basis lens:method-family:lstm)", h)
+        self.assertIn("severity 1-3", h)
+        self.assertIn("confirm-assumed (source check on b)", h)          # b has its full text
+
+    def test_a_contradiction_move_needs_a_full_text(self):
+        r = {"result": "conflict", "axes_differ": ["none"], "sides": [{"id": "a#C1", "paper": "a"}]}
+        self.assertTrue(it_collide.gap_hint(self.I, r).startswith("no move open without a full text"))
+        r["sides"].append({"id": "b#C1", "paper": "b"})
+        self.assertIn("cause (source check on b)", it_collide.gap_hint(self.I, r))
+        self.assertIn("severity 1-5", it_collide.gap_hint(self.I, r))
 
 
 class Ranking(unittest.TestCase):

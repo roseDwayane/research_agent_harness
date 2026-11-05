@@ -104,7 +104,9 @@ class Skill:
     def expand(self, cmd: str, subs: Subs, quote: bool = True) -> str:
         """Fill in the placeholders; quote=True for a command line (shlex-quoted values), False for a path or text."""
         values = {"RD": subs.rd, "GEN": subs.gen_dir, "K": subs.gen, "TOPIC": subs.topic, "PY": self.cfg.python,
-                  "SK": self.root, "IDEAS": subs.ideas, "ROUND": subs.round, "DEPTH": self.cfg.depth, **subs.extra}
+                  "SK": self.root, "IDEAS": subs.ideas, "ROUND": subs.round, "DEPTH": self.cfg.depth,
+                  "BUDGET": self.cfg.batch_budget(), "DESC_BODY": f"B_draft_{subs.topic.stem}_descriptive.md" if subs.topic else None,
+                  **subs.extra}
 
         def repl(m: re.Match) -> str:
             v = values.get(m.group(1))

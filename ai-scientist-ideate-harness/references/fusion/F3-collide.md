@@ -51,7 +51,14 @@ text, kind, strength, scope, `overreach`, quote and where, coordinates, paper, y
 metrics, method family, baselines and headline — plus the `equivalence` notes of the concepts involved (band edges that
 differ, a measurement taken at another time). One subagent per batch; it reads this section and its batch file, writes
 `{model, judgements: [{candidate, relations: [...]}]}` to the batch's `answer` path and nothing else, self-checking with
-`collide-check <RD> --answer <file>` (never `collide-merge`). Then `collide-merge` in the main session.
+`collide-check <RD> --answer <file>` (never `collide-merge`). Then `collide-merge` in the main session. A relation's
+sides come from its own candidate's `members` — a batch holds other candidates' members too, and they do not count.
+
+A candidate with `refused_before` was judged last time and refused for the reasons listed there; judge it again and fix
+exactly that — a relation between units of one paper goes (the other relations stay; `independent` when none is left), a
+side that is not one of the candidate's members is replaced by one that is, a result whose sides do not fit takes the
+result the sides fit. `collide-merge` keeps the judgements it accepts and refuses only these; the Unit asks again up to
+three times.
 
 **One judgement per candidate, one or more relations in it.** A relation is `{result, sides: [member ids], axes_differ,
 reason}`:
@@ -79,8 +86,8 @@ only possible reasons. Real pairs differ on several axes; the count does not dec
 (an assumption unit) is related through `untested-shared`, `assumption-challenged`, `assumption-at-stake` or
 `criterion-unmet`; these are the strongest gap sources (confirm-assumed, cause).
 
-A paper in tension with itself (its premise against its own analysis window) is not a collision — every relation joins
-two papers; it is recorded at deconstruction as a not-done unit or an `overreach` note, and B3 may build on it there.
+A paper in tension with itself (its premise against its own analysis window, or two of its own results on two
+configurations) is not a collision — every relation joins two papers; it is recorded at deconstruction as a not-done unit or an `overreach` note, and B3 may build on it there.
 
 A broad construct (one that merges several mechanisms) often yields only `analogy` or `independent`; do not stretch a
 relation to have one, and do not call the merge `incommensurable` unless it hides two different quantities.
@@ -211,10 +218,12 @@ coordinate axes (construct, measure, population, data, split, method_family) and
 - **Novelty** is judged against the shortlist; when it leans on knowledge outside the corpus, say so in `novelty_basis`.
   Zero counter-evidence: look once more over the shortlist (`list-papers`) before trusting it.
 - **Feasibility** is read off the lens: cite the verdicts (`lens:<concept>`) and the topic's own data (`own:<name>`). The
-  weakest cited verdict caps it: yes 5, partial or obtainable 4, no 2 (W08).
+  weakest cited verdict caps it: yes 5, partial or obtainable 4, no 2 (W08). The cap is the rule's, not a judgement:
+  `gaps-set` lowers a feasibility above it to the cap and prints the change.
 - **Every** straight conflict and every premise collision (untested-shared, assumption-challenged, assumption-at-stake,
   criterion-unmet) is either in a gap or set aside in
-  `not_gaps` with a reason (W10).
+  `not_gaps` with a reason (W10); the digest lists their ids above its collisions. `not_gaps` names a collision by its
+  id as written (`X0019`).
 
 `gaps-set <RD> gaps.json` validates, computes each composite (`severity × 0.40 + novelty × 0.30 + feasibility × 0.30`),
 ranks with the tie-break — taken in composite order and grouped while each stays within 0.30 of its group's top (counted
@@ -223,6 +232,11 @@ in hundredths, so exactly 0.30 is a tie), each group ordered contradiction move 
 the table). Gap ids are never reused: an id dropped from the list is retired.
 
 There is no `## Selected for this generation`: the planning block picks a question (reconstruct, B3.5), not a gap.
+
+**From a digest** (the harness, `recon-digest <RD> B3`): under each collision a `gap:` line gives what the rules above
+settle for a gap resting on it - the moves open to it (a contradiction move or `confirm-assumed` only where a paper of
+it has a full text), the severity bound, and for an empty cell the papers on each side of the cell and the feasibility
+cap with its lens basis; above the collisions, the ids W10 asks for. Take them as given; what is left is the judgement - which collisions make a gap, and its text.
 
 Edge cases: only full texts carry `#N` / `#F` units, so recurring not-done and the same future-work call come from them
 alone; abstract papers enter through collisions. Gaps with equal composites are ordered by move class, severity, novelty,

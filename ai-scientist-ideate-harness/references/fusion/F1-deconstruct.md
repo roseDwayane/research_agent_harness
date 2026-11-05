@@ -27,12 +27,13 @@ methods-matrix rows, and its own words for methods, measures, datasets, splits, 
 A full-text paper also gets an eligibility verdict.
 
 ### Inputs
-For paper `<key>`: `step5_full_text/<key>.md` when A6 obtained it (with `step5_full_text/figure/index.json` for numbers
-in tables and plots), otherwise its title and abstract from `step3_shortlist.json`; the protocol's framework, outcomes
+For paper `<key>`: `step5_full_text/<key>.md` when A6 obtained it (with its figure pages for numbers in tables and
+plots: the batch's `figure_index`, that paper's entries of `step5_full_text/figure/index.json`), otherwise its title and abstract from `step3_shortlist.json`; the protocol's framework, outcomes
 and criteria (`step0_session_config.json → protocol`; `pico` on a topic framed before 2026-10-16) with A3's criteria
 amendments (`screening_scores.json`; an eligibility verdict reads the criteria as amended). Nothing else: not
 another paper's record or note, not `knowledge/`, not `gen_*`. The batch file `decon-plan` writes holds all of it.
 
+<a id="a7d-method"></a>
 ### Method
 
 **Basis.** A paper with a full text is deconstructed from the full text (`basis: full-text`); every other paper from its
@@ -43,8 +44,19 @@ the abstract, the last paragraph of the introduction (contributions), the method
 paragraphs, the results tables and their captions, then limitations / discussion / future work in full; `grep -n` the
 protocol's outcome terms to catch what the skim missed; then the parts only the experiment rows need (statistics, compute,
 code and data availability, ablations, how thresholds were chosen). A number in a table or plot — or in a table the
-conversion scrambled — comes from the page image (`figure/index.json` names the file), cited as `[Table III, page
+conversion scrambled — comes from the page image (the batch's `figure_index` names the file), cited as `[Table III, page
 image]`. One pass: the experiment rows are written now, not in a second reading.
+
+**An excerpt.** The reader's copy (`knowledge/_work/A7D/text/<key>.md`) never holds the reference list. For a worker
+given everything in one prompt (`decon-plan --max-chars`), a long paper is an excerpt made by code: it opens with
+`[an excerpt of a paper of N characters ...]`, the back matter is left out, and every section keeps its beginning
+(`[... N characters left out here by decon-plan ...]` marks each cut). Write the record from what the excerpt shows:
+every kept line is the paper's own words, so quote it as usual, but never across a cut mark; a field the excerpt does
+not show is `(TBD)`, not a guess from the title.
+
+**Refused before.** A paper whose last answer was refused carries `refused_before`: the reasons, one per unit. Fix
+exactly those. Where a reason names "the nearest words in the source", quote those words as they stand - even when the
+conversion garbled them (`solutionof`): the check compares letters with the source, not with what the sentence meant.
 
 **Eligibility** (`eligibility`):
 - `eligible` — read in full and inside the protocol.
@@ -172,6 +184,33 @@ novices" is two population terms — the alignment step maps a word to one conce
 An ineligible answer keeps `summary` (`(TBD)` lines are fine) and has `"units": [], "experiments": []`, with
 `eligibility: {"verdict": "ineligible", "criteria": ["EX1"], "reason": "…"}`.
 
+<a id="a7d-abstract"></a>
+### Abstract-only records (the short brief)
+
+A batch of abstract-only papers (no full text) is read with this section alone. For each paper of the batch write
+its record from its **title and abstract only**:
+
+- **`eligibility`**: `{"verdict": "abstract-only", "reason": "no full text; deconstructed from title and abstract"}`.
+- **`summary`**: `problem`, `method`, `data`, `metrics`, `headline`, `builds_on` — one line each, `(TBD)` when the
+  abstract does not say (an abstract rarely names what it builds on).
+- **`units`**: 1–3 **claims** — the main findings the abstract states, C1 first (the headline result, not the closing
+  implication). Each claim: `text` (your one line), `strength` with the abstract's own verb (`causes` · `shows` ·
+  `suggests` · `may` · `correlates`; "demonstrates / improves / finds" → `shows`, "may / could" → `may`, "is associated
+  with" → `correlates`), `scope` `{population, data, conditions}` as the abstract states them (`(TBD)` for a part it
+  does not state, not all three - unless the paper has no abstract: a title alone may leave all three `(TBD)`),
+  `where: "abstract"` and a `quote` of 4–60 consecutive words copied from the title or
+  abstract (checked letter by letter: copy, never paraphrase; a refused quote's `refused_before` reason may name "the
+  nearest words in the source" - quote those as they stand). An assumption, limitation or future-work unit only when
+  the abstract states one, quoted the same way; never a `not-done` unit from an abstract.
+- **`experiments`**: exactly **one** row: `role`, `method_family` (short kebab-case names), `split`, `data`
+  (`[{name, n, modality, preproc}]`), `baselines`, `metrics`, `stats`, `headline`, `not_done` — what the abstract
+  says, `(TBD)` (or `["(TBD)"]` for a list) for the rest. Never `(NR)` or `(NA)`: both need the full text.
+- **`terms`**: the paper's own words for its methods, measures, datasets, splits, populations — `{term, kind}`, kind one
+  of method · measure · dataset · split · population · construct · paradigm; one term per thing.
+
+Never use another paper or what you know about the work from elsewhere: the record is this abstract, taken apart.
+
+<a id="a7d-edge"></a>
 ### Edge cases (from the golf acceptance run)
 - **No abstract** (title only): one claim at most, quoted from the title, strength `may` or `suggests`; `summary.problem`
   says "(no abstract)".
@@ -238,7 +277,10 @@ every eligible full-text record has a note equal to its rendering and no other r
 more than three claims from an abstract (D10), no terms (D14), a strong verb on a hedging quote (D17).
 
 ### When something fails
-A refused answer is not written; `decon-merge` exits 1 and lists the problems per paper — re-dispatch those papers. A
+A refused answer is not written; `decon-merge` exits 1 and lists the problems per paper — re-dispatch those papers. The
+last round's merge (`decon-merge --drop-unquoted`) leaves out a unit whose quote is still not the source's words, names
+it in the record's `dropped_units` and raises the caveat `units-dropped`, instead of leaving the paper without a record;
+a paper with no claim left is still refused. A garbled conversion is better replaced (PMC's text: `pmc-text`). A
 full text that changes (a better conversion, a hand-fetched PDF) makes the record stale (D11); `decon-plan` lists it again
 and the new record is written with the old one's hash in `history`. A current record is replaced only through
 `decon-merge --revise "<why>"`. A knowledge base with hand-written notes and no `knowledge/decon/` is frozen: `decon-merge`

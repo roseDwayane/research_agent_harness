@@ -44,6 +44,16 @@ groups (`agree` and `boundary`).
 - **Premise collisions** (untested-shared, assumption-challenged, assumption-at-stake, criterion-unmet) have no card type
   of their own: they live in the Planes' Q3 / Q5, the Body's Q5, patches (`depends_on`, `caused_by`) and the gap list.
 
+**In batches** (the harness): `recon-batches <RD>` settles what the rules settle from the records and writes one batch
+per candidate they let through — a findings group of ≥ 2 papers not on abstracts only (a Point), a debate of ≥ 2 sides not
+on abstracts only (a card when it rests on ≥ 3 units or collisions, otherwise the model judges whether it is a major axis),
+an evolution chain of ≥ 3 papers or of 2 whose later paper builds on the earlier (a card), an analogy (the model judges
+whether it is a major cross-theme axis) — each with its collisions' sides, quotes and reasons, the units' texts, the papers
+and the concept Points on them, and a schema; the rest become patch lines. The answer is a Point's name, claim type and
+six fields, or a card's title, endpoints and sections, or `patch` with why it is no card. `recon-merge <RD>` makes them
+cards: the findings Points (origin `collide`, a card of their own, with their collisions and papers) for `cards-merge`, the
+Line files (id, relation, collisions and provenance written by code) and `frontmatter_patches.md`.
+
 `recon-check --unit A7.R1`: Lines cite current collisions of the right result (J01); debates have two sides and not only
 abstracts (J02); findings Points rest on agree / boundary collisions of ≥ 2 papers (J03).
 
@@ -70,6 +80,13 @@ existing Points. The five questions:
 Then `build-cards` (it writes the paper–theme table now that Planes exist) and `build-methods` again (the family × theme
 table follows the Planes).
 
+**From a digest** (the harness, `recon-digest <RD> A7.R2`, which also writes the answer's schema): the answer is the
+Planes (`n, name, slug, member_points, q1`–`q5`) and, apart from them, `assign` - every evidence paper's Plane `n`, each
+paper required - and `methodology`, every evidence paper's class (the six of research-cycle.md section 2). Q3 and Q5
+are lists chosen from the ids that count there (Q3: the Lines and collisions; Q5: debate Lines, conflict, boundary and
+premise collisions, `#L` / `#F` units). `cards-merge --planes` builds each Plane's `member_papers` and `source_files` from
+`assign` and joins Q3 and Q5 into their lines of ids (`(TBD)` when empty); the classes become the cards' `methodology` map.
+
 `recon-check --unit A7.R2`: every evidence paper in exactly one Plane, member Points exist (J05); Q3 and Q5 cite existing
 ids or say `(TBD)` (J06); every `conflict`, `boundary` and premise collision lands in a Line, a Plane's Q3 / Q5, the
 Body's Q3 / Q5 — the gap list does not count: the field's picture must hold them (J04). A Plane's Q5 cites only `#L` /
@@ -91,10 +108,14 @@ frontmatter (no generation, no angle; one key per line, or several on one line a
 `## Theme` section per Plane (J08). **Consensus** cites `agree` / `boundary` collisions or
 findings Points; **Debates** cites `conflict` / `boundary` collisions or debate Lines; Key results, "A. Experimental
 designs" and "B. Reported numbers" come from matrix rows (`exp_id`s) as before. It adds nothing the collisions did not
-find — where there is none, `(TBD)`. Its readers are the planning block (designs, expected magnitudes) and the writeup
+find — where there is none, `(TBD)`; the digest (`recon-digest <RD> B2`) lists under each Plane the ids its Theme's
+Consensus and Debates may cite (the collisions touching the Plane's papers, its findings Points, its debate Lines), and
+`(TBD)` where there are none — an `independent` collision or an `align` Point is not a finding. Its readers are the planning block (designs, expected magnitudes) and the writeup
 (Related Work). The paper–theme mapping is the table of the template (the archived layout); a pointer to
 `knowledge/_MANIFEST.md` (generated) may follow it but does not replace it. The archived engine's front-matter keys
 (`session_id`, `step: 6`, `themes`), methodology legend and cross-theme subsections are part of the template too.
+`sota-tables <RD>` writes the methodology legend and the paper–theme mapping after the review is written (one row
+per paper the review cites: its Plane, its class from A7.R2, whether it bridges themes) - the model writes the rest.
 `recon-check --unit B2` (J08).
 
 <a id="b35"></a>
@@ -197,6 +218,23 @@ move (Y01), the eight sections (Y02), common ground cited (Y03), condition = the
 (Y05), screens complete, ready means passed, abandoned has a reason, the settled screen weighs each prefilled collision (Y06),
 ≤ 2 per gap with different axes (Y07), the data screen reads the lens (Y10), section 9's targets (Y11), rival accounts (Y12)
 and magnitudes (Y13).
+
+**In batches** (the harness, a worker that cannot run commands): `questions-plan <RD>` writes one batch per question to
+write — a question for each ranked gap still without one, and each question the checks refused (Y01–Y10), again: its file
+moves to `knowledge/_work/B35/previous/` and the batch names it as `previous`, with `refused_before` (why). A batch holds
+`frontmatter` (the values to copy), `must_cite` (what sections 1, 2 and 6 have to cite, worked out by code: the common
+ground on the gap's papers, the gap's own collisions, each prefilled collision to weigh or the sentence for none, the gap's
+lens ids), the gap, its prefill (with each collision's sides and quotes), the `raw` lookup run by code (the names of the
+constructs and measures on the gap's primary collision, each searched in `step2_raw_papers.json`'s titles and abstracts,
+spelling variants folded: the hit counts, the papers holding all of them), collisions, lens verdicts and matrix rows. An
+answer that writes no file is asked once more in its conversation — `(TBD)` where the batch lacks something, said in the
+note — before the batch is dispatched again. `questions-handovers <RD>` writes a section 9
+batch for each ready question without one and each question whose section 9 was refused (Y11–Y13), with its candidates and
+a schema of its choices — a target is written as `{collision, unit, also?, holds}` (the unit on that collision's losing or
+untested side: a premise collision's holder, either side of a conflict or boundary; `also` what it bundles) or
+`{overreach, also?, holds}`, and texts and lists have a ceiling; `questions-attach <RD>` puts each answer into its question
+under the section's heading, turns each target into `claim_units` + `weakness`, and writes the records' copies itself — each target's `papers`, `strength`, `evidence_level`, its weakness's `type` and `axes`, and
+the ids T1…, RA1…. The Unit runs these three up to three times, then `unit-done`.
 
 **More questions later** (PLAN F-D15): when the planning block has used every ready question, write questions for the next
 ranked gaps (new ids only) and re-index; if the gaps are used up too, say so — a broader search on a copy of the topic is

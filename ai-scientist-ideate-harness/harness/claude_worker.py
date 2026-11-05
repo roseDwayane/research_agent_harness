@@ -27,6 +27,26 @@ SHIMS = {"ideate-tool": "ideate_tools.py", "ideate-bridge": "mcp_bridge.py"}
 BASE_TOOLS = ["Read", "Write", "Edit", "Glob", "Grep"]
 _HEADING = re.compile(r"^(#+)\s")
 _ANCHOR = re.compile(r'^<a id="[^"]+"></a>\s*$')
+_FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
+
+
+def _headings(lines: list[str]) -> list[re.Match | None]:
+    """_HEADING per line, None inside a fenced code block: a `# comment` in a bash block, or a heading in a ~~~markdown
+    template, is not a heading of the rules (it cut A1.q's, A3's, A7.D's and B3.5's rules short). A fence closes only
+    on its own kind of marker, so a ``` block inside a ~~~ template stays inside."""
+    out, fence = [], None
+    for ln in lines:
+        m = _FENCE.match(ln)
+        if m and fence is None:
+            fence = m.group(1)
+        elif m and fence is not None and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) \
+                and not ln.strip()[len(m.group(1)):].strip():
+            fence = None
+        elif fence is None:
+            out.append(_HEADING.match(ln))
+            continue
+        out.append(None)
+    return out
 
 SHELL_RULES = """\
 You are one Unit (a small step) of the ai-scientist ideate pipeline, run by a code conductor. Rules of the shell:
@@ -74,17 +94,17 @@ def rules_text(root: Path, anchor: str) -> str:
     start = next((i for i, ln in enumerate(lines) if f'id="{aid}"' in ln), None)
     if start is None:
         return text                               # an anchor that moved: the whole file is still the rule
+    hd = _headings(lines)
     if not _ANCHOR.match(lines[start]):           # an anchor inside a paragraph: up to the next anchor or heading
-        end = next((i for i in range(start + 1, len(lines)) if 'id="' in lines[i] or _HEADING.match(lines[i])),
-                   len(lines))
+        end = next((i for i in range(start + 1, len(lines)) if 'id="' in lines[i] or hd[i]), len(lines))
         return "\n".join(lines[start:end]).strip()
-    head = next((i for i in range(start, len(lines)) if _HEADING.match(lines[i])), None)
+    head = next((i for i in range(start, len(lines)) if hd[i]), None)
     if head is None:
         return "\n".join(lines[start + 1:]).strip()
-    level = len(_HEADING.match(lines[head]).group(1))
+    level = len(hd[head].group(1))
     end = len(lines)
     for i in range(head + 1, len(lines)):
-        m = _HEADING.match(lines[i])
+        m = hd[i]
         if m and len(m.group(1)) <= level:
             end = i - 1 if i - 1 > head and _ANCHOR.match(lines[i - 1]) else i   # the next section's own anchor
             break
@@ -98,7 +118,9 @@ def system_prompt(root: Path, unit: dict, card: dict | None, rules: list[str], c
             parts.append(f"Purpose: {card['purpose']}\n")
         if card.get("done_when"):
             dw = card["done_when"]
-            parts.append("Done when: " + ("; ".join(map(str, dw)) if isinstance(dw, list) else str(dw)) + "\n")
+            # a card's entries are {check, codes, negative_fixture}: the check is what the worker needs, not the dict
+            items = [d.get("check") or str(d) if isinstance(d, dict) else str(d) for d in dw] if isinstance(dw, list) else [str(dw)]
+            parts.append("Done when: " + "; ".join(items) + "\n")
         if card.get("forbidden"):
             parts.append("Never read or use: " + "; ".join(map(str, card["forbidden"])) + "\n")
     if commands:

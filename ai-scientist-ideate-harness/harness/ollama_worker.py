@@ -7,7 +7,9 @@ A local model gets no tools. The conductor does what Claude Code's tools did:
     output is put into the prompt; a state-changing command the task needs the worker to run itself (questions-prefill,
     frame query-revise, consume ...) cannot be, and the worker refuses the step at once instead of pretending;
   - the model answers with ONE JSON object - {"files": [{"path", "content"}], "note"} - decoded under Ollama's
-    `format` (a JSON schema: grammar-constrained, far more reliable for a local model than tool calls);
+    `format` (a JSON schema: grammar-constrained, far more reliable for a local model than tool calls); a step whose
+    recipe names a `schema` for its one file gets {"answer": <that schema>, "note"} instead, so the file's own
+    structure is decoded under the grammar too, not written as a string inside a string (the archived engine's way);
   - the conductor writes only the files the scope allows (the step's `writes`, the Unit's contract outputs, scratch
     folders), and checks a .json / .jsonl file parses before writing it.
 
@@ -25,14 +27,16 @@ prompt is estimated before it is sent, and a reply whose prompt_eval_count reach
 from __future__ import annotations
 
 import fnmatch
+import hashlib
 import json
 import os
 import re
+import threading
 import time
 import urllib.error
 import urllib.request
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from . import __version__
@@ -72,8 +76,9 @@ OLLAMA_RULES = """\
 You are one Unit (a small step) of the ai-scientist ideate pipeline, run by a code conductor. Rules:
 - Do exactly the task below, following the Unit's rules (appended). You cannot open files or run commands: every file
   you may read, and the output of the lookups the conductor ran for you, is included in the task message.
-- Answer with ONE JSON object: {"files": [{"path": "...", "content": "..."}], "note": "..."}. Each file's content is
-  its complete new text (not a diff). Write only the files the task names or allows; a JSON file must be valid JSON.
+- Answer with ONE JSON object, in the shape the task's "# Your answer" section gives. Where it is {"files": [...]},
+  each file's content is its complete new text (not a diff); write only the files the task names or allows; a JSON
+  file must be valid JSON.
 - Knowledge comes from the files given, never from memory: a field you cannot support from a source is (TBD).
 - No human is available: decide by the rules; where a rule leaves a choice, take the conservative one and say why
   in "note". If you cannot do the task with what you were given, write no file and say why in "note".
@@ -81,6 +86,22 @@ You are one Unit (a small step) of the ai-scientist ideate pipeline, run by a co
 """
 
 _SESSIONS: dict[str, list[dict]] = {}
+_WROTE: dict[str, dict[str, str]] = {}           # session -> {file: sha256 of what the model wrote there}
+
+
+def _sha(p: Path) -> str:
+    return hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() else ""
+
+
+SUPERSEDED = "(an earlier answer - the files it wrote were replaced by the answer further down)"
+
+
+def _latest_answer_only(history: list[dict]) -> list[dict]:
+    """A resumed history with every answer but the last cut to one line: each answer writes the whole files again, so
+    the earlier ones are superseded, and keeping them grew the prompt by a file per revision (a 12k-token gap list
+    took a B3 revision past num_ctx). The requests and findings stay: they say what was fixed."""
+    last = max((i for i, m in enumerate(history) if m["role"] == "assistant"), default=-1)
+    return [{**m, "content": SUPERSEDED} if m["role"] == "assistant" and i != last else m for i, m in enumerate(history)]
 
 
 @dataclass
@@ -92,6 +113,7 @@ class FileScope:
     globs: list[str] = field(default_factory=list)        # base-relative patterns it may also write
     forbid: list[Path] = field(default_factory=list)      # never shown (a scorer's blinding)
     lookups: list[tuple[str, str]] = field(default_factory=list)     # (command, output) the conductor ran
+    schema: dict | None = None                            # the one write's JSON schema: the answer is that object
     unavailable: list[str] = field(default_factory=list)  # commands the task asks the worker itself to run
     max_file_chars: int = 60000
 
@@ -146,8 +168,12 @@ def _files_block(scope: FileScope, writes_only: bool = False) -> str:
                 add(f"{label.rstrip('/')}/{f.name}", f)
         else:
             add(label, path)
-    for w in scope.writes:                                    # a revision starts from what is there
-        add(str(w), w, " (current content - revise it, write it back whole)")
+    # a revision (writes_only: the conversation goes on) starts from what is there; on a first call the file was left
+    # by an earlier run - context, not an answer to keep (a model shown "revise it" keeps an earlier run's mistakes)
+    note = " (current content - revise it, write it back whole)" if writes_only else \
+        " (left by an earlier run - write it anew from the inputs; keep only what they still support)"
+    for w in scope.writes:
+        add(str(w), w, note)
     return "\n\n".join(out)
 
 
@@ -158,6 +184,15 @@ def build_message(task: str, scope: FileScope) -> str:
         parts += ["# Files you can read", files]
     if scope.lookups:
         parts += ["# Lookups the conductor ran for you"] + [f"$ {c}\n{o.strip()}" for c, o in scope.lookups]
+    if scope.schema is not None:
+        if len(scope.writes) == 1:
+            parts += ["# Your answer", f"One JSON object: {{\"answer\": <the content of {scope.writes[0]}>, \"note\"}}. "
+                      "The conductor writes `answer` to that file."]
+        else:
+            parts += ["# Your answer", "One JSON object: {\"answer\": {<name>: <that file's content>, ...}, \"note\"}, "
+                      "one entry per file, named by its file name without the extension: "
+                      + ", ".join(f"{w.stem} -> {w}" for w in scope.writes) + ". The conductor writes each file."]
+        return "\n\n".join(parts)
     allowed = [str(w) for w in scope.writes] + [f"{scope.base}/{g}" for g in scope.globs]
     parts += ["# Your answer", "One JSON object: {\"files\": [{\"path\", \"content\"}], \"note\"}. You may write only: "
               + "; ".join(allowed) + "."]
@@ -172,6 +207,17 @@ def ollama_system(system: str) -> str:
 
 
 # ------------------------------------------------------------------------------------------------------- http
+STREAM_IDLE_S = 900.0               # the longest silence while streaming: a prompt being read (prefill) sends nothing
+
+
+class StreamTimeout(TimeoutError):
+    """A call that ran out of time, with what the model had written by then (logged: a runaway answer shows)."""
+
+    def __init__(self, msg: str, partial: str = ""):
+        super().__init__(msg)
+        self.partial = partial
+
+
 def _post(cfg: HarnessConfig, body: dict, timeout: float) -> tuple[int, dict | None, str]:
     url = cfg.ollama_url.rstrip("/") + "/api/chat"
     # a named client: a proxy in front of the server (Cloudflare's "error code: 1010") refuses Python-urllib's default
@@ -180,15 +226,87 @@ def _post(cfg: HarnessConfig, body: dict, timeout: float) -> tuple[int, dict | N
     if key:
         headers["Authorization"] = f"Bearer {key}"
     req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST")
+    t0 = time.time()
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read().decode("utf-8", errors="replace")
-            return resp.status, json.loads(raw), raw
+        # streamed (NDJSON, one chunk per line): bytes flow while the model writes, so a proxy in front of the server
+        # never sees an idle request (Cloudflare closes one after 100 s: "error code: 524"); a server that answers
+        # with one JSON object (stream off, or a test fake) is the same loop with one line
+        with urllib.request.urlopen(req, timeout=min(timeout, STREAM_IDLE_S)) as resp:
+            parts, thinking, last = [], [], None
+            try:
+                for line in resp:
+                    if not line.strip():
+                        continue
+                    chunk = json.loads(line.decode("utf-8", errors="replace"))
+                    if chunk.get("error"):
+                        return 500, None, str(chunk["error"])
+                    msg = chunk.get("message") or {}
+                    parts.append(str(msg.get("content") or ""))
+                    thinking.append(str(msg.get("thinking") or ""))
+                    last = chunk
+                    if time.time() - t0 > timeout:
+                        raise TimeoutError(f"no complete answer within {timeout}s")
+            except TimeoutError as e:                   # our limit, or a read that waited STREAM_IDLE_S
+                raise StreamTimeout(str(e), "".join(parts)) from e
+            if last is None or not last.get("done"):     # cut off mid-answer: a dropped connection, not an answer
+                return 502, None, "the stream ended before the answer was complete (connection dropped)"
+            data = dict(last, message={"role": "assistant", "content": "".join(parts), "thinking": "".join(thinking)})
+            return resp.status, data, ""
     except urllib.error.HTTPError as e:
         raw = e.read().decode("utf-8", errors="replace") if e.fp else ""
         return e.code, None, raw
     except ValueError as e:
         return 200, None, f"the server's answer is not JSON: {e}"
+
+
+IDLE_PROBE_S, IDLE_PAUSE_S, IDLE_ROUNDS = 60.0, 30.0, 40   # wait_idle: at most ~1 h for a busy server to drain
+WARM_CHARS = 20000            # a longer prompt is read into the server's cache (prewarm) before the call is sent
+_LAST_MESSAGES: dict[int, list] = {}                       # thread -> the messages of its last call (the probe's)
+
+
+def server_idle(cfg: HarnessConfig) -> bool:
+    """Is the server free to take a request now? A one-token answer within IDLE_PROBE_S says so. Behind a proxy a
+    dropped request is not cancelled - the server still writes the whole answer - and a re-send meanwhile only queues
+    one more behind it (a cheap probe queues instead). The probe repeats this thread's last prompt: a server with one
+    slot keeps the cache of the last prompt it read, so the probe either finds it cached or reads it into the cache -
+    and the re-send then starts writing at once instead of reading a long prompt past a proxy's limit again."""
+    messages = _LAST_MESSAGES.get(threading.get_ident()) or [{"role": "user", "content": "ok"}]
+    body = {"model": cfg.model, "messages": messages, "stream": False,
+            "options": {"num_ctx": int(cfg.num_ctx), "num_predict": 1}}       # num_ctx as loaded: no reload
+    if cfg.think is not None:
+        body["think"] = bool(cfg.think)                  # as the call sends it: the same prompt, the same cache
+    if cfg.ollama_keep_alive:
+        body["keep_alive"] = cfg.ollama_keep_alive
+    try:
+        status, data, _ = _post(cfg, body, IDLE_PROBE_S)
+    except (TimeoutError, urllib.error.URLError, ConnectionError, OSError):
+        return False
+    return status == 200 and data is not None
+
+
+def prewarm(cfg: HarnessConfig, messages: list[dict], say=None) -> None:
+    """Read a long prompt into the server's cache with a one-token call before the call itself. Behind a proxy that
+    closes a request whose first byte is late (Cloudflare: 100 s), a long prompt is otherwise dropped, and the server
+    writes its whole answer for nobody before the re-send; a dropped one-token call costs only the prompt's reading,
+    which the server finishes - the call then finds the prompt cached and starts writing at once. A prompt already
+    cached answers the probe in about a second."""
+    _LAST_MESSAGES[threading.get_ident()] = list(messages)
+    if server_idle(cfg):
+        return
+    if say:
+        say("reading the long prompt into the server's cache before the call (a proxy would drop it otherwise)")
+    wait_idle(cfg)
+
+
+def wait_idle(cfg: HarnessConfig, say=None) -> bool:
+    """Wait, probing, until the server is free (True) or IDLE_ROUNDS probes found it busy (False)."""
+    for i in range(IDLE_ROUNDS):
+        if server_idle(cfg):
+            return True
+        if i == 0 and say:
+            say("the server is still busy (most often with a dropped answer it is still writing); waiting for it")
+        time.sleep(IDLE_PAUSE_S)
+    return False
 
 
 def _http_failure(status: int, raw: str, url: str) -> tuple[str, str]:
@@ -204,20 +322,34 @@ def _http_failure(status: int, raw: str, url: str) -> tuple[str, str]:
     return "tool_invocation", text
 
 
-def chat(cfg: HarnessConfig, messages: list[dict], timeout: float) -> tuple[WorkerResult, str]:
+def answer_format(scope: FileScope) -> dict:
+    """The `format` an answer is decoded under: the files envelope, or {answer: <the step's schema>, note}."""
+    if scope.schema is None:
+        return RESPONSE_SCHEMA
+    return {"type": "object", "properties": {"answer": scope.schema, "note": {"type": "string"}},
+            "required": ["answer", "note"]}
+
+
+def chat(cfg: HarnessConfig, messages: list[dict], timeout: float, fmt: dict | None = None) -> tuple[WorkerResult, str]:
     """One /api/chat call -> (result, the assistant's raw content)."""
-    body = {"model": cfg.model, "messages": messages, "format": RESPONSE_SCHEMA, "stream": False,
+    body = {"model": cfg.model, "messages": messages, "format": fmt or RESPONSE_SCHEMA, "stream": True,
             "options": {"num_ctx": int(cfg.num_ctx), "num_predict": int(cfg.num_predict)}}
     if cfg.think is not None:
         body["think"] = bool(cfg.think)
+    if cfg.ollama_keep_alive:
+        body["keep_alive"] = cfg.ollama_keep_alive
     if cfg.temperature is not None:
         body["options"]["temperature"] = float(cfg.temperature)
     t0 = time.time()
     try:
+        _LAST_MESSAGES[threading.get_ident()] = list(messages)
         status, data, raw = _post(cfg, body, timeout)
-    except TimeoutError:
-        return WorkerResult(False, error=f"no answer from {cfg.ollama_url} within {timeout}s", error_category="timeout",
-                            duration_ms=int((time.time() - t0) * 1000)), ""
+    except TimeoutError as e:                    # our own limit, or a socket read that waited STREAM_IDLE_S
+        took = time.time() - t0
+        why = f"within {timeout:.0f}s" if took >= timeout else \
+            f"- silent for {STREAM_IDLE_S:.0f}s after {took:.0f}s (busy, reloading the model, or the connection stalled)"
+        return WorkerResult(False, error=f"no answer from {cfg.ollama_url} {why}", error_category="timeout",
+                            duration_ms=int(took * 1000)), getattr(e, "partial", "")
     except (urllib.error.URLError, ConnectionError, OSError) as e:
         why = getattr(e, "reason", e)
         cat = "timeout" if "timed out" in str(why) else "external_service"
@@ -246,6 +378,24 @@ def _apply(scope: FileScope, content: str) -> tuple[list[Path], list[str], str]:
         answer = json.loads(content)
     except ValueError as e:
         return [], [f"your answer is not one JSON object ({e})"], ""
+    if scope.schema is not None:                       # the answer is the file's object itself
+        if not isinstance(answer, dict) or not isinstance(answer.get("answer"), dict) or not scope.writes:
+            return [], ['your answer needs "answer": the object the task names, and "note"'], ""
+        ans = answer["answer"]
+        if len(scope.writes) == 1:                     # one file: the object, or keyed by the file's name (a batch
+            w = scope.writes[0]                        # schema keyed by its items, with one item in it)
+            objs = {w: ans[w.stem] if set(ans) == {w.stem} and isinstance(ans[w.stem], dict) else ans}
+        else:
+            objs = {w: ans.get(w.stem) for w in scope.writes}
+        written, problems = [], []
+        for dest, obj in objs.items():
+            if not isinstance(obj, dict):
+                problems.append(f"answer.{dest.stem} is missing: one object per file")
+                continue
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(json.dumps(obj, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+            written.append(dest)
+        return written, problems, str(answer.get("note") or "")
     if not isinstance(answer, dict) or not isinstance(answer.get("files"), list):
         return [], ['your answer needs "files": a list of {"path", "content"}'], ""
     written, problems = [], []
@@ -285,7 +435,7 @@ def _parses(line: str) -> bool:
 
 def run_worker(cfg: HarnessConfig, *, task: str, system: str, cwd: Path, scope: FileScope | None = None,
                resume: str | None = None, timeout: float | None = None, log_dir: Path | None = None,
-               label: str = "worker", **_claude_only) -> WorkerResult:
+               label: str = "worker", say=None, **_claude_only) -> WorkerResult:
     """One Ollama worker turn (and, for an answer the conductor cannot use, one correction turn in the same
     conversation). The claude-only arguments (allowed tools, add_dirs, budget_usd, bin_dir) do not apply."""
     if not cfg.model:
@@ -296,12 +446,16 @@ def run_worker(cfg: HarnessConfig, *, task: str, system: str, cwd: Path, scope: 
         return WorkerResult(False, error="this step needs a worker that runs skill commands itself ("
                             + ", ".join(scope.unavailable) + "); the Ollama worker cannot run commands - the recipe "
                             "has to run them as steps of its own", error_category="environment")
-    if resume:                                            # the history has the files; show what is written now
-        current = _files_block(scope, writes_only=True)
-        message = task + ("\n\n# The files as they are now\n\n" + current if current else "")
+    if resume:      # the history has the model's own answer: show a file again only where a tool changed it since
+        wrote = _WROTE.get(resume, {})                    # (re-reading its own answer made a revision the longest
+        changed = [w for w in scope.writes if wrote.get(str(w.resolve())) != _sha(w)]     # prompt a Unit sends)
+        current = _files_block(replace(scope, writes=changed), writes_only=True)
+        message = task + ("\n\n# The files as they are now\n\n" + current if current else
+                          "\n\n(The files are as you wrote them.)" if scope.writes else "")
     else:
         message = build_message(task, scope)
-    history = list(_SESSIONS.get(resume, [])) if resume else [{"role": "system", "content": ollama_system(system)}]
+    history = _latest_answer_only(_SESSIONS.get(resume, [])) if resume else \
+        [{"role": "system", "content": ollama_system(system)}]
     history.append({"role": "user", "content": message})
     est = int(sum(len(m["content"]) for m in history) / CHARS_PER_TOKEN)
     if est > int(cfg.num_ctx) * 0.95:
@@ -312,7 +466,9 @@ def run_worker(cfg: HarnessConfig, *, task: str, system: str, cwd: Path, scope: 
     total = WorkerResult(True, session_id=resume or uuid.uuid4().hex)
     note, written = "", []
     for turn in (1, 2):                                       # the answer, and one correction of an unusable one
-        res, content = chat(cfg, history, limit)
+        if sum(len(m["content"]) for m in history) > WARM_CHARS and not cfg.dry_run:
+            prewarm(cfg, history, say)
+        res, content = chat(cfg, history, limit, answer_format(scope))
         total.tokens_in += res.tokens_in
         total.tokens_out += res.tokens_out
         total.duration_ms += res.duration_ms
@@ -320,14 +476,17 @@ def run_worker(cfg: HarnessConfig, *, task: str, system: str, cwd: Path, scope: 
         if log_dir is not None:
             log_dir.mkdir(parents=True, exist_ok=True)
             (log_dir / f"{label}.ollama.{turn}.json").write_text(json.dumps(
-                {"model": cfg.model, "request_tail": history[-1]["content"][-4000:], "answer": content,
-                 "error": res.error}, ensure_ascii=False, indent=1), encoding="utf-8")
+                {"model": cfg.model, "request_head": history[-1]["content"][:6000],
+                 "request_tail": history[-1]["content"][-4000:], "answer": content, "error": res.error},
+                ensure_ascii=False, indent=1), encoding="utf-8")
         if not res.ok:
             total.ok, total.error, total.error_category = False, res.error, res.error_category
             break
         history.append({"role": "assistant", "content": content})
         got, problems, note = _apply(scope, content)
         written += got
+        for w in got:
+            _WROTE.setdefault(total.session_id, {})[str(w.resolve())] = _sha(w)
         if not problems:
             break
         if turn == 2:

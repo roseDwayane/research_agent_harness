@@ -57,6 +57,7 @@ Five rules hold everywhere in this file:
 
 ---
 
+<a id="qc2"></a>
 ## 2. Problem and question — `gen_{k}/step7b_problem.md`
 
 Written after B3 has selected the `(gap, angle)` and before B4. Its job is to settle that the question is worth asking

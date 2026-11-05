@@ -25,6 +25,7 @@ import tempfile
 import types
 import unittest
 from pathlib import Path
+from unittest import mock
 from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parent
@@ -154,7 +155,8 @@ def build(tmp: Path) -> Path:
         "protocol": {"framework": {"name": "PICO", "slots": [{"slot": "population", "value": "adults"}]}}}, indent=2))
     papers = [{"id": pid, "citation_key": k, "title": f"Paper {k}", "doi": doi, "arxiv_id": ax, "year": 2020,
                "screening": {"composite": comp, "tier": tier}} for pid, k, comp, tier, doi, ax in PAPERS]
-    (rd / "step3_shortlist.json").write_text(json.dumps({"papers": papers, "summary": {"included": len(papers)}}, indent=2))
+    # through write_json, as A3 leaves it (with the archived engine's fields): A6.c's write-back changes access_level only
+    ideate_tools.write_json(rd / "step3_shortlist.json", {"papers": papers, "summary": {"included": len(papers)}})
     (rd / "step4_citation_keys.jsonl").write_text("".join(json.dumps({"key": k, "id": pid, "authors_basis": "openalex",
                                                                       "n_authors": 1}) + "\n" for pid, k, *_ in PAPERS))
     (rd / "step2_raw_papers.json").write_text(json.dumps({"papers": [{"id": pid, "title": f"Paper {k}", "year": 2020,
@@ -417,6 +419,57 @@ class TestInterrupt(Fixture):
             (rd / "step5_full_text" / "kim2022.md").write_bytes(b"# kim2022\r\nFigure 1: A test figure of kim2022\r\n")
 
         self.interrupt("A6.c", prepare, lambda rd: ideate_tools.cmd_fulltext_status(ns(rd)))
+
+
+JATS = """<?xml version="1.0"?><pmc-articleset><article><front><article-meta><title-group>
+<article-title>Artifact removal in EEG</article-title></title-group><abstract><p>We remove artifacts.</p></abstract>
+</article-meta></front><body><sec><title>Introduction</title><p>EEG is noisy. """ + "Long sentence. " * 400 + """</p></sec>
+<sec><title>Methods</title><p>We used ICA <table-wrap><label>Table 1</label><caption><p>Datasets</p></caption><table>
+<tr><th>Name</th><th>N</th></tr><tr><td>DS1</td><td>20</td></tr></table></table-wrap> on every subject.</p></sec></body>
+<back><ref-list><ref>Smith J. A cited work. 2020.</ref></ref-list></back><floats-group><fig><label>Figure 1</label>
+<caption><p>The pipeline</p></caption></fig></floats-group></article></pmc-articleset>"""
+
+
+class TestPmcText(unittest.TestCase):
+    def test_jats_becomes_markdown_with_the_tables_cells(self):
+        md = it_fulltext.pmc_xml_to_markdown(JATS)
+        self.assertTrue(md.startswith("# Artifact removal in EEG\n"))
+        for line in ("## Abstract", "## Introduction", "## Methods", "We used ICA on every subject.",
+                     "> **Table 1: Datasets**", "| Name | N |", "| DS1 | 20 |", "> **Figure 1: The pipeline**"):
+            self.assertIn(line, md)
+        self.assertLess(md.index("Figure 1"), md.index("## References"))     # the reference list stays last
+
+    def test_a_candidate_in_pmc_gets_its_text_and_the_rest_are_left_to_pdf2md(self):
+        rd = Path(tempfile.mkdtemp()) / "topic_research"
+        self.addCleanup(shutil.rmtree, rd.parent, True)
+        (rd / "step5_full_text").mkdir(parents=True)
+        cands = [{"citation_key": "a2020", "doi": "10.1/a"}, {"citation_key": "b2021", "doi": "10.1/b"},
+                 {"citation_key": "c2022", "doi": "10.1/c"}]
+        (rd / it_fulltext.CANDIDATES).write_text(json.dumps({"candidates": cands}))
+        (rd / "step3_shortlist.json").write_text(json.dumps({"papers": [{"citation_key": "b2021", "pmc_id": "7777"}]}))
+        (rd / "step5_full_text" / "c2022.md").write_text("# converted earlier\n")
+        asked = []
+
+        def fake_json(url, rd=None):
+            asked.append(url)
+            if "idconv" in url:
+                return {"records": [{"requested-id": "10.1/a", "pmcid": "PMC1234"}]}
+            return {"xml_url": "s3://pmc-oa-opendata/PMC1234.2/PMC1234.2.xml?md5=0", "version": 2, "license_code": "CC BY"}
+
+        def fake_text(url, rd=None):
+            asked.append(url)
+            if "list-type=2" in url:
+                return "<Key>metadata/PMC1234.1.json</Key><Key>metadata/PMC1234.2.json</Key>" if "PMC1234" in url else ""
+            return JATS
+
+        with mock.patch.object(it_fulltext, "http_json", fake_json), mock.patch.object(it_fulltext, "http_text", fake_text):
+            it_fulltext.cmd_pmc_text(SimpleNamespace(research_dir=str(rd)))
+        self.assertTrue(asked[0].endswith("ids=10.1/a"))       # by DOI: a2020 only (b2021's PMCID is known, c2022 done)
+        self.assertIn(f"{it_fulltext.PMC_OPENDATA}/PMC1234.2/PMC1234.2.xml", asked)  # the latest version
+        self.assertEqual(json.loads((rd / "step5_full_text" / "a2020_meta.json").read_text())["converter"], "pmc-xml")
+        self.assertEqual(it_fulltext.access_level(rd, "a2020"), "full-text")
+        self.assertFalse((rd / "step5_full_text" / "b2021.md").exists())            # PMC7777: not in the service
+        self.assertEqual((rd / "step5_full_text" / "c2022.md").read_text(), "# converted earlier\n")
 
 
 if __name__ == "__main__":

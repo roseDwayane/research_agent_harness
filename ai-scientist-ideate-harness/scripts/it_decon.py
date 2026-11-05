@@ -28,12 +28,13 @@ knowledge/decon/*.json` (build-methods concatenates the `experiments` of every i
 from __future__ import annotations
 
 import json
+import os
 import re
 import unicodedata
 from collections import Counter
 from pathlib import Path
 
-from it_common import die, now_iso, read_json, sha256_file, sha256_json, write_json, write_text
+from it_common import die, now_iso, read_json, repair_quote, sha256_file, sha256_json, write_json, write_text
 
 SCHEMA = "ai-scientist-decon/1"
 UNIT = "A7.D"
@@ -216,15 +217,18 @@ def record_problems(rec: dict, rd: Path, pp: dict, cfg: dict, *, stale_check=Tru
             if not str(u.get("where") or "").strip():
                 fs.append(F("ERROR", "D05", U, f"{uid}: `where` missing (section / page / table; 'abstract')"))
             prob = quote_problem(u.get("quote"), ts)
-            if prob:
-                fs.append(F("ERROR", "D05", U, f"{uid}: {prob}"))
+            if prob:                                   # the source's own words, for the next reading to copy
+                near = repair_quote(u.get("quote"), text, 0.6) if "not found" in prob else None
+                hint = f" (the nearest words in the source: {near!r})" if near and not quote_problem(near, ts) else ""
+                fs.append(F("ERROR", "D05", U, f"{uid}: {prob}{hint}"))
         elif u.get("quote"):
             fs.append(F("ERROR", "D05", U, f"{uid}: a not-done unit is the reader's observation and carries no quote"))
         if kind == "claim":
             if u.get("strength") not in STRENGTH:
                 fs.append(F("ERROR", "D06", U, f"{uid}: strength must be one of {STRENGTH} (the source's own verb)"))
-            sc = u.get("scope")
-            if not isinstance(sc, dict) or set(sc) != set(SCOPE_KEYS) or \
+            sc = u.get("scope")                        # a paper with no abstract: its title rarely states any
+            title_only = basis == "abstract" and not str(pp[key].get("abstract") or "").strip()
+            if not isinstance(sc, dict) or set(sc) != set(SCOPE_KEYS) or not title_only and \
                     all(_is_tag(sc.get(k), TBD) or not str(sc.get(k) or "").strip() for k in SCOPE_KEYS):
                 fs.append(F("ERROR", "D06", U, f"{uid}: scope must be {{{', '.join(SCOPE_KEYS)}}} with at least one "
                                                 "stated (the population, data or conditions the claim is made for)"))
@@ -435,7 +439,172 @@ def needing_records(rd: Path) -> tuple[list[str], list[str]]:
     return missing, stale
 
 
-def plan(rd: Path, ft_size: int = 6, abs_size: int = 40) -> dict:
+REFS_HEADING = re.compile(r"^\s*(?:#+\s*|\d+\.?\s*)?(?:references|bibliography|literature cited|works cited)\s*:?\s*$",
+                          re.I | re.M)
+
+
+# The section headings of a converted paper, the name alone on its line ("2. Methods", "RESULTS", "## Discussion"):
+# the main sections a long paper's excerpt keeps the beginning of, and the back matter it leaves out.
+MAIN_SECTION = re.compile(r"abstract|introduction|background|(?:materials and |experimental )?methods?|methodology|"
+                          r"results?(?: and discussion)?|discussion|conclusions?|limitations", re.I)
+BACK_MATTER = re.compile(r"acknowledge?ments?|funding|author contributions?|conflicts? of interest(?: statement)?|"
+                         r"competing interests?|supplementary (?:materials?|information|figures?|data)|"
+                         r"data availability(?: statement)?|ethics statement|abbreviations", re.I)
+
+
+def heading_offsets(text: str, names: re.Pattern) -> list[int]:
+    """Where the lines that are headings of `names` start. A heading is capitalised: a lower-case "methods" alone on
+    its line is a sentence pdftotext wrapped."""
+    out, pos = [], 0
+    for line in text.splitlines(keepends=True):
+        s = re.sub(r"^\s*#*\s*(?:\d+(?:\.\d+)*\.?|[IVX]+\.)?\s*", "", line).strip().rstrip(":").strip()
+        if s[:1].isupper() and len(s) < 60 and names.fullmatch(s):
+            out.append(pos)
+        pos += len(line)
+    return out
+
+
+def _pieces(part: str, span: int) -> list[str]:
+    """A section longer than two spans, split at lines into pieces of about one span: an excerpt keeps the beginning
+    of each, so a paper whose sections were not found is read along its whole length, not only from the top."""
+    out, start = [], 0
+    while len(part) - start > 2 * span:
+        k = part.find("\n", start + span)
+        if k < 0:
+            break
+        out.append(part[start:k + 1])
+        start = k + 1
+    return out + [part[start:]]
+
+
+def _shorten(part: str, n: int) -> str:
+    """The first n characters of a part, ended at a line or a sentence (a paragraph may be one long line), and how
+    much of it was left out."""
+    if len(part) <= n:
+        return part
+    k = max(part.rfind("\n", 0, n), part.rfind(". ", 0, n) + 1)
+    k = k if k > n // 2 else n
+    return part[:k].rstrip() + f"\n\n[... {len(part) - k} characters left out here by decon-plan ...]\n\n"
+
+
+def reading_text(text: str, max_chars: int = 0) -> str:
+    """A full text as the reader gets it: without its reference list (the last 'References' heading in the second
+    half of the paper, to the end) - about a sixth of a converted paper, and nothing a record quotes. The record's
+    quotes are still checked against the whole full text, of which this is a part.
+
+    With max_chars (an Ollama worker's $BUDGET: the prompt must reach its first byte before a proxy gives up), a longer
+    paper is cut to an excerpt, as the archived engine cut its digests' text: the back matter after the last main
+    section goes, then every main section (a long one in pieces: a quarter of the budget, a twelfth of the paper at
+    least) keeps its beginning - the same length for each, the longest that fits. Every kept line is the paper's own."""
+    cut = [m.start() for m in REFS_HEADING.finditer(text) if m.start() > len(text) // 2]
+    if not max_chars or len(text[:cut[-1]] if cut else text) <= max_chars:
+        return text[:cut[-1]].rstrip() + "\n\n[reference list left out by decon-plan]\n" if cut else text
+    text = text[:cut[-1]] if cut else text
+    main = [i for i in heading_offsets(text, MAIN_SECTION) if i > 0]
+    back = [i for i in heading_offsets(text, BACK_MATTER) if i > max(main or [len(text) // 2])]
+    text = text[:back[0]] if back else text
+    head = (f"[an excerpt of a paper of {len(text)} characters: the reference list"
+            + (" and back matter" if back else "") + " left out, and the beginning of each section kept - decon-plan]\n\n")
+    room = max_chars - len(head)
+    if len(text) <= room:
+        return head + text
+    sections = [text[a:b] for a, b in zip([0, *main], [*main, len(text)])]
+    span = max(max_chars // 4, len(text) // 12)       # about a dozen pieces at most: a short section stays whole
+    parts = [q for p in sections for q in _pieces(p, span)]
+    room -= 80 * len(parts)                            # each shortened part's note
+    lo, hi = 0, max(len(p) for p in parts)             # the longest beginning every section can keep
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        lo, hi = (mid, hi) if sum(min(len(p), mid) for p in parts) <= room else (lo, mid - 1)
+    return head + "".join(_shorten(p, lo) for p in parts)
+
+
+def record_schema(basis: str, criteria: list) -> dict:
+    """What a reader writes for one paper (decon-merge completes the rest: schema, key, basis, ids, evidence, model).
+    Every field required, "" / "none" / [] where it does not apply - a schema-decoded answer leaves optional
+    fields out even when it means to write them."""
+    s = {"type": "string"}
+    obj = lambda props: {"type": "object", "properties": props, "required": list(props), "additionalProperties": False}  # noqa: E731
+    lst = lambda it, lo=0, hi=None: {"type": "array", "items": it, "minItems": lo, **({"maxItems": hi} if hi else {})}  # noqa: E731
+    full = basis == "full-text"
+    unit = obj({"kind": {"enum": [k for k in KINDS.values() if full or k != "not-done"]}, "text": s,
+                "strength": {"enum": ["none", *STRENGTH]}, "scope": obj({k: s for k in SCOPE_KEYS}),
+                "where": s, "quote": s})
+    row = obj({"where": s, "role": s, "method_family": lst(s, 1), "split": s,
+               "data": lst(obj({"name": s, "n": s, "modality": s, "preproc": s}), 1), "baselines": lst(s, 1),
+               "metrics": lst(s, 1), "stats": s, "headline": s, "not_done": lst(s, 1)})
+    return obj({"eligibility": obj({"verdict": {"enum": ["eligible", "ineligible"] if full else ["abstract-only"]},
+                                    "reason": s, "criteria": lst({"enum": criteria or ["none"]})}),
+                "summary": obj({k: s for k in SUMMARY_KEYS}),
+                "units": lst(unit, 1, MAX_CLAIMS_FULL + 8 if full else MAX_CLAIMS_ABSTRACT + 2),
+                "experiments": lst(row, 1, MAX_ROWS_FULL if full else 1),
+                "terms": lst(obj({"term": s, "kind": {"enum": list(TERM_KINDS)}, "definition": s, "where": s}))})
+
+
+def complete(ans: dict, key: str, basis: str, text: str = "") -> dict:
+    """What code settles in a reader's answer before it is checked: the schema, key and basis, every unit id
+    (<key>#<letter><n>, numbered per kind in the order written), each row's exp_id / citation_key / evidence, the
+    model (the run's), and the empty fields a schema-decoded answer writes ("", "none", [], {}). Nothing the reader
+    judged is changed."""
+    a = dict(ans)
+    a.update({"schema": SCHEMA, "citation_key": key, "basis": basis})
+    if not str(a.get("model") or "").strip() and os.environ.get("IDEATE_LLM_MODEL"):
+        a["model"] = os.environ["IDEATE_LLM_MODEL"]
+    blank = lambda v: v is None or (isinstance(v, str) and v.strip().lower() in ("", "none")) or v in ([], {})   # noqa: E731
+    el = {k: v for k, v in (a.get("eligibility") or {}).items() if not blank(v)}
+    if el.get("verdict") != "ineligible":
+        el.pop("criteria", None)
+    a["eligibility"] = el
+    letter = {v: k for k, v in KINDS.items()}
+    n, units = Counter(), []
+    for u in a.get("units") or []:
+        if not isinstance(u, dict):
+            continue
+        kind = u.get("kind")
+        u = {k: v for k, v in u.items() if not blank(v) or k == "text"}
+        if kind != "claim":
+            u.pop("strength", None)
+            u.pop("scope", None)
+            u.pop("overreach", None)
+        if kind == "not-done":
+            u.pop("quote", None)
+            u.pop("where", None)
+        elif text and u.get("quote") and quote_problem(u["quote"], squash(text)):     # a near copy: the source's words
+            u["quote"] = repair_quote(u["quote"], text) or u["quote"]
+        if kind in letter and not re.fullmatch(re.escape(key) + r"#[CALFN]\d+", str(u.get("id") or "")):
+            n[kind] += 1
+            u["id"] = f"{key}#{letter[kind]}{n[kind]}"
+        units.append(u)
+    a["units"] = units
+    rows = []
+    for i, r in enumerate([r for r in a.get("experiments") or [] if isinstance(r, dict)], 1):
+        r = {k: v for k, v in r.items() if not blank(v)}
+        r.update({"exp_id": r.get("exp_id") if re.fullmatch(re.escape(key) + r"#E\d+", str(r.get("exp_id") or ""))
+                  else f"{key}#E{i}", "citation_key": key, "evidence": basis})
+        rows.append(r)
+    a["experiments"] = rows
+    terms = []
+    for t in a.get("terms") or []:
+        if not isinstance(t, dict):
+            continue
+        t = {k: v for k, v in t.items() if not blank(v)}
+        d = t.get("definition")
+        if t.get("kind") != "measure":                 # a definition is a measure's defining sentence, nothing else's
+            t.pop("definition", None)
+        elif d and text and quote_problem(d, squash(text), min_words=2, min_chars=8):
+            fixed = repair_quote(d, text)              # a near copy: the source's words; not found: no definition
+            if fixed and not quote_problem(fixed, squash(text), min_words=2, min_chars=8):
+                t["definition"] = fixed
+            else:
+                t.pop("definition", None)
+        terms.append(t)
+    a["terms"] = terms
+    if el.get("verdict") == "ineligible":
+        a["units"], a["experiments"] = [], []
+    return a
+
+
+def plan(rd: Path, ft_size: int = 6, abs_size: int = 40, max_chars: int = 0) -> dict:
     rd = Path(rd)
     cfg = _cfg(rd)
     pp = papers(rd)
@@ -453,18 +622,36 @@ def plan(rd: Path, ft_size: int = 6, abs_size: int = 40) -> dict:
     ab = [k for k in todo if k not in ft]
     wd = work_dir(rd)
     (wd / "answers").mkdir(parents=True, exist_ok=True)
-    for old in wd.glob("batch_*.json"):
+    for old in [*wd.glob("batch_*.json"), *(wd / "schemas").glob("*.json")]:
         old.unlink()
+    fig_index = Path(rd) / "step5_full_text" / "figure" / "index.json"
+    figs: dict = {}                                    # the figure pages of each paper: a batch names only its own,
+    for f in (read_json(fig_index) or []) if fig_index.exists() else []:     # never the whole topic's index
+        figs.setdefault(f.get("key"), []).append(f)
+    overhead = len(json.dumps(context, indent=2, ensure_ascii=False)) + 1500  # the batch file around one paper
+    for k in ft:                                       # the reader's copy and its figure pages: within $BUDGET together
+        own = wd / "figures" / f"{k}.json"
+        if figs.get(k):
+            write_json(own, figs[k])
+        elif own.exists():
+            own.unlink()
+        room = max(8000, max_chars - overhead - (len(own.read_text(encoding="utf-8")) if own.exists() else 0)) \
+            if max_chars else 0
+        write_text(wd / "text" / f"{k}.md", reading_text(full_text_path(rd, k).read_text(encoding="utf-8", errors="replace"),
+                                                         room))
+    crit = sorted(_criteria_ids(cfg))
+    refused_before = read_json(wd / "refused.json") if (wd / "refused.json").exists() else {}
     batches = []
 
     def entry(k, basis):
         p = pp[k]
         e = {"citation_key": k, "title": p.get("title"), "year": p.get("year"), "basis": basis,
              "answer": f"{WORK}/answers/{k}.json"}
+        if refused_before.get(k):                      # the last answer's refusal: fix exactly that this time
+            e["refused_before"] = refused_before[k][:8]
         if basis == "full-text":
-            e["full_text"] = f"step5_full_text/{k}.md"
-            fig = Path(rd) / "step5_full_text" / "figure" / "index.json"
-            e["figure_index"] = "step5_full_text/figure/index.json" if fig.exists() else None
+            e["full_text"] = f"{WORK}/text/{k}.md"
+            e["figure_index"] = f"{WORK}/figures/{k}.json" if (wd / "figures" / f"{k}.json").exists() else None
         else:
             e["abstract"] = p.get("abstract") or ""
         return e
@@ -476,21 +663,49 @@ def plan(rd: Path, ft_size: int = 6, abs_size: int = 40) -> dict:
         arch.mkdir(parents=True, exist_ok=True)
         for f in stale_answers:
             f.rename(arch / f.name)
-    for basis, keys, size in (("full-text", ft, ft_size), ("abstract", ab, abs_size)):
-        for i in range(0, len(keys), size):
+    if max_chars:                                      # a worker given its batch in the prompt (the harness's $BUDGET):
+        ft_size, abs_size = min(ft_size, 2), min(abs_size, 8)    # its answer is every record at once - keep it short
+
+    def size_of(k, basis):
+        if basis != "full-text":
+            return len(pp[k].get("abstract") or "") + 300
+        own = wd / "figures" / f"{k}.json"
+        return len((wd / "text" / f"{k}.md").read_text(encoding="utf-8")) + \
+            (len(own.read_text(encoding="utf-8")) if own.exists() else 0) + overhead
+
+    for basis, keys, size, tag in (("full-text", ft, ft_size, "ft"), ("abstract", ab, abs_size, "ab")):
+        chunks, cur, used = [], [], 0
+        for k in keys:
+            c = size_of(k, basis)
+            if cur and (len(cur) >= size or (max_chars and used + c > max_chars)):
+                chunks.append(cur)
+                cur, used = [], 0
+            cur.append(k)
+            used += c
+        chunks += [cur] if cur else []
+        for chunk in chunks:
             n = len(batches) + 1
-            b = {"batch": n, "basis": basis, "rules": RULES, "context": context,
-                 "papers": [entry(k, basis) for k in keys[i:i + size]]}
-            write_json(wd / f"batch_{n:03d}.json", b)
-            batches.append({"batch": n, "basis": basis, "keys": keys[i:i + size]})
+            b = {"batch": n, "basis": basis, "rules": RULES + ("#a7d-method" if basis == "full-text" else "#a7d-abstract"),
+                 "context": context, "papers": [entry(k, basis) for k in chunk]}
+            write_json(wd / f"batch_{tag}_{n:03d}.json", b)
+            write_json(wd / "schemas" / f"batch_{tag}_{n:03d}.json", {
+                "type": "object", "additionalProperties": False, "required": chunk,
+                "properties": {k: record_schema(basis, crit) for k in chunk}})
+            batches.append({"batch": n, "basis": basis, "keys": chunk})
     out = {"at": now_iso(), "missing": missing, "stale": stale, "batches": batches, **moved}
     write_json(wd / "plan.json", out)
     return out
 
 
-def merge(rd: Path, revise: str | None = None) -> dict:
+QUOTE_FAILED = re.compile(r"^(\S+#[CALF]\d+): quote (?:not found|too short|too long)")
+
+
+def merge(rd: Path, revise: str | None = None, drop_unquoted: bool = False) -> dict:
     """Validate every answer under knowledge/_work/A7D/answers/ and write the valid ones as records (+ their notes).
-    An answer for a paper whose current record stands is refused unless `revise` names why (a declared revision)."""
+    An answer for a paper whose current record stands is refused unless `revise` names why (a declared revision).
+    With drop_unquoted (the last round), a unit whose quote is not the source's words is left out and named in the
+    record's `dropped_units`, instead of refusing the paper: no unverified quote enters a record, and one passage a
+    reader could not copy (a garbled conversion) does not leave the paper without one."""
     rd = Path(rd)
     cfg, pp = _cfg(rd), papers(rd)
     legacy = legacy_notes(rd)
@@ -507,8 +722,18 @@ def merge(rd: Path, revise: str | None = None) -> dict:
             refused.append((f.stem, ["answer does not parse"]))
             continue
         key = ans.get("citation_key") or f.stem
-        ans = {"schema": SCHEMA, **ans, "citation_key": key}
+        if key in pp:
+            basis_, text_, _ = source(rd, key, pp[key])
+            ans = complete(ans, key, basis_, text_)
+        else:
+            ans = {"schema": SCHEMA, **ans, "citation_key": key}
         fs = errors(record_problems(ans, rd, pp, cfg, stale_check=False))
+        dropped = sorted({m.group(1) for x in fs if x["code"] == "D05" and (m := QUOTE_FAILED.match(x["msg"]))}) \
+            if drop_unquoted else []
+        if dropped:
+            ans = {**ans, "units": [u for u in ans.get("units") or [] if u.get("id") not in dropped],
+                   "dropped_units": dropped}
+            fs = errors(record_problems(ans, rd, pp, cfg, stale_check=False))
         if fs:
             refused.append((key, [x["code"] + " " + x["msg"] for x in fs]))
             continue
@@ -532,6 +757,9 @@ def merge(rd: Path, revise: str | None = None) -> dict:
         write_json(decon_dir(rd) / f"{key}.json", rec)
         _write_view(rd, key, rec, pp[key])
         written.append(key)
+        if dropped:
+            print(f"  {key}: left out {', '.join(dropped)} - their quotes are not the source's words")
+    write_json(work_dir(rd) / "refused.json", {k: why for k, why in refused})     # decon-plan shows them again
     return {"written": written, "kept": kept, "refused": refused}
 
 
@@ -568,7 +796,7 @@ def _print(fs, as_json=False):
 
 def cmd_plan(a):
     rd = Path(a.research_dir)
-    out = plan(rd, a.ft_size, a.abs_size)
+    out = plan(rd, a.ft_size, a.abs_size, getattr(a, "max_chars", 0) or 0)
     nft = sum(len(b["keys"]) for b in out["batches"] if b["basis"] == "full-text")
     nab = sum(len(b["keys"]) for b in out["batches"] if b["basis"] == "abstract")
     print(f"decon-plan: {len(out['missing'])} missing, {len(out['stale'])} stale -> {len(out['batches'])} batch(es) "
@@ -577,7 +805,8 @@ def cmd_plan(a):
         print(f"  {len(out.get('withdrawn') or [])} record(s) of papers that left the shortlist moved to "
               f"knowledge/decon/_withdrawn/, {len(out.get('restored') or [])} restored")
     for b in out["batches"]:
-        print(f"  batch_{b['batch']:03d}.json  {b['basis']:<9} {len(b['keys'])} paper(s)")
+        tag = "ft" if b["basis"] == "full-text" else "ab"
+        print(f"  batch_{tag}_{b['batch']:03d}.json  {b['basis']:<9} {len(b['keys'])} paper(s)")
     if out["batches"]:
         print(f"  one subagent per batch: read {RULES} and its batch file, write one answer per paper under "
               f"{WORK}/answers/<key>.json, self-check with `decon-check <RD> --answer <file>`; then `decon-merge <RD>`")
@@ -609,7 +838,7 @@ def cmd_merge(a):
 
 
 def _cmd_merge(a) -> int:
-    out = merge(Path(a.research_dir), a.revise)
+    out = merge(Path(a.research_dir), a.revise, a.drop_unquoted)
     print(f"decon-merge: {len(out['written'])} written, {len(out['kept'])} unchanged, {len(out['refused'])} refused")
     for key, why in out["refused"]:
         print(f"  REFUSED {key}:")
@@ -628,6 +857,8 @@ def add_parsers(sub) -> None:
     sp.add_argument("research_dir")
     sp.add_argument("--ft-size", type=int, default=6, help="full-text papers per subagent (default 6)")
     sp.add_argument("--abs-size", type=int, default=40, help="abstract-only papers per subagent (default 40)")
+    sp.add_argument("--max-chars", type=int, default=0, help="at most this many characters of papers per batch, and "
+                    "smaller batches (0: no limit; the harness passes $BUDGET for a worker given its batch in its prompt)")
     sp.set_defaults(fn=cmd_plan)
     sp = sub.add_parser("decon-check", help="A7.D checks (D01-D17); --answer validates one answer without writing")
     sp.add_argument("research_dir")
@@ -637,6 +868,9 @@ def add_parsers(sub) -> None:
     sp = sub.add_parser("decon-merge", help="A7.D: valid answers -> knowledge/decon/<key>.json + the rendered note")
     sp.add_argument("research_dir")
     sp.add_argument("--revise", metavar="REASON", help="replace current records, recording why (a declared revision)")
+    sp.add_argument("--drop-unquoted", action="store_true",
+                    help="the last round: leave out a unit whose quote is not the source's words instead of refusing "
+                         "the paper (named in the record's dropped_units; caveat units-dropped)")
     sp.set_defaults(fn=cmd_merge)
     sp = sub.add_parser("decon-render", help="A7.D: re-render knowledge/_notes/<key>.md from every full-text record")
     sp.add_argument("research_dir")

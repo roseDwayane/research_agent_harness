@@ -49,6 +49,16 @@ def test_rules_sections_are_extracted():
     assert cw.rules_text(MODULE, "references/planning/P3-decision-tree.md").startswith("# P3")
 
 
+def test_a_heading_inside_a_code_block_does_not_end_the_section(tmp_path):
+    (tmp_path / "r.md").write_text('<a id="x"></a>\n## X\n\n```bash\ncmd one\n#   a bash comment\ncmd two\n```\n\n'
+                                   '~~~markdown\n## a template heading\n```json\n{}\n```\n## still the template\n~~~\n\n'
+                                   'tail of X\n\n## Y\nnot X\n')
+    x = cw.rules_text(tmp_path, "r.md#x")
+    assert "cmd two" in x and "still the template" in x and x.endswith("tail of X") and "not X" not in x
+    a1q = cw.rules_text(MODULE, "references/search/A1-frame.md#a1q")    # its Commands block has `#   {...}` lines
+    assert "frame anchors-revise" in a1q and "## A1.v" not in a1q
+
+
 # --------------------------------------------------------------------------------------------- skill
 def test_expand_quotes_paths_with_spaces_and_apostrophes(tmp_path):
     rd = tmp_path / "Justin's Master" / "x_research"
@@ -272,6 +282,21 @@ def test_fanout_answers_every_batch(tmp_path, fake_claude):
     assert len(log.read_text().splitlines()) == 2
 
 
+def test_a_fanout_task_may_spell_out_a_json_shape(tmp_path, fake_claude):
+    """A7.A2's task names its answer as {unit id: {axis: [concept ids]}}: only {batch} {out} {brief} are filled in."""
+    exe, log = fake_claude
+    ctx = _ctx(tmp_path, exe)
+    wd = ctx.rd / "knowledge" / "_work" / "A7A"
+    wd.mkdir(parents=True)
+    (wd / "coord_batch_001.json").write_text(json.dumps({"answer": "knowledge/_work/A7A/canswers/coord_batch_001.json"}))
+    fanout = next(s for s in rcp.load()["A7.A2"].steps("main") if s.kind == "fanout")
+    one = parse({"recipes": [{"unit": "A7.A2", "phases": {"main": [fanout.spec]}}]})[0]
+    res = RecipeExecutor().execute(ctx, "A7.A2", one, "main", None, 1)  # the fake answers nothing valid: no matter
+    assert "IDEATE.INTERNAL" not in [e.error_code for e in res.errors]
+    task = json.loads(log.read_text().splitlines()[0])["task"]          # the fake logs the task's head
+    assert task.startswith(f"Read the batch {wd / 'coord_batch_001.json'}: ")
+
+
 def test_a_custom_agent_still_goes_through_the_shell(tmp_path):
     """A swapped-in executor that writes nothing fails the Unit's output contract."""
     class Lazy:
@@ -281,3 +306,20 @@ def test_a_custom_agent_still_goes_through_the_shell(tmp_path):
     ctx = _ctx(tmp_path, "claude")
     r = UnitAgent("A1.p", rcp.load()["A1.p"], Lazy()).run(ctx, force=True)
     assert r.status == "failed" and "IDEATE.UNIT.OUTPUT_MISSING" in [e.error_code for e in r.errors]
+
+
+def test_a_refused_a1e_waits_on_loop02(tmp_path):
+    """A1.e's own check refuses (E04) while the revision its round asked for is not made: the step runs LOOP-02
+    instead of failing - as A2.c's re-plan runs LOOP-01. set-evaluation marks such a round `pending-revision`."""
+    from harness import loops
+    from harness.steps import StepAgent
+    ctx = _ctx(tmp_path, "claude")
+    (ctx.rd / "step1_protocol_evaluation.json").write_text(json.dumps({
+        "rounds": [{"round": 1, "verdict": "revision-required"}], "final": {"status": "pending-revision"}}))
+    assert loops.protocol_verdict(ctx.rd) == (1, "revision-required")
+    step = StepAgent("STEP-S1", {})
+    assert step._pending_loop(ctx, "A1.e") == step._loop02
+    assert step._pending_loop(ctx, "A1.p") is None
+    (ctx.rd / "step1_protocol_evaluation.json").write_text(json.dumps({
+        "rounds": [{"round": 2, "verdict": "revision-required"}], "final": {"status": "accepted-with-doubts"}}))
+    assert step._pending_loop(ctx, "A1.e") is None                 # round 2 settles it: no further loop

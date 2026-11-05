@@ -79,6 +79,22 @@ by hand; `build-methods` reads it and canonicalises every row's names through it
 A revision (a collision judged `incommensurable` sends one back) is `align-set <RD> vocab.json --reason "<why>"`; the
 previous vocabulary's hash goes into `history`.
 
+**In batches** (the harness): `align-terms <RD> --batches [--max-chars N]` puts the words still on no concept into
+`knowledge/_work/A7A/vbatch_NNN.json` (grouped by the kinds they may take, with how many papers use each and — for a
+measure two papers define — the definitions). A word whose roles share no kind ("EEG" a population term in one
+paper, a dataset in another) comes once per role, its `uses` naming the papers and roles. The answer, at the batch's
+`answer` path, is per word key `{kind, slug,
+name, definition}` — `kind` one of the word's kinds, or `unaligned` with the reason as `definition`; words that mean
+the same thing share one slug — and for a defined measure also `same_measure` and `because`. `align-terms <RD>
+--merge-answers` builds the draft `knowledge/_work/A7A/vocab.json` by code: a concept is `<kind>:<slug>`, a measure
+two papers define is one measure only when the answer says so (otherwise one per paper, through an override), a
+word with `uses` is placed per paper and role (an override `{origin: concept}`), and a spelling two kinds share is
+told apart by the kind. A measure that two spellings brought onto one concept, each defined by one paper ("SNR",
+"signal-to-noise ratio"), was never read with both definitions side by side: the next `--batches` asks it as an item
+with `concept` (the measure already placed), `definitions` and `words` - the answer's `same_measure` and `because`
+make it one measure (an equivalence note), `false` gives each further paper a measure of its own. Then `align-set` as
+above.
+
 ### Done when
 `align-check --unit A7.A1` passes: ids, kinds, names, definitions and families well-formed (A01); no spelling on two concepts
 (A02); every word on a concept or set aside (A03), on a concept of an allowed kind (A04); every measure that several papers
@@ -125,6 +141,12 @@ are found on these coordinates, so a unit without them cannot meet anything.
    made on, a measure the text implies. An axis may be filled from **the same paper's record** (its data line, another
    unit's scope) — say so in `note` — never from another paper. `unstated` = the paper does not say; `n/a` = the axis does
    not apply to this unit (no split in a non-predictive ANOVA). A guessed concept is neither.
+4. **In batches** (the harness): `align-coords <RD> --batches [--max-chars N]` puts the units `--auto` left into
+   `knowledge/_work/A7A/coord_batch_NNN.json`, each unit with its one-line `text`, the axes the tool settled (`fixed`) and
+   the axes it could not (`ask`: the suggested concepts, or `"*"` — any concept of the batch's `choices` — when it
+   suggests none). The answer, at the batch's `answer` path, is `{unit id: {axis: [concept ids]}}` for the asked axes only
+   (`["unstated"]` / `["n/a"]` as above); `align-coords <RD> --apply-answers` joins them to the fixed axes. A unit whose
+   answer names a concept of the wrong kind is left for the next batch pass.
 
 ### Done when
 `align-check --unit A7.A2` passes: every claim and assumption of an evidence record has coordinates with exactly the six
@@ -152,6 +174,15 @@ six fields from those units and records (knowledge-templates.md, Point; `(TBD)` 
 Findings Points — a cross-paper result or explanation — are **not** written here: they come from collisions
 (`origin: collide`, reconstruct step).
 
+**In batches** (the harness): `align-points <RD> --batches [--max-chars N]` puts the candidates into
+`knowledge/_work/A7A/point_batch_NNN.json`, each with its vocabulary definition, its papers and up to twelve of its
+units as one line of text. The answer to a batch is, per candidate concept id, `{keep, claim_type, description,
+purpose, core_claim, expanded, method, findings}`: `keep` true for a concept the topic turns on, the text from the
+definition and the units shown only, `(TBD)` where they do not support a field. The rest of each Point is the code's
+(`align-points <RD> --merge-answers`): slug and name from the concept, `source` the earliest of its papers, `also_in`
+the others, `unit_refs` the units shown, `source_files` the papers' records -> `knowledge/_work/A7A/points_part.json`;
+`cards-merge <RD> <that file> --origin align` puts them into knowledge_cards.json, then `build-cards`.
+
 ### Done when
 `align-check --unit A7.A3`: every Point with `origin: align` names a candidate concept and existing unit ids (A12).
 
@@ -176,6 +207,16 @@ and what this machine holds **today**. Every later judgement about feasibility �
      the data and sensors the method needs** (eye tracking with no eye tracker is `no` whatever the CPU); every **dataset**
      concept that two or more papers use (not the `not_shared` ones; others may be judged too): `{on_disk: yes | obtainable |
      no, where?, why}`; `yes` names `where` — a path under a data root the probe listed;
+   - the verdicts say what this machine **could** run and get, not only what it holds now:
+     - `affordable`: `yes` — the compute suffices and its packages import; `partial` — the compute suffices but something
+       must be installed first (a package the probe lists as MISSING that pip or conda installs: name it in `why`), or
+       only part of it fits (inference on CPU, training too heavy); `no` — it needs what installing cannot give: a GPU
+       the persona's compute lacks for its scale, a sensor or a scanner, data nobody can get. A missing package alone is
+       never `no`.
+     - `on_disk`: `yes` — under a data root; `obtainable` — not here, but a public dataset (a download, a request form)
+       or data of a kind anyone can make or download (simulated EEG, a public recording of that kind): name the source in
+       `why`; `no` — only its authors hold it (their own recordings, a clinical cohort not shared). No data root on this
+       machine is a reason for not `yes`, never for `no`.
    - `own_data` — the topic's own recordings, which no paper names: `[{name, where, what}]`, `where` an existing path.
 3. `lens-set <RD> lens.json` validates and writes `<RD>/lens.json` (the probe copied in, with its date) and re-projects
    `methods_matrix_input.json`: a matrix row whose `affordable_here` is `(TBD)` takes the weakest verdict of its families,

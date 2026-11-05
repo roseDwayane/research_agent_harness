@@ -1,6 +1,6 @@
 # Orchestration by a Claude session (interactive mode)
 
-> This was Gino's `SKILL.md` for the v2 control layer, kept as the reference for **interactive** runs, where a Claude
+> This was `SKILL.md` for the v2 control layer, kept as the reference for **interactive** runs, where a Claude
 > session conducts and asks the `ideate_v2` MCP server before each step. The default way to run the pipeline is the
 > code conductor in `harness/` (`ideate-harness run`, see [../README.md](../README.md)); there the same gates, loop
 > bounds and retry decisions are applied by code, and this page describes what each of them means.

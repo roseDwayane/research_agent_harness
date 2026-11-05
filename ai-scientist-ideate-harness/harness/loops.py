@@ -65,6 +65,8 @@ def protocol_verdict(rd: Path) -> tuple[int, str | None]:
     data = read_json(p)
     rounds = data.get("rounds") or []
     final = (data.get("final") or {}).get("status")
+    if final == "pending-revision":                       # set-evaluation's mark: the round's verdict stands
+        final = None
     last = (rounds[-1] if rounds else {}).get("verdict") if rounds else None
     return len(rounds), final or last
 

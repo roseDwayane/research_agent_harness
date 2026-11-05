@@ -128,6 +128,168 @@ class Good(unittest.TestCase):
         code, out = run("align-coords", self.rd, "--apply", bad, tool=TOOLS)
         self.assertEqual(code, 1, out)
 
+    def test_coordinate_batches_ask_only_what_the_tool_cannot_settle(self):
+        """The harness's local worker: units --auto left, each asking only its unsettled axes; the answers joined to
+        the settled ones; an answer naming a concept of the wrong kind leaves its unit for the next pass."""
+        p = it_align.alignment_path(self.rd)
+        al = json.loads(p.read_text())
+        al["coords"].pop("smithetal2020#A1")
+        p.write_text(json.dumps(al))
+        code, out = run("align-coords", self.rd, "--batches", "--max-chars", "20000", tool=TOOLS)
+        self.assertEqual(code, 0, out)
+        wd = self.rd / it_align.WORK
+        b = json.loads((wd / "coord_batch_001.json").read_text())
+        self.assertEqual([u["id"] for u in b["units"]], ["smithetal2020#A1"])
+        u = b["units"][0]
+        self.assertEqual(u["ask"], {"construct": ["*"], "measure": ["*"]})        # nothing suggested: any concept
+        self.assertIn("choices", b)
+        schema = json.loads((wd / "schemas" / "coord_batch_001.json").read_text())
+        self.assertIn("construct:class-correlated-artifacts",
+                      schema["properties"]["smithetal2020#A1"]["properties"]["construct"]["items"]["enum"])
+        ans = self.rd / b["answer"]
+        ans.parent.mkdir(parents=True, exist_ok=True)
+        ans.write_text(json.dumps({"smithetal2020#A1": {"construct": ["construct:class-correlated-artifacts"],
+                                                        "measure": ["dataset:own-mi-eeg"]}}))     # wrong kind
+        code, out = run("align-coords", self.rd, "--apply-answers", tool=TOOLS)
+        self.assertNotIn("smithetal2020#A1", json.loads(p.read_text())["coords"])
+        ans.write_text(json.dumps({"smithetal2020#A1": {"construct": ["construct:class-correlated-artifacts"],
+                                                        "measure": ["measure:accuracy"]}}))
+        code, out = run("align-coords", self.rd, "--apply-answers", tool=TOOLS)
+        self.assertEqual(code, 0, out)
+        c = json.loads(p.read_text())["coords"]["smithetal2020#A1"]
+        self.assertEqual((c["by"], c["axes"]["construct"], c["axes"]["measure"]),
+                         ("model", "construct:class-correlated-artifacts", "measure:accuracy"))
+        self.assertEqual(set(c["axes"]), set(it_align.AXES))                   # the fixed axes joined in
+
+    def test_vocabulary_in_batches(self):
+        """The harness's local worker: the words in batches, each answered with a concept, the vocabulary built by
+        code - here every word answered as the fixture's good vocabulary places it, which align-set must take."""
+        good = it_align.Vocab(json.loads((FIX / "good" / "vocab.json").read_text()))
+        al = json.loads(it_align.alignment_path(self.rd).read_text())
+        al.pop("vocab")
+        it_align.alignment_path(self.rd).write_text(json.dumps(al))
+        code, out = run("align-terms", self.rd, "--batches", "--max-chars", "700", tool=TOOLS)
+        self.assertEqual(code, 0, out)
+        wd = self.rd / it_align.WORK
+        batches = sorted(wd.glob("vbatch_*.json"))
+        self.assertGreater(len(batches), 1)                    # the budget splits them
+        for bf in batches:
+            b = json.loads(bf.read_text())
+            ans = {}
+            for it in b["items"]:
+                cid = good.resolve("", it["word"])
+                c = good.concepts[cid]
+                ans[it["key"]] = {"kind": c["kind"], "slug": cid.partition(":")[2], "name": c["name"],
+                                  "definition": c["definition"]}
+                if it.get("definitions"):
+                    ans[it["key"]].update(same_measure=True, because="both define the same quantity")
+            (self.rd / b["answer"]).parent.mkdir(parents=True, exist_ok=True)
+            (self.rd / b["answer"]).write_text(json.dumps(ans))
+        code, out = run("align-terms", self.rd, "--merge-answers", tool=TOOLS)
+        self.assertEqual(code, 0, out)
+        code, out = run("align-set", self.rd, wd / "vocab.json", tool=TOOLS)
+        self.assertEqual(code, 0, out)
+        code, out = run("align-terms", self.rd, "--batches", tool=TOOLS)    # every word placed: nothing left to ask
+        self.assertIn("0 word(s) to place", out)
+
+    def test_a_word_whose_roles_share_no_kind_is_asked_per_role(self):
+        """'own MI EEG' a dataset in one paper and a population term in another: one item per role, each answer placed
+        for its papers and role only - not as a spelling, which would put the other role on the wrong kind (A04)."""
+        dp = self.rd / "knowledge" / "decon" / "parketal2019.json"
+        r = json.loads(dp.read_text())
+        r["terms"].append({"term": "own MI EEG", "kind": "population"})
+        dp.write_text(json.dumps(r))
+        al = json.loads(it_align.alignment_path(self.rd).read_text())
+        al.pop("vocab")
+        it_align.alignment_path(self.rd).write_text(json.dumps(al))
+        run("align-terms", self.rd, tool=TOOLS)
+        bs = it_align.vocab_batches(self.rd)
+        roles = [it for b in bs for it in b if it["word"] == "own MI EEG"]
+        self.assertEqual(sorted((it["kinds"], it["uses"]) for it in roles),
+                         [(["dataset"], [["smithetal2020", "row:data"]]), (["population"], [["parketal2019", "term:population"]])])
+        good = it_align.Vocab(json.loads((FIX / "good" / "vocab.json").read_text()))
+        wd = self.rd / it_align.WORK
+        code, out = run("align-terms", self.rd, "--batches", tool=TOOLS)
+        for bf in sorted(wd.glob("vbatch_*.json")):
+            b = json.loads(bf.read_text())
+            ans = {}
+            for it in b["items"]:
+                if it.get("uses"):
+                    kind = it["kinds"][0]
+                    ans[it["key"]] = {"kind": kind, "slug": "own-mi-eeg", "name": "own MI EEG", "definition": f"as a {kind}"}
+                    continue
+                c = good.concepts[good.resolve("", it["word"])]
+                ans[it["key"]] = {"kind": c["kind"], "slug": c["id"].partition(":")[2], "name": c["name"],
+                                  "definition": c["definition"], "same_measure": True, "because": "the same quantity"}
+            (self.rd / b["answer"]).parent.mkdir(parents=True, exist_ok=True)
+            (self.rd / b["answer"]).write_text(json.dumps(ans))
+        code, out = run("align-terms", self.rd, "--merge-answers", tool=TOOLS)
+        self.assertEqual(code, 0, out)
+        code, out = run("align-set", self.rd, wd / "vocab.json", tool=TOOLS)
+        self.assertEqual(code, 0, out)
+        V = it_align.Vocab(json.loads(it_align.alignment_path(self.rd).read_text())["vocab"])
+        self.assertEqual(V.kind(V.resolve("smithetal2020", "own MI EEG", "row:data")), "dataset")
+        self.assertEqual(V.kind(V.resolve("parketal2019", "own MI EEG", "term:population")), "population")
+
+    def test_a_measure_two_papers_define_under_two_spellings_is_asked_once_more(self):
+        """'SNR' (smithetal2020) and 'signal-to-noise ratio' (parketal2019), each defined by its paper and placed on one
+        measure by two answers: nobody read the two definitions together (A05). The next pass asks, side by side; 'not
+        the same' gives the second paper a measure of its own."""
+        dp = self.rd / "knowledge" / "decon" / "parketal2019.json"
+        r = json.loads(dp.read_text())
+        r["terms"].append({"term": "signal-to-noise ratio", "kind": "measure", "where": "abstract",
+                           "definition": "the power of the signal over the power of the noise"})
+        dp.write_text(json.dumps(r))
+        al = json.loads(it_align.alignment_path(self.rd).read_text())
+        al.pop("vocab")
+        it_align.alignment_path(self.rd).write_text(json.dumps(al))
+        good = it_align.Vocab(json.loads((FIX / "good" / "vocab.json").read_text()))
+        snr, wd = good.resolve("", "SNR"), self.rd / it_align.WORK
+
+        def answer_all(same):
+            asked = []
+            for bf in sorted(wd.glob("vbatch_*.json")):
+                b = json.loads(bf.read_text())
+                ans = {}
+                for it in b["items"]:
+                    asked.append(it)
+                    cid = snr if it.get("concept") or it["word"] == "signal-to-noise ratio" else good.resolve("", it["word"])
+                    c = good.concepts[cid]
+                    ans[it["key"]] = {"kind": c["kind"], "slug": cid.partition(":")[2], "name": c["name"],
+                                      "definition": c["definition"]}
+                    if it.get("definitions"):
+                        ans[it["key"]].update(same_measure=same, because="the same quantity" if same else "")
+                (self.rd / b["answer"]).parent.mkdir(parents=True, exist_ok=True)
+                (self.rd / b["answer"]).write_text(json.dumps(ans))
+            self.assertEqual(run("align-terms", self.rd, "--merge-answers", tool=TOOLS)[0], 0)
+            return asked
+
+        run("align-terms", self.rd, tool=TOOLS)
+        run("align-terms", self.rd, "--batches", tool=TOOLS)
+        answer_all(True)
+        code, out = run("align-set", self.rd, wd / "vocab.json", tool=TOOLS)
+        self.assertIn("A05", out)                                             # placed, but never read together
+        run("align-terms", self.rd, "--batches", tool=TOOLS)
+        [q] = answer_all(False)
+        self.assertEqual((q["concept"], sorted(q["definitions"])), (snr, ["parketal2019", "smithetal2020"]))
+        code, out = run("align-set", self.rd, wd / "vocab.json", tool=TOOLS)
+        self.assertEqual(code, 0, out)
+        V = it_align.Vocab(json.loads(it_align.alignment_path(self.rd).read_text())["vocab"])
+        self.assertNotEqual(V.resolve("parketal2019", "signal-to-noise ratio"), V.resolve("smithetal2020", "SNR"))
+
+    def test_lens_brief_lists_what_needs_a_verdict(self):
+        code, out = run("lens-brief", self.rd, tool=TOOLS)
+        self.assertEqual(code, 0, out)
+        wd = self.rd / "knowledge" / "_work" / "B1"
+        schema = json.loads((wd / "lens.schema.json").read_text())
+        need = schema["properties"]["on_coords"]["required"]
+        self.assertIn("method-family:artifact-rejection", need)
+        brief = (wd / "brief.md").read_text()
+        self.assertIn("method-family:artifact-rejection", brief)
+        # what each verdict means sits beside the list: a package not installed, or data not here, is not a no
+        self.assertIn("a missing package alone is never no", brief)
+        self.assertIn("no data root here is a reason for not yes, never for no", brief)
+
     def test_point_candidates(self):
         code, out = run("align-points", self.rd, tool=TOOLS)
         self.assertEqual(code, 0, out)
@@ -142,6 +304,34 @@ class Good(unittest.TestCase):
         self.assertIn("origin: align", card)
         self.assertIn("concept: measure:accuracy", card)
         self.assertEqual(check(self.rd)[0], 0)
+
+    def test_points_in_batches_are_built_by_code_from_the_decision(self):
+        """The model answers keep + the text under a schema; slug, source, also_in, unit_refs and source_files are
+        the candidate's, and an empty text field is (TBD)."""
+        code, out = run("align-points", self.rd, "--batches", tool=TOOLS)
+        self.assertEqual(code, 0, out)
+        wd = self.rd / it_align.WORK
+        b = json.loads((wd / "point_batch_001.json").read_text())
+        schema = json.loads((wd / "schemas" / "point_batch_001.json").read_text())
+        self.assertEqual(schema["required"], ["measure:accuracy"])
+        self.assertTrue(b["candidates"][0]["definition"])                     # the vocabulary's, for a word-only one
+        ans = {"measure:accuracy": {"keep": True, "claim_type": "empirical", "description": "decoding accuracy",
+                                    "purpose": "how well a classifier decodes", "core_claim": "", "expanded": "",
+                                    "method": "", "findings": "smithetal2020#C1"}}
+        (self.rd / b["answer"]).parent.mkdir(parents=True, exist_ok=True)
+        (self.rd / b["answer"]).write_text(json.dumps(ans))
+        code, out = run("align-points", self.rd, "--merge-answers", tool=TOOLS)
+        self.assertEqual(code, 0, out)
+        p = json.loads((wd / "points_part.json").read_text())["points"][0]
+        self.assertEqual((p["slug"], p["origin"], p["concept"], p["core_claim"]),
+                         ("Decoding_Accuracy", "align", "measure:accuracy", "(TBD)"))
+        self.assertEqual(sorted([p["source"], *p["also_in"]]), ["parketal2019", "smithetal2020"])
+        self.assertEqual(p["source_files"], [f"knowledge/decon/{k}.json" for k in [p["source"], *p["also_in"]]])
+        code, out = run("cards-merge", self.rd, wd / "points_part.json", "--origin", "align", tool=TOOLS)
+        self.assertEqual(code, 0, out)
+        code, out = run("build-cards", self.rd, self.rd / "knowledge_cards.json", tool=TOOLS)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(check(self.rd, "--unit", "A7.A3")[0], 0)
 
     def test_projection_feeds_build_methods(self):
         mi = json.loads(it_align.matrix_input_path(self.rd).read_text())

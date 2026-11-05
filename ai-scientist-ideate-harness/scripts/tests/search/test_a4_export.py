@@ -124,6 +124,19 @@ class TestPipeline(unittest.TestCase):
         code, out = run("a4-check", self.rd)
         self.assertEqual(code, 0, out)
 
+    def test_access_level_written_back_keeps_the_bibliography_current(self):
+        """A6.c writes access_level into the shortlist after A4.b: L03 does not see it; any other change it does."""
+        rd = self.copy("access")
+        sl = json.loads((rd / "step3_shortlist.json").read_text())
+        for p in sl["papers"]:
+            p["access_level"] = "full-text"
+        it_export.write_json(rd / "step3_shortlist.json", sl)
+        code, out = run("a4-check", rd)
+        self.assertEqual(code, 0, out)
+        sl["papers"][0]["title"] += " (edited)"
+        it_export.write_json(rd / "step3_shortlist.json", sl)
+        self.assertIn("L03", run("a4-check", rd)[1])
+
     def test_keys_from_fuller_authors(self):
         self.assertEqual(self.keys["paper_002"], "jasetal2017")   # 1 author in the search record: "jas2017"
         log = it_export.read_log(self.rd)

@@ -231,6 +231,29 @@ class TestWritesAreGuarded(unittest.TestCase):
             self.assertEqual(code, 2, f"{cmd}: {out}")
             self.assertIn("does not own", out)
 
+    def test_one_refusal_names_every_fix(self):
+        """A worker gets one revision: the refusal reports foreign keys with the content findings, and names the axes
+        and words each fix needs, so fixing what it says passes (A1.q, qwen3.8 runs of 2026-10-30)."""
+        st = json.loads((FIX / "good" / "strategy.json").read_text())
+        st["strategy_basis"] = {"note": "the tool writes this"}
+        st["queries"][0]["flat_query"] = "EEG automated artifact quality"            # an axis label word
+        st["queries"][3]["axes"]["C2"] = "all"                                       # anchor-methods + anchor slot
+        st["queries"][3]["flat_query"] = "EEG Autoreject artifact"
+        code, out = run("frame", "set-strategy", self.rd, self.bad("s.json", st))
+        self.assertEqual(code, 2, out)
+        self.assertEqual((self.rd / "step0_session_config.json").read_text(), self.before)
+        self.assertIn("does not own: ['strategy_basis']", out)
+        self.assertIn("Q1: flat_query words ['quality'] come from none of the query's axis terms", out)
+        self.assertIn("C1: EEG, electroencephalograph*, scalp recording", out)
+        self.assertIn("the anchor slot `intervention` is C2: leave it out", out)
+        self.assertIn("flat_query words ['artifact'] go with it, leaving 2 of the 3-5", out)
+        del st["strategy_basis"]
+        st["queries"][0]["flat_query"] = "EEG automated artifact rejection"
+        del st["queries"][3]["axes"]["C2"]
+        st["queries"][3]["flat_query"] = "EEG Autoreject scalp"
+        code, out = run("frame", "set-strategy", self.rd, self.bad("s.json", st))
+        self.assertEqual(code, 0, out)
+
     def test_set_context_refuses_a_malformed_file(self):
         code, out = run("frame", "set-context", self.rd, self.bad("ctx.json", {"target_venues": ["ACL", "EMNLP"],
                                                                             "expert_domain": "NLP", "local_environment": "none"}))
@@ -369,6 +392,89 @@ class TestStalenessAndGate(unittest.TestCase):
         code, out = run("frame", "query-revise", self.rd, f)
         self.assertEqual(code, 0, out)
         self.assertEqual(it_frame.search_gate(self.cfg(), self.rd), [])
+
+
+class TestHarnessFill(unittest.TestCase):
+    """The harness's worker path (A1-frame.md#a1q-fill): the tool fixes the variants and their axes, the model fills
+    the judgement, fill-strategy submits it through set-strategy."""
+    GOOD = {"flat": {"Q1": ["EEG", "automated", "artifact", "rejection"],
+                     "Q2": ["electroencephalography", "artefact", "removal"],
+                     "Q3": {"anchor": "Autoreject", "words": ["scalp", "EEG"]},
+                     "Q4": ["automated", "artifact", "rejection"],
+                     "Q5": ["EEG", "expert", "annotation"]},
+            "anchor_terms": ["EEG", "artifact", "artefact"],
+            "sources": ["semantic_scholar", "openalex", "pubmed", "scopus"],
+            "known_items": [{"title": "Autoreject: Automated artifact rejection for MEG and EEG data", "why": "anchor"},
+                            {"title": "ICLabel: An automated electroencephalographic independent component classifier",
+                             "why": "anchor"}]}
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        shutil.copy(FIX / "good" / "topic.md", self.tmp / "topic.md")
+        self.rd = self.tmp / "topic_research"
+        self.rd.mkdir()
+        self.assertEqual(run("frame", "set-protocol", self.rd, FIX / "good" / "protocol.json")[0], 0)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp)
+
+    def fill(self, data):
+        p = self.tmp / "fill.json"
+        p.write_text(json.dumps(data))
+        return run("frame", "fill-strategy", self.rd, p)
+
+    def test_the_skeleton_follows_the_protocol(self):
+        p = json.loads((self.rd / "step0_session_config.json").read_text())["protocol"]
+        qs, warn = it_frame.skeleton_queries(p, "standard")
+        self.assertEqual(warn, [])
+        self.assertEqual([q["strategy"] for q in qs], it_frame.DEPTH_STRATEGIES["standard"])
+        ax = {q["strategy"]: q["axes"] for q in qs}
+        self.assertEqual(ax["primary"], {"C1": "all", "C2": "all"})
+        self.assertEqual(ax["anchor-methods"], {"C3": "all", "C1": "all"})       # C2, the anchor slot, left out
+        self.assertEqual(ax["contrast"], {"C4": "all", "C1": "all"})
+        self.assertEqual(len(ax["loosen"]), 1)
+        self.assertNotEqual(ax["synonym-swap"], ax["primary"])
+        self.assertTrue(all(q["rationale"] for q in qs))
+
+    def test_brief_and_schema(self):
+        code, out = run("frame", "strategy-brief", self.rd)
+        self.assertEqual(code, 0, out)
+        brief = (self.rd / it_frame.BRIEF_FILE).read_text()
+        self.assertIn("anchor slot `intervention` = C2", brief)
+        self.assertIn("anchor: exactly one of Autoreject, PREP pipeline, FASTER, ICLabel", brief)
+        self.assertLess(len(brief), 4000)
+        schema = json.loads((self.rd / it_frame.FILL_SCHEMA_FILE).read_text())
+        flat = schema["properties"]["flat"]
+        self.assertEqual(flat["required"], ["Q1", "Q2", "Q3", "Q4", "Q5"])
+        self.assertEqual(flat["properties"]["Q3"]["properties"]["anchor"]["enum"],
+                         ["Autoreject", "PREP pipeline", "FASTER", "ICLabel"])
+        self.assertFalse(schema["additionalProperties"])
+        self.assertNotIn("queries", (self.rd / "step0_session_config.json").read_text())    # the brief writes no step0
+
+    def test_a_good_fill_is_the_strategy(self):
+        code, out = self.fill(self.GOOD)
+        self.assertEqual(code, 0, out)
+        cfg = json.loads((self.rd / "step0_session_config.json").read_text())
+        self.assertEqual(cfg["queries"][2]["flat_query"], "Autoreject scalp EEG")
+        self.assertEqual(cfg["anchor_terms"], ["eeg", "artifact", "artefact"])          # lower-cased by the tool
+        self.assertEqual([q["strategy"] for q in cfg["queries"]], it_frame.DEPTH_STRATEGIES["standard"])
+
+    def test_one_refusal_names_every_problem_of_a_fill(self):
+        before = (self.rd / "step0_session_config.json").read_text()
+        bad = copy.deepcopy(self.GOOD)
+        bad["scope_probe"] = {"skipped": "x"}
+        del bad["flat"]["Q5"]
+        bad["flat"]["Q3"]["words"] = ["EEG", "artifact"]             # an anchor-slot word in anchor-methods
+        bad["sources"] = ["semantic_scholar"]
+        code, out = self.fill(bad)
+        self.assertEqual(code, 2, out)
+        for part in ("does not own: ['scope_probe']", "flat.Q5 is missing", "Q3: flat_query words ['artifact']",
+                     "ERROR Q15"):
+            self.assertIn(part, out)
+        self.assertEqual((self.rd / "step0_session_config.json").read_text(), before)
+        code, out = self.fill({"flat": "EEG"})
+        self.assertEqual(code, 2, out)
+        self.assertIn("`flat` is an object", out)
 
 
 class TestRulesLiveInOnePlace(unittest.TestCase):

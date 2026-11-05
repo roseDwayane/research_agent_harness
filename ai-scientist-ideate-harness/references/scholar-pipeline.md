@@ -63,8 +63,10 @@ the depth rule (`tier1` takes the depth from step0); every attempt is recorded w
 top-up pass (F04; `tier1` refuses a second) · no credential in the files it writes or the paper_pdf log (F05). Fewer
 PDFs in hand than the depth asked for is a warning (F06, caveat `fulltext-short`).
 
-<a id="a6c"></a>**A6.c convert** — `pdf2md.sh` (not a Python command: run it first, in the background), `figures`,
-`fulltext-status` (the command that closes the Unit). Done when: every shortlisted paper carries the access level its
+<a id="a6c"></a>**A6.c convert** — `pmc-text` (a candidate in PubMed Central's open-access collections gets PMC's own
+JATS XML as markdown, with its sections and tables' cells: the best text there is, and there for author manuscripts
+without a PDF), `pdf2md.sh` (not a Python command: run it next, in the background; it skips a key that has its
+markdown), `figures`, `fulltext-status` (the command that closes the Unit). Done when: every shortlisted paper carries the access level its
 files give (F11) · every full text is UTF-8 with LF and no NUL byte (F12) · every PDF went through `figures` as it is
 now (F13) · every PDF and full text is named after a citation key (F14). Warnings: full texts from pdftotext (F15,
 caveat `fulltext-plain`), PDFs nothing could convert (F16, caveat `pdf-unconverted`).
@@ -83,6 +85,7 @@ $PY $SK/scripts/ideate_tools.py tier1 $RD --targets               # after B3.5 w
                                                                       #   then download + arxiv-pdfs + pdf2md, decon-plan
                                                                       #   (their records go stale: D02 / D11), A7.D again,
                                                                       #   collisions re-judged, questions-handover again
+$PY $SK/scripts/ideate_tools.py pmc-text $RD                    # PMC's XML → step5_full_text/*.md + _meta.json (seconds)
 IDEATE_PYTHON=$PY bash $SK/scripts/pdf2md.sh $RD                # pdfs/*.pdf → step5_full_text/*.md  (~1-2 min each when healthy)
 $PY $SK/scripts/ideate_tools.py figures $RD                        # caption pages → step5_full_text/figure/*.png (local, ~2 s/paper)
 $PY $SK/scripts/ideate_tools.py fulltext-status $RD             # → _access_log.md, access_level per paper

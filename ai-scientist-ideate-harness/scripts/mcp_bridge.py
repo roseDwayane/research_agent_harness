@@ -38,6 +38,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent.parent
+PDF_ENV = ("PAPER_PDF_UNPAYWALL_EMAIL", "SCHOLAR_CONTACT_EMAIL", "OPENALEX_API_KEY")   # read by paper_pdf_mcp
 SERVERS = {
     "scholar": HERE / "mcp" / "scholar_mcp" / "server.py",
     "paper_pdf": HERE / "mcp" / "paper_pdf_mcp" / "server.py",
@@ -75,7 +76,14 @@ class Server:
         # logger themselves. Backstop: scrub_log() redacts anything credential-shaped when the session closes.
         # (FASTMCP_LOG_LEVEL has no effect on httpx in this mcp version - do not rely on it.)
         self.name, self._rd = name, log_dir
-        self.params = StdioServerParameters(command=sys.executable, args=[str(SERVERS[name])], env={**os.environ})
+        # The scholar server reads its .env itself; the PDF server only sees its environment, so the keys it uses
+        # come from that same .env here (an exported variable still wins).
+        from it_common import scholar_key
+        env = {**os.environ}
+        for k in PDF_ENV if name == "paper_pdf" else ():
+            if not env.get(k) and scholar_key(k):
+                env[k] = scholar_key(k)
+        self.params = StdioServerParameters(command=sys.executable, args=[str(SERVERS[name])], env=env)
         self._log_path = (log_dir / f"_mcp_{name}.log") if log_dir else None
         self._log = open(self._log_path or "/dev/null", "a", encoding="utf-8")
 
@@ -145,7 +153,8 @@ async def cmd_call(a):
 # One command per Unit's network run; the logic is in the Unit's module (it_*.py), the rules in references/search/.
 
 def _mailto() -> str:
-    return os.environ.get("SCHOLAR_CONTACT_EMAIL", "research-agent@example.com")
+    from it_common import scholar_key
+    return scholar_key("SCHOLAR_CONTACT_EMAIL") or "research-agent@example.com"
 
 
 def _cfg(rd: Path) -> dict:
@@ -332,6 +341,7 @@ async def _download(a):
     keys = [c["citation_key"] for c in json.loads(cand.read_text())["candidates"]]
     todo = [k for k in keys if k not in attempted and not (rd / "pdfs" / f"{k}.pdf").exists()]
     if not todo:
+        record_attempts(rd, "paper_pdf", [])      # the fetch log exists even when there was nothing to fetch
         print(f"download: nothing new to fetch ({len(keys)} candidates, all attempted; use --retry-failed to try again)")
         return
     print(f"download: fetching {len(todo)} candidate(s)" + (f", skipping {len(keys) - len(todo)} already attempted" if len(todo) < len(keys) else ""), flush=True)

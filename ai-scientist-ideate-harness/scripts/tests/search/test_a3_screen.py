@@ -474,7 +474,7 @@ class TestPipeline(unittest.TestCase):
                 ans = fake_subagent(b)
                 if bad is None:
                     e = next(x for x in ans["scores"] if x["rel"] >= 3)
-                    e["evidence"]["data"], bad = "EEG", e["id"]          # one word: not a phrase (C03)
+                    e["evidence"]["problem"], bad = "EEG", e["id"]       # one word: not a phrase (C03)
                 (fan / b["out"]).write_text(json.dumps(ans))
             code, out = run("screen-merge", rd)
             self.assertEqual(code, 0, out)
@@ -491,6 +491,56 @@ class TestPipeline(unittest.TestCase):
             self.assertEqual(len(json.loads((rd / "screening_scores.json").read_text())["refused"]), 1)
         finally:
             shutil.rmtree(tmp)
+
+    def test_a_rationale_shared_word_for_word_is_asked_again_at_merge(self):
+        """C04 is not left for screen-build: the merge takes both entries out with why, and the next plan asks them
+        again - the A3 rounds can then fix what only the build would have refused."""
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            rd = tmp / "topic_research"
+            shutil.copytree(self.rd.parent / "topic_research", rd)
+            shutil.copy(self.rd.parent / "topic.md", tmp / "topic.md")
+            (rd / "screening_scores.json").unlink()
+            fan = rd / "_state" / "fanout" / "A3"
+            shutil.rmtree(fan)
+            self.assertEqual(run("screen-plan", rd, "--size", "40")[0], 0)
+            first = sorted(fan.glob("batch_*.in.json"))
+            twins = []
+            for f in first:
+                b = json.loads(f.read_text())
+                ans = fake_subagent(b)
+                for e in ans["scores"]:
+                    if e["rel"] >= 3 and "violates" not in e and not e["rationale"].startswith("no abstract") \
+                            and len(twins) < 2:
+                        e["rationale"] = "Removes ocular artifacts, but is an application rather than a method."
+                        twins.append(e["id"])
+                (fan / b["out"]).write_text(json.dumps(ans))
+            self.assertEqual(len(twins), 2)
+            code, out = run("screen-merge", rd)
+            self.assertEqual(code, 0, out)
+            sc = json.loads((rd / "screening_scores.json").read_text())
+            self.assertFalse(set(twins) & {e["id"] for e in sc["scores"]})
+            self.assertTrue(all(r["problems"][0].startswith("C04") for r in sc["refused"] if r["id"] in twins))
+            self.assertEqual(run("screen-plan", rd, "--size", "40")[0], 0)
+            new = [json.loads(f.read_text()) for f in sorted(fan.glob("batch_*.in.json")) if f not in first]
+            self.assertEqual(sorted(i for b in new for i in b["ids"]), sorted(twins))
+            self.assertTrue(all(p["refused_before"][0].startswith("C04") for b in new for p in b["papers"]))
+            for b in new:                                            # each answered on its own terms this time
+                (fan / b["out"]).write_text(json.dumps(fake_subagent(b)))
+            self.assertEqual(run("screen-merge", rd)[0], 0)          # the templated answers stay out, the new ones in
+            got = {e["id"]: e["batch"] for e in json.loads((rd / "screening_scores.json").read_text())["scores"]}
+            self.assertEqual({t: got.get(t) for t in twins}, {t: new[0]["batch"] for t in twins})
+            self.assertEqual(run("screen-build", rd, rd / "screening_scores.json")[0], 0)
+        finally:
+            shutil.rmtree(tmp)
+
+    def test_a_paraphrased_quote_is_refused_with_the_nearest_words(self):
+        """The refusal goes back to the scorer as `refused_before`: it names the text's own words to copy."""
+        paper = {"title": "Artifacts are not noise", "abstract": "Conventional artifact rejection removes eye movements."}
+        e = {"rel": 4, "evidence": {"problem": "Artifacts are not noise", "method": "standard artifact rejection",
+                                    "data": "not stated", "code": "not stated"}}
+        [msg] = it_screen.evidence_problems(e, paper)
+        self.assertIn("'standard artifact rejection' (the nearest words in the text: 'artifact rejection')", msg)
 
     def test_rescue(self):
         tmp = Path(tempfile.mkdtemp())

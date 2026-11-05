@@ -13,6 +13,10 @@
 Writes, each only into the fields its Unit owns (OWNERS below); a command that finds an ERROR writes nothing:
   ideate_tools.py frame set-protocol  <RD> protocol.json      A1.p
   ideate_tools.py frame set-strategy  <RD> strategy.json      A1.q   (before the search only)
+  ideate_tools.py frame strategy-brief <RD>                   A1.q, the harness's worker path: the queries fixed from the
+                                                              protocol -> the brief and the fill's schema (scratch only)
+  ideate_tools.py frame fill-strategy <RD> strategy_fill.json A1.q: the worker's flat words, anchor terms, sources, known
+                                                              items merged into the skeleton, then set-strategy
   ideate_tools.py frame query-revise  <RD> revision.json      A2.c's declared revision of A1.q's queries (after the search)
   ideate_tools.py frame anchors-revise <RD> anchors.json      A2.c's declared revision of A1.q's anchor terms (after the search)
   ideate_tools.py frame set-context   <RD> context.json       A1.v
@@ -25,13 +29,15 @@ Reads only:
 
 from __future__ import annotations
 
+import argparse
 import copy
 import json
+import os
 import re
 from datetime import date
 from pathlib import Path
 
-from it_common import (content_words, die, norm_title, now_iso, read_json, require_protocol, resolve_topic_file,
+from it_common import (STOP_WORDS, content_words, die, norm_title, now_iso, read_json, require_protocol, resolve_topic_file,
                        sha256_file, sha256_json, write_json, write_text)
 
 PROTOCOL_SCHEMA = "ideate-protocol/1"
@@ -358,6 +364,29 @@ def _render(protocol: dict, q: dict) -> dict:
     return q
 
 
+def _stray_words(words: list[str], terms: dict) -> list[str]:
+    """The flat-query words that no term of these axes ({axis: [terms]}) matches as a prefix, either way round."""
+    toks = {t.strip("*").lower() for ts in terms.values() for term in ts
+            for t in re.split(r"[\s/-]+", str(term)) if t.strip("*")}
+    return [w for w in words if not any(w.lower().startswith(t) or t.startswith(w.lower().strip("*")) for t in toks)]
+
+
+def _vocab(terms: dict, kind: dict) -> str:
+    """{axis: [terms]} as a finding names them: the words a flat query may draw on."""
+    return "; ".join(f"{i}{' (anchor: name one)' if kind.get(i) == 'anchor' else ''}: {', '.join(map(str, ts))}"
+                     for i, ts in terms.items())
+
+
+def _axes_hint(strategy: str, kind: dict, anchor_slot, anchor_axes: set) -> str:
+    """The protocol's axes as a Q03 finding needs them: told only "the anchor slot's axes", a model cannot tell which."""
+    of = lambda k: ", ".join(i for i, x in kind.items() if x == k) or "none"     # noqa: E731
+    slot = f"the anchor slot `{anchor_slot}` is {', '.join(sorted(anchor_axes)) or 'no search axis'}"
+    return {"anchor-methods": f" - anchor axes: {of('anchor')}; search axes: {of('search')}; {slot}: leave it out, "
+                              "the named tools stand in for it",
+            "contrast": f" - contrast axes: {of('contrast')}; search axes: {of('search')}; {slot}: leave it out, the "
+                        "contrast axis stands in for it"}.get(strategy, f" - search axes: {of('search')}")
+
+
 def check_strategy(cfg: dict, probe: bool = True, rd: Path | None = None) -> list[dict]:
     U = "A1.q"
     fs: list[dict] = []
@@ -417,7 +446,19 @@ def check_strategy(cfg: dict, probe: bool = True, rd: Path | None = None) -> lis
             "rigor": ("rigor" in kinds and s_ids == set(search_ids), "adds a rigor axis to every search axis"),
         }.get(st)
         if need and not need[0]:
-            fs.append(F("ERROR", "Q03", U, f"{qid} is a `{st}` variant, so it {need[1]}"))
+            hint = _axes_hint(st, kind, anchor_slot, anchor_axes)
+            if st in ("anchor-methods", "contrast") and qa.keys() & anchor_axes:
+                # dropping the anchor slot's axes strands the flat words taken from them: name those now, or the
+                # revision that fixes Q03 fails Q12 with no revision left
+                words, kept = content_words(q.get("flat_query")), {i: t for i, t in selected_terms(p, q).items()
+                                                                   if i not in anchor_axes}
+                gone = [w for w in _stray_words(words, kept) if w not in _stray_words(words, selected_terms(p, q))]
+                if gone:
+                    hint += f"; flat_query words {gone} go with it"
+                    if len(words) - len(gone) < FLAT_WORDS[0]:
+                        hint += (f", leaving {len(words) - len(gone)} of the {FLAT_WORDS[0]}-{FLAT_WORDS[1]} it needs: "
+                                 f"add from {_vocab(kept, kind)}")
+            fs.append(F("ERROR", "Q03", U, f"{qid} is a `{st}` variant, so it {need[1]}{hint}"))
         if st == "synonym-swap" and primary:
             ps, qs_ = selected_terms(p, primary[0]), selected_terms(p, q)
             if all(sorted(ps.get(i, [])) == sorted(qs_.get(i, [])) for i in search_ids):
@@ -428,14 +469,16 @@ def check_strategy(cfg: dict, probe: bool = True, rd: Path | None = None) -> lis
         sig_seen[sig] = qid
         # flat form: 3-5 content words, every one taken from the query's own terms
         words = content_words(q.get("flat_query"))
+        # the words a revision may draw on, named in the finding: told only "too few", a model pads from other axes
+        vocab = _vocab(selected_terms(p, q), kind)
         if not FLAT_WORDS[0] <= len(words) <= FLAT_WORDS[1]:
             fs.append(F("ERROR", "Q12", U, f"{qid}: flat_query has {len(words)} content words; ranking engines and the "
-                                          f"AND-ing fallbacks need {FLAT_WORDS[0]}-{FLAT_WORDS[1]}"))
-        toks = {t.strip("*").lower() for terms in selected_terms(p, q).values() for term in terms
-                for t in re.split(r"[\s/-]+", str(term)) if t.strip("*")}
-        stray = [w for w in words if not any(w.lower().startswith(t) or t.startswith(w.lower().strip("*")) for t in toks)]
+                                          f"AND-ing fallbacks need {FLAT_WORDS[0]}-{FLAT_WORDS[1]}, taken from the "
+                                          f"terms (not the labels) of {qid}'s own axes - {vocab}"))
+        stray = _stray_words(words, selected_terms(p, q))
         if stray:
-            fs.append(F("ERROR", "Q12", U, f"{qid}: flat_query words {stray} come from none of the query's axis terms"))
+            fs.append(F("ERROR", "Q12", U, f"{qid}: flat_query words {stray} come from none of the query's axis terms "
+                                          f"(an axis label is not a term) - {vocab}"))
         if q.get("strategy") == "anchor-methods":
             named = [t for i in qa if kind.get(i) == "anchor" for t in selected_terms(p, q).get(i, [])
                      if all(any(w.lower().startswith(x.strip("*").lower()) for w in words) for x in str(t).split())]
@@ -512,6 +555,208 @@ def match_known_items(items: list[dict], hits: list[dict]) -> list[dict]:
         out.append({"ref": ref, "resolved": h is not None, "title": (h or {}).get("title"), "doi": (h or {}).get("doi"),
                     "year": (h or {}).get("year")})
     return out
+
+
+# ---------------------------------------------------------------------------------------- A1.q skeleton and fill
+# The harness's worker path (contracts/recipes/search.json A1.q; rules references/search/A1-frame.md#a1q-fill). As in
+# the archived engine, code does what follows from the inputs and the model only the judgement: `frame strategy-brief`
+# derives the variants the depth needs and the axes of each from the protocol, and writes the brief the model reads
+# and the schema its answer is decoded under; the model answers with the flat words, anchor terms, sources and known
+# items; `frame fill-strategy` merges that into a draft and submits it exactly as `set-strategy` does.
+BRIEF_FILE = "_state/A1/strategy_brief.md"
+FILL_FILE = "_state/A1/strategy_fill.json"
+FILL_SCHEMA_FILE = "_state/A1/strategy_fill.schema.json"
+FILL_KEYS = ("flat", "anchor_terms", "sources", "known_items", "a1q_note")
+FILL_CODES = {"Q12", "Q14", "Q15", "Q16"}          # the findings a fill can answer; the others come from the protocol
+WHY = {"primary": "maximum precision", "synonym-swap": "phrasings the ranking engines see one at a time",
+       "anchor-methods": "the named tools a generic query misses", "loosen": "papers that do not state it",
+       "contrast": "the comparator / adjacent-field literature",
+       "counter-evidence": "failures and null results a novelty claim must not ignore", "recent": "preprints of the last year"}
+SPECIAL_KIND = {"anchor-methods": "anchor", "contrast": "contrast", "counter-evidence": "counter"}
+STEM_ENDINGS = ("s", "e", "es", "y", "ic", "al", "ing", "ion", "ation")   # a stem's words in the fill's word list
+
+
+def skeleton_queries(p: dict, depth: str) -> tuple[list[dict], list[str]]:
+    """The variants `depth` needs, each with the axes it takes from the protocol (Method §1), ids in order ->
+    (queries without flat_query, warnings). Pure: the same protocol and depth give the same skeleton."""
+    axes = [a for a in p.get("axes") or [] if isinstance(a, dict) and a.get("id")]
+    T, slot = _terms(p), {a["id"]: a.get("slot") for a in axes}
+    search = [a["id"] for a in axes if a.get("kind") == "search"]
+    _, anchor_slot, outcome_slot = framework_spec(p.get("framework") or {}) or (None, None, None)
+    core = [i for i in search if slot.get(i) != anchor_slot]      # what an anchor or contrast axis is ANDed with
+    left_out = [i for i in search if i not in core]
+    out, warn = [], []
+
+    def add(st: str, ax: dict, why: str, **extra) -> None:
+        out.append({"id": f"Q{len(out) + 1}", "strategy": st, "axes": ax, **extra, "rationale": why})
+
+    for st in DEPTH_STRATEGIES.get(depth, DEPTH_STRATEGIES["standard"]):
+        if st in ("primary", "recent"):
+            add(st, {i: "all" for i in search}, f"{st}: {' + '.join(search)}, every term"
+                + (", last 12 months" if st == "recent" else "") + f" - {WHY[st]}",
+                **({"year": "last-12-months"} if st == "recent" else {}))
+        elif st == "synonym-swap":                 # another subset: every term but each axis's first
+            if all(len(T.get(i, [])) < 2 for i in search):
+                warn.append("every search axis has one term: a synonym-swap cannot differ from the primary (A1.p adds synonyms)")
+            add(st, {i: T[i][1:] if len(T.get(i, [])) > 1 else list(T.get(i, [])) for i in search},
+                f"synonym-swap: {' + '.join(search)}, every term but each axis's first - {WHY[st]}")
+        elif st == "loosen":                       # the outcome is the concept papers most often leave unstated
+            drop = next((i for i in search if outcome_slot and slot.get(i) == outcome_slot), None) or \
+                (core[-1] if core else search[-1] if search else None)
+            if drop is None:
+                warn.append("no search axis: no `loosen` query")
+                continue
+            add(st, {i: "all" for i in search if i != drop},
+                f"loosen: drops {drop}{f' ({slot[drop]})' if slot.get(drop) else ''} - {WHY[st]}")
+        elif st in SPECIAL_KIND:
+            k = SPECIAL_KIND[st]
+            keep = search if st == "counter-evidence" else core
+            mine = [a["id"] for a in axes if a.get("kind") == k]
+            if not mine:
+                warn.append(f"no {k} axis in the protocol: no `{st}` query (A1.p adds one)")
+            if not keep:
+                warn.append(f"no search axis besides the anchor slot's: a `{st}` query has nothing to AND with")
+            for i in mine if keep else []:
+                gone = f" ({', '.join(left_out)}, the anchor slot, left out)" if left_out and st != "counter-evidence" else ""
+                add(st, {i: "all", **{j: "all" for j in keep}}, f"{st}: {i} + {' + '.join(keep)}{gone} - {WHY[st]}")
+    return out, warn
+
+
+def _fill_vocab(p: dict, q: dict, kind: dict) -> list[str]:
+    """The brief's lines for one query: its axes and the terms a flat word may come from."""
+    label = {a.get("id"): a.get("label") or a.get("name") or "" for a in p.get("axes") or [] if isinstance(a, dict)}
+    lines = []
+    for i, ts in selected_terms(p, q).items():
+        if q["strategy"] == "anchor-methods" and kind.get(i) == "anchor":
+            continue
+        lines.append(f"- {i} {label.get(i, '')}: {', '.join(map(str, ts))}".replace("  ", " "))
+    return lines
+
+
+def flat_words(terms: dict, skip: set = frozenset()) -> list[str]:
+    """The single words a flat query may use, from {axis: [terms]}: every content word of every term (split as Q12
+    splits them), a stem (`denois*`) as itself and with common endings. Each is one content word, so a list of them is
+    exactly that many words and none of them is stray (Q12)."""
+    out: dict[str, str] = {}
+    for i, ts in terms.items():
+        if i in skip:
+            continue
+        for term in ts:
+            for t in re.split(r"[\s/-]+", str(term)):
+                w = t.strip().strip('"()')
+                if not w.rstrip("*") or w.rstrip("*").lower() in STOP_WORDS:
+                    continue
+                stem = w.rstrip("*")
+                for x in [stem] + ([stem + e for e in STEM_ENDINGS] if w.endswith("*") else []):
+                    out.setdefault(x.lower(), x)
+    return list(out.values())
+
+
+def fill_schema(p: dict, qs: list[dict], depth: str) -> dict:
+    """The JSON schema of strategy_fill.json for these queries: an Ollama worker's answer is decoded under it (the
+    archived engine's fence), so the keys, the query ids, one anchor per anchor-methods query, the word counts and
+    the source names cannot come out wrong."""
+    kind = {a.get("id"): a.get("kind") for a in p.get("axes") or [] if isinstance(a, dict)}
+    lo, hi = FLAT_WORDS
+    words = lambda ws, a, b: {"type": "array", "items": {"enum": ws}, "minItems": a, "maxItems": b}   # noqa: E731
+    flat = {}
+    for q in qs:
+        terms = selected_terms(p, q)
+        if q["strategy"] == "anchor-methods":
+            anchor = {i for i in terms if kind.get(i) == "anchor"}
+            anchors = [t for i in anchor for t in terms[i]]
+            flat[q["id"]] = {"type": "object", "properties": {"anchor": {"enum": anchors},
+                                                              "words": words(flat_words(terms, anchor), lo - 1, hi - 2)},
+                             "required": ["anchor", "words"], "additionalProperties": False}
+        else:
+            flat[q["id"]] = words(flat_words(terms), lo, hi)
+    item = {"type": "object", "properties": {"title": {"type": "string"}, "why": {"type": "string"}},
+            "required": ["title", "why"], "additionalProperties": False}
+    return {"type": "object", "additionalProperties": False, "required": ["flat", "anchor_terms", "sources", "known_items"],
+            "properties": {
+                "flat": {"type": "object", "properties": flat, "required": list(flat), "additionalProperties": False},
+                "anchor_terms": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 5},
+                "sources": {"type": "array", "items": {"enum": list(KNOWN_SOURCES)}, "minItems": 2},
+                "known_items": {"type": "array", "items": item, "minItems": 0 if depth == "quick" else 2}}}
+
+
+def strategy_brief(cfg: dict) -> tuple[str, list[dict], list[str]]:
+    """The brief a model fills the strategy from -> (markdown, skeleton queries, warnings)."""
+    p = cfg.get("protocol") or {}
+    depth = cfg.get("depth") if cfg.get("depth") in DEPTH_STRATEGIES else "standard"
+    qs, warn = skeleton_queries(p, depth)
+    kind = {a.get("id"): a.get("kind") for a in p.get("axes") or [] if isinstance(a, dict)}
+    fw = p.get("framework") or {}
+    _, anchor_slot, _ = framework_spec(fw) or (None, None, None)
+    slot_axes = [a["id"] for a in p.get("axes") or [] if isinstance(a, dict) and a.get("kind") == "search"
+                 and a.get("slot") == anchor_slot]
+    lo, hi = FLAT_WORDS
+    L = [f"# A1.q - the strategy to fill in", "",
+         f"Topic: {cfg.get('topic') or '(see the topic file)'}",
+         f"Framework: {fw.get('name')}; anchor slot `{anchor_slot}`" + (f" = {', '.join(slot_axes)}" if slot_axes else ""),
+         f"Depth: {depth}. The tool has fixed {len(qs)} queries and the axes of each; you write their flat words.", "",
+         f"## flat - {lo}-{hi} words per query, one word per item, each from that query's own terms below",
+         '("artefact removal" is two items: "artefact", "removal")', ""]
+    for q in qs:
+        L.append(f"### {q['id']} {q['strategy']} - {q['rationale'].split(': ', 1)[-1]}")
+        if q["strategy"] == "anchor-methods":
+            anchors = [t for i, ts in selected_terms(p, q).items() if kind.get(i) == "anchor" for t in ts]
+            L += [f"anchor: exactly one of {', '.join(map(str, anchors))}", f"words: {lo - 1}-{hi - 2} more, from"]
+        L += _fill_vocab(p, q, kind) + [""]
+    one = lambda q: json.dumps({"anchor": "<one anchor>", "words": ["<word>", "<word>"]}         # noqa: E731
+                               if q["strategy"] == "anchor-methods" else ["<word>", "<word>", "<word>"])
+    flat = (",\n" + " " * 10).join(f'"{q["id"]}": {one(q)}' for q in qs)
+    L += ["## anchor_terms, sources, known_items", "",
+          "As the rules say. sources: " + ", ".join(KNOWN_SOURCES) + ".", "",
+          f"## Your answer: {FILL_FILE}", "", "```json",
+          '{"flat": {' + flat + "},",
+          ' "anchor_terms": ["<lower-case stem>", "<lower-case stem>"], "sources": ["<source>", "<source>"],',
+          ' "known_items": [{"title": "<paper title>", "why": "<why the search must find it>"}]}', "```"]
+    if warn:
+        L += ["", "## The protocol cannot give every variant (A1.p's to fix, not yours)", ""] + [f"- {w}" for w in warn]
+    return "\n".join(L) + "\n", qs, warn
+
+
+def _flat_text(v) -> str:
+    """A fill's flat entry -> the flat query: a string, a list of words, or {"anchor", "words"}."""
+    if isinstance(v, dict):
+        v = [v.get("anchor") or ""] + list(v.get("words") or [])
+    if isinstance(v, list):
+        v = " ".join(str(w).strip() for w in v if str(w).strip())
+    return re.sub(r"\s+", " ", str(v or "")).strip()
+
+
+def merge_fill(cfg: dict, fill: dict) -> tuple[dict, list[str]]:
+    """skeleton + fill -> (the strategy draft set-strategy takes, problems with the fill's shape). Normalises what code
+    can: anchor terms lower-cased, repeated words, sources and items dropped."""
+    p = cfg.get("protocol") or {}
+    depth = cfg.get("depth") if cfg.get("depth") in DEPTH_STRATEGIES else "standard"
+    qs, _ = skeleton_queries(p, depth)
+    problems = []
+    if not isinstance(fill, dict):
+        return {"queries": qs}, ["strategy_fill.json is one JSON object {flat, anchor_terms, sources, known_items}"]
+    extra = sorted(set(fill) - set(FILL_KEYS))
+    if extra:
+        problems.append(f"strategy_fill.json has keys this Unit does not own: {extra} - only {list(FILL_KEYS[:4])}")
+    flat = fill.get("flat") if isinstance(fill.get("flat"), dict) else {}
+    if not isinstance(fill.get("flat"), dict):
+        problems.append('`flat` is an object: {"Q1": [words], ...}, one entry per query of the brief')
+    for q in qs:
+        text = _flat_text(flat.get(q["id"]))
+        if not text:
+            problems.append(f"flat.{q['id']} is missing: {q['id']} ({q['strategy']}) needs its words")
+        q["flat_query"] = " ".join(dict.fromkeys(text.split()))
+    stray = sorted(set(flat) - {q["id"] for q in qs})
+    if stray:
+        problems.append(f"flat has {stray}, which the brief does not list (its queries: {[q['id'] for q in qs]})")
+    lst = lambda k: fill.get(k) if isinstance(fill.get(k), list) else []     # noqa: E731
+    draft = {"queries": qs, "dropped_terms": [],
+             "anchor_terms": list(dict.fromkeys(str(x).strip().lower() for x in lst("anchor_terms") if str(x).strip())),
+             "sources": list(dict.fromkeys(str(x).strip() for x in lst("sources"))),
+             "known_items": [k for k in lst("known_items") if isinstance(k, dict)]}
+    if fill.get("a1q_note"):
+        draft["a1q_note"] = fill["a1q_note"]
+    return draft, problems
 
 
 # ----------------------------------------------------------------------------------------------------- A1.v context
@@ -693,28 +938,37 @@ def print_findings(fs: list[dict]) -> None:
         print(f"  {f['level']:<5} {f['code']} [{f['unit']}] {f['msg']}")
 
 
-def refuse_if_errors(fs: list[dict], what: str) -> None:
+def refuse_if_errors(fs: list[dict], what: str, foreign: str = "") -> None:
     errs = errors(fs)
     print_findings(fs)
-    if errs:
-        die(f"{len(errs)} error(s) in {what}; nothing was written", 2)
+    if errs or foreign:
+        die("; ".join(x for x in (foreign, f"{len(errs)} error(s) in {what}" if errs else "") if x)
+            + "; nothing was written", 2)
 
 
 def _only_keys(data: dict, allowed: set, what: str) -> None:
+    if msg := _foreign(data, allowed, what):
+        die(msg, 2)
+
+
+def _foreign(data: dict, allowed: set, what: str) -> str:
+    """The refusal for keys a draft may not carry ('' if none). A model-written draft is refused for them together with
+    its content findings (refuse_if_errors), not before them, so the worker's one revision sees every problem."""
     extra = sorted(set(data) - allowed)
-    if extra:
-        die(f"{what} has keys this Unit does not own: {extra}", 2)
+    return f"{what} has keys this Unit does not own: {extra} - leave them out" if extra else ""
 
 
 # ------------------------------------------------------------------------------------------------------- commands
 def _cmd_set_protocol(a):
     rd = Path(a.research_dir)
     new = read_json(Path(a.input_json))
-    _only_keys(new, {"topic", "topic_file", "depth", "protocol"}, "protocol.json")
+    foreign = _foreign(new, {"topic", "topic_file", "depth", "protocol"}, "protocol.json")
     cfg = load_cfg(rd)
     before = copy.deepcopy(cfg.get("protocol"))
     out = {**cfg, **{k: new[k] for k in ("topic", "topic_file", "depth") if k in new}}
     p = dict(new.get("protocol") or {})
+    if isinstance(p.get("axes"), list):
+        p["axes"] = [_normal_axis(x) for x in p["axes"]]
     p["schema"] = PROTOCOL_SCHEMA
     p.setdefault("review_type", "scoping")
     p.setdefault("reporting_standard", "PRISMA-ScR")
@@ -731,7 +985,7 @@ def _cmd_set_protocol(a):
     fs = check_protocol(out, rd)
     if tf is None:
         fs.append(F("WARN", "P10", "A1.p", f"topic file {out.get('topic_file')!r} not found; its hash is not recorded"))
-    refuse_if_errors(fs, "the protocol")
+    refuse_if_errors(fs, "the protocol", foreign)
     if (rd / "step2_raw_papers.json").exists():
         print("  note: the search has already run - a protocol change after it makes every screening score stale")
     write_json(cfg_path(rd), out)
@@ -743,13 +997,16 @@ def _cmd_set_protocol(a):
 def _cmd_set_strategy(a):
     rd = Path(a.research_dir)
     new = read_json(Path(a.input_json))
-    _only_keys(new, {"queries", "dropped_terms", "anchor_terms", "sources", "known_items", "a1q_note"}, "strategy.json")
+    foreign = "; ".join(x for x in (getattr(a, "refusal", ""), _foreign(
+        new, {"queries", "dropped_terms", "anchor_terms", "sources", "known_items", "a1q_note"}, "strategy.json")) if x)
     cfg = load_cfg(rd)
     if "protocol" not in cfg:
         die("no protocol in step0: run `frame set-protocol` (A1.p) first", 2)
     if errors(check_protocol(cfg, rd)):
         die("the protocol has errors (`frame check --unit A1.p`); fix A1.p first", 2)
     if (rd / "step2_raw_papers.json").exists():
+        if foreign:
+            die(foreign, 2)
         if _same_strategy(cfg, new):
             print("A1.q: the strategy is the one in step0 - nothing written, the Unit re-recorded")
             return
@@ -769,12 +1026,130 @@ def _cmd_set_strategy(a):
     same = hist and hist[-1].get("action") == "set" and hist[-1].get("queries") == entry["queries"] and \
         all(cfg.get(k) == out.get(k) for k in ("dropped_terms", "anchor_terms", "sources", "known_items"))
     out["queries_history"] = hist if same else hist + [entry]   # the same strategy again (a resumed run) adds nothing
-    refuse_if_errors(check_strategy(out, probe=False), "the strategy")
+    fs = check_strategy(out, probe=False)
+    theirs = sorted({f["code"] for f in errors(fs)} - FILL_CODES) if getattr(a, "fill", False) else []
+    if theirs:
+        print(f"  note: {', '.join(theirs)} come from the protocol's axes, not from the fill - A1.p has to change them")
+    refuse_if_errors(fs, "the strategy", foreign)
     write_json(cfg_path(rd), out)
     render_view(rd, out)
     print(f"A1.q: {len(out['queries'])} query variants written -> step0_session_config.json")
     if out.get("depth") != "quick" and "scope_probe" not in out:
         print("  next: `mcp_bridge.py probe <RD>` (scope probe + known-item lookup), then A1.e")
+
+
+def protocol_schema(depth: str) -> dict:
+    """The JSON schema of A1.p's draft (_state/A1/protocol.json): its keys and enumerations, from this module's
+    constants, so a schema-decoded draft has the shape set-protocol takes. What the shape cannot say - slots that
+    fit the framework, refs that name slots, terms per axis - set-protocol's checks still say."""
+    s = {"type": "string"}
+    lst = lambda it, lo=0: {"type": "array", "items": it, "minItems": lo}       # noqa: E731
+    obj = lambda props, req: {"type": "object", "properties": props, "required": req, "additionalProperties": False}  # noqa: E731
+    slot = obj({"slot": s, "value": s, "operational_role": {"enum": list(ROLES)}, "reason": s},
+               ["slot", "value", "operational_role", "reason"])
+    framework = obj({"name": {"enum": sorted(FRAMEWORKS) + ["custom"]}, "rationale": s, "slots": lst(slot, 2),
+                     "anchor_slot": s, "outcome_slot": s, "alternative": obj({"name": s, "why_not": s}, ["name", "why_not"])},
+                    ["name", "rationale", "slots"])
+    # every field required: a schema-decoded answer leaves an optional field out even when it means to write it;
+    # "none" / "" say the field does not apply, and set-protocol drops them (_normal_axis)
+    axis = obj({"id": s, "kind": {"enum": list(AXIS_KINDS)}, "slot": s, "name": s, "terms": lst(s, 1), "outcome": s},
+               ["id", "kind", "slot", "name", "terms", "outcome"])
+    crit = obj({"id": s, "text": s, "refs": lst(s, 1)}, ["id", "text", "refs"])
+    protocol = obj({"framework": framework, "axes": lst(axis, 2), "outcomes": lst(obj({"id": s, "text": s}, ["id", "text"]), 1),
+                    "timeframe": s, "timeframe_reason": s, "setting": s, "languages": lst(s),
+                    "criteria": obj({"inclusion": lst(crit, 1), "exclusion": lst(crit, 1)}, ["inclusion", "exclusion"]),
+                    "a1p_note": s}, ["framework", "axes", "outcomes", "timeframe", "timeframe_reason", "criteria"])
+    return obj({"topic": s, "topic_file": s, "depth": {"enum": [depth]}, "protocol": protocol},
+               ["topic", "topic_file", "depth", "protocol"])
+
+
+def _normal_axis(a):
+    """An axis as set-protocol checks it: a slot or outcome of "none" / "" (a schema-decoded draft writes every
+    field) is no slot or outcome."""
+    if not isinstance(a, dict):
+        return a
+    return {k: v for k, v in a.items() if not (k in ("slot", "outcome") and str(v or "").strip().lower() in ("", "none"))}
+
+
+def context_schema() -> dict:
+    """A1.v's draft as the harness's worker writes it: venues, domain and the packages to check (set-context checks
+    them and records the local environment itself - the model names, the code looks)."""
+    s = {"type": "string"}
+    return {"type": "object", "additionalProperties": False, "required": ["target_venues", "expert_domain", "packages"],
+            "properties": {"target_venues": {"type": "array", "items": s, "minItems": 2, "maxItems": 4},
+                           "expert_domain": s, "packages": {"type": "array", "items": s, "maxItems": 15}, "a1v_note": s}}
+
+
+def evaluation_schema(checks: tuple, criteria: list) -> dict:
+    """One A1.e reply: a finding per check the brief asks for; E6 names a protocol criterion."""
+    s = {"type": "string"}
+    f = {"type": "object", "additionalProperties": False,
+         "required": ["check", "result", "severity", "fix_target", "evidence", "fix", "criterion", "word", "alt_reading"],
+         "properties": {"check": {"enum": list(checks)}, "result": {"enum": ["pass", "fail", "note"]},
+                        "severity": {"enum": ["none", "improvable", "blocking"]},
+                        "fix_target": {"enum": ["none", "A1.p", "A1.q"]}, "evidence": s, "fix": s,
+                        "criterion": {"enum": ["none"] + list(criteria)}, "word": s, "alt_reading": s}}
+    return {"type": "object", "additionalProperties": False, "required": ["verdict", "summary", "findings"],
+            "properties": {"verdict": {"enum": list(VERDICTS)}, "summary": s,       # `model`: code's (the run's)
+                           "findings": {"type": "array", "items": f, "minItems": len(checks)}}}
+
+
+def _cmd_schemas(a):
+    rd = Path(a.research_dir)
+    cfg = load_cfg(rd) if (rd / "step0_session_config.json").exists() else {}
+    depth = getattr(a, "depth", None) or cfg.get("depth") or "standard"
+    write_json(rd / "_state" / "A1" / "protocol.schema.json", protocol_schema(depth))
+    write_json(rd / "_state" / "A1" / "context.schema.json", context_schema())
+    print(f"A1: answer schemas -> {rd / '_state' / 'A1'} (protocol.schema.json, context.schema.json)")
+
+
+def probe_environment(rd: Path, packages: list) -> dict:
+    """local_environment from what is on this machine now: each named package imported (env-probe's test), every
+    data root that exists. The model names the packages the topic needs; it never says what is installed."""
+    from ideate_tools import PROBE_MAX_CHILDREN, PROBE_ROOTS, _package_version
+    present, missing = [], []
+    for name in dict.fromkeys(str(x).strip() for x in packages or [] if str(x).strip()):
+        ok, version = _package_version(name)
+        (present if ok else missing).append(f"{name} {version}".strip() if ok and version else name)
+    cached = []
+    for root in list(PROBE_ROOTS) + [str(Path(rd) / "datasets")]:
+        path = Path(root).expanduser()
+        if path.is_dir():
+            kids = sorted(c.name for c in path.iterdir())[:PROBE_MAX_CHILDREN]
+            cached.append(f"{root}: {len(kids)} entries" + (f" ({', '.join(kids[:8])})" if kids else ""))
+    return {"artefacts": [], "cached_data": cached, "packages_present": present, "packages_missing": missing}
+
+
+def _cmd_strategy_brief(a):
+    rd = Path(a.research_dir)
+    cfg = load_cfg(rd)
+    if "protocol" not in cfg:
+        die("no protocol in step0: run `frame set-protocol` (A1.p) first", 2)
+    if errors(check_protocol(cfg, rd)):
+        die("the protocol has errors (`frame check --unit A1.p`); fix A1.p first", 2)
+    text, qs, warn = strategy_brief(cfg)
+    depth = cfg.get("depth") if cfg.get("depth") in DEPTH_STRATEGIES else "standard"
+    write_text(rd / BRIEF_FILE, text)
+    write_json(rd / FILL_SCHEMA_FILE, fill_schema(cfg["protocol"], qs, depth))
+    print(f"A1.q: {len(qs)} queries fixed from the protocol -> {BRIEF_FILE} (fill {FILL_FILE}, schema {FILL_SCHEMA_FILE})")
+    for w in warn:
+        print(f"  WARN {w}")
+
+
+def _cmd_fill_strategy(a):
+    rd = Path(a.research_dir)
+    cfg = load_cfg(rd)
+    if "protocol" not in cfg:
+        die("no protocol in step0: run `frame set-protocol` (A1.p) first", 2)
+    try:
+        fill = read_json(Path(a.input_json))
+    except ValueError as e:
+        die(f"{Path(a.input_json).name} is not valid JSON ({e}); nothing was written", 2)
+    draft, problems = merge_fill(cfg, fill)
+    path = rd / "_state" / "A1" / "strategy.json"            # the draft set-strategy takes, kept for the audit
+    write_json(path, draft)
+    _cmd_set_strategy(argparse.Namespace(research_dir=str(rd), input_json=str(path), refusal="; ".join(problems),
+                                         fill=True))
 
 
 def a1q_anchor_terms(cfg: dict) -> list:
@@ -859,6 +1234,89 @@ def _cmd_query_revise(a):
     print(f"  -> run `mcp_bridge.py search <RD> --only {','.join(n for _, n in done)}`")
 
 
+# ---- A2.c's re-plan for a worker that cannot run commands: the tool lists what to revise, the model chooses new flat
+# words (and, if it wants, fewer terms), the tool writes the revisions and names the new ids for `search --only`
+def _replan_queries(rd: Path, cfg: dict) -> list[dict]:
+    rel = Path(rd) / "step2_relevance_check.json"
+    rounds = (read_json(rel).get("rounds") or []) if rel.exists() else []
+    last = rounds[-1] if rounds else {}
+    by_id = {q.get("id"): q for q in cfg.get("queries") or []}
+    return [{**by_id[v["query"]], "replan_reason": v.get("reason")} for v in last.get("verdicts") or []
+            if v.get("verdict") == "replan" and by_id.get(v.get("query"), {}).get("status", "active") == "active"]
+
+
+def _cmd_replan_brief(a):
+    rd = Path(a.research_dir)
+    cfg = load_cfg(rd)
+    p = cfg["protocol"]
+    kind = {x.get("id"): x.get("kind") for x in p.get("axes") or [] if isinstance(x, dict)}
+    qs = _replan_queries(rd, cfg)
+    lo, hi = FLAT_WORDS
+    L = ["# A2.c re-plan - new flat words for each query judged replan", "",
+         f"Each replacement keeps its query's strategy and axes; give it {lo}-{hi} new flat words (one word per item, "
+         "from the terms below), and, if a term pulled the query off topic, a smaller subset of an axis's terms.", ""]
+    props = {}
+    for q in qs:
+        terms = selected_terms(p, q)
+        L += [f"## {q['id']} {q.get('strategy')} - now: {q.get('flat_query')!r}", f"why replan: {q.get('replan_reason')}"]
+        L += _fill_vocab(p, {**q, "strategy": ""}, kind) + [""]
+        props[q["id"]] = {"type": "object", "additionalProperties": False, "required": ["flat", "terms", "reason"],
+                          "properties": {"flat": {"type": "array", "items": {"enum": flat_words(terms)}, "minItems": lo,
+                                                  "maxItems": hi},
+                                         "terms": {"type": "object", "additionalProperties": False, "properties": {
+                                             i: {"type": "array", "items": {"enum": ts}} for i, ts in terms.items()}},
+                                         "reason": {"type": "string"}}}
+    write_text(rd / "_state" / "A2c" / "replan_brief.md", "\n".join(L) + "\n")
+    write_json(rd / "_state" / "A2c" / "replan.schema.json", {"type": "object", "additionalProperties": False,
+                                                               "required": list(props), "properties": props})
+    print(f"A2.c re-plan: {len(qs)} quer(y/ies) to revise -> _state/A2c/replan_brief.md")
+
+
+def _cmd_replan_apply(a):
+    """The model's choices as `query-revise` revisions: each replan query retired, its replacement (the same strategy
+    and axes, the new flat words, the chosen term subsets) added under the next free id. Prints the new ids."""
+    rd = Path(a.research_dir)
+    cfg = load_cfg(rd)
+    ans = read_json(Path(a.input_json))
+    qs = _replan_queries(rd, cfg)
+    rel = read_json(rd / "step2_relevance_check.json") if (rd / "step2_relevance_check.json").exists() else {}
+    rnd = len(rel.get("rounds") or [])
+    used = {int(m.group(1)) for q in cfg.get("queries") or [] for m in [re.fullmatch(r"Q(\d+)", str(q.get("id")))] if m}
+    revs, missing = [], []
+    for q in qs:
+        x = ans.get(q["id"]) if isinstance(ans, dict) else None
+        if not isinstance(x, dict) or not x.get("flat"):
+            missing.append(q["id"])
+            continue
+        nid = f"Q{max(used | {0}) + 1}"
+        used.add(int(nid[1:]))
+        chosen = x.get("terms") or {}                  # a smaller term subset per axis, else the axis as it was
+        terms_now = selected_terms(cfg["protocol"], q)
+        axes = {}
+        for i, v in (q.get("axes") or {}).items():
+            pick = [t for t in terms_now.get(i, []) if t in set(chosen.get(i) or [])]
+            axes[i] = pick or v
+        add = {k: v for k, v in q.items() if k in ("strategy", "year", "sources")}
+        add.update({"id": nid, "axes": axes, "flat_query": " ".join(dict.fromkeys(map(str, x["flat"]))),
+                    "rationale": f"replan of {q['id']}: {x.get('reason') or q.get('replan_reason')}"})
+        revs.append({"retire": q["id"], "add": add, "reason": str(x.get("reason") or q.get("replan_reason") or "replan"),
+                     "round": rnd})
+    if missing:
+        die(f"no revision for {missing}: every query judged replan needs new flat words", 2)
+    old = {q["id"]: q for q in qs}
+    same = [r["retire"] for r in revs
+            if {w.lower() for w in content_words(r["add"]["flat_query"])} ==
+            {w.lower() for w in content_words(old[r["retire"]].get("flat_query"))}
+            and r["add"]["axes"] == old[r["retire"]].get("axes")]
+    if same:
+        die(f"{same}: the revision repeats the query it retires (the same flat words and terms) - a re-plan changes "
+            "something: other words from the brief's terms, or fewer terms of the axis that pulled it off topic", 2)
+    path = rd / "_state" / "A2c" / "replan_revisions.json"
+    write_json(path, revs)
+    _cmd_query_revise(argparse.Namespace(research_dir=str(rd), input_json=str(path)))
+    print("replan-ids: " + ",".join(r["add"]["id"] for r in revs))
+
+
 def _cmd_add_terms(a):
     """A2.c's declared revision of A1.p: add synonyms an axis was missing (found by the relevance check's vocabulary
     feedback or a missing known item). Add only; every added term must then be asked by a query (`query-revise`)."""
@@ -940,7 +1398,10 @@ def _cmd_retire_terms(a):
 def _cmd_set_context(a):
     rd = Path(a.research_dir)
     new = read_json(Path(a.input_json))
-    _only_keys(new, {"target_venues", "expert_domain", "local_environment", "a1v_note"}, "context.json")
+    packages = new.pop("packages", None)
+    foreign = _foreign(new, {"target_venues", "expert_domain", "local_environment", "a1v_note"}, "context.json")
+    if packages is not None and "local_environment" not in new:      # the harness's worker names, the code checks
+        new["local_environment"] = probe_environment(rd, packages if isinstance(packages, list) else [packages])
     if not isinstance(new.get("local_environment", {}), dict) or not isinstance(new.get("target_venues", []), list):
         die("context.json: local_environment is an object {artefacts, cached_data, packages_present, packages_missing} "
             "and target_venues a list of 2-4 venues", 2)
@@ -954,7 +1415,7 @@ def _cmd_set_context(a):
         if "probe" in (cfg.get("local_environment") or {}):
             le["probe"] = cfg["local_environment"]["probe"]      # B0's field: kept, never written here
         out["local_environment"] = le
-    refuse_if_errors(check_context(out), "the context")
+    refuse_if_errors(check_context(out), "the context", foreign)
     write_json(cfg_path(rd), out)
     print("A1.v: target_venues, expert_domain, local_environment written -> step0_session_config.json")
 
@@ -1031,7 +1492,36 @@ def _cmd_eval_brief(a):
     brief = BRIEF.format(round=n, topic=tf or cfg.get("topic_file"), view=view.resolve(), previous=prev)
     path = rd / "_state" / "A1e" / f"brief_r{n}.md"
     write_text(path, brief)
+    write_json(rd / "_state" / "A1e" / f"schema_r{n}.json", evaluation_schema(CHECK_IDS, sorted(criteria_ids(cfg))))
     print(path)
+
+
+def _normal_evaluation(r: dict) -> dict:
+    """What code can settle in a reader's reply: severity and fix_target belong to failed checks only, E6's fields to
+    an E6 note or fail; the verdict follows the findings as the brief states (a blocking finding: revision-required;
+    a failed check: not approved). An absent model is the run's."""
+    r = dict(r)
+    fs = []
+    for f in r.get("findings") or []:
+        if not isinstance(f, dict):
+            continue
+        f = {k: v for k, v in f.items() if v not in ("", None, [], "none")}
+        if f.get("result") != "fail":
+            f.pop("severity", None)
+            f.pop("fix_target", None)
+        if f.get("check") != "E6" or f.get("result") == "pass":
+            for k in ("criterion", "word", "alt_reading"):
+                f.pop(k, None)
+        fs.append(f)
+    if "findings" in r:
+        r["findings"] = fs
+    if any(f.get("severity") == "blocking" for f in fs):
+        r["verdict"] = "revision-required"
+    elif r.get("verdict") == "approved" and any(f.get("result") == "fail" for f in fs):
+        r["verdict"] = "approved-with-notes"
+    if os.environ.get("IDEATE_LLM_MODEL"):        # the run knows its model; a model asked names one ("gpt-4o")
+        r["model"] = os.environ["IDEATE_LLM_MODEL"]
+    return r
 
 
 def _cmd_set_evaluation(a):
@@ -1040,7 +1530,7 @@ def _cmd_set_evaluation(a):
     require_protocol(cfg, rd)                      # the reader judged a protocol: there must be one, and a brief for it
     if not list((rd / "_state" / "A1e").glob("brief_r*.md")):
         die("no brief: run `frame eval-brief` first; the reader answers that brief", 2)
-    r = read_json(Path(a.input_json))
+    r = _normal_evaluation(read_json(Path(a.input_json)))
     _only_keys(r, {"verdict", "summary", "model", "findings"}, "evaluation.json")
     ev = read_json(eval_path(rd)) if eval_path(rd).exists() else {"schema": EVAL_SCHEMA, "rounds": []}
     last = ev["rounds"][-1] if ev["rounds"] else None
@@ -1271,6 +1761,17 @@ def cmd_set_strategy(a):
         _cmd_set_strategy(a)
 
 
+def cmd_strategy_brief(a):
+    _cmd_strategy_brief(a)                         # reads step0, writes scratch only: no ledger event
+
+
+def cmd_fill_strategy(a):
+    from it_ledger import run_unit                 # A1.q's boundary, as set-strategy's
+    with run_unit(a.research_dir, "A1.q", check=_unit_errors(a.research_dir, "A1.q"),
+                  degraded=lambda: __import__("it_ledger").degraded_codes(a.research_dir, "A1.q")):
+        _cmd_fill_strategy(a)
+
+
 def cmd_set_context(a):
     from it_ledger import run_unit
     with run_unit(a.research_dir, "A1.v", check=_unit_errors(a.research_dir, "A1.v")):
@@ -1328,6 +1829,7 @@ def add_parsers(sub) -> None:
     fp = sub.add_parser("frame", help="A1 frame: protocol, strategy, evaluation, context (references/search/A1-frame.md)")
     fsub = fp.add_subparsers(dest="frame_cmd", required=True)
     for name, fn in (("set-protocol", cmd_set_protocol), ("set-strategy", cmd_set_strategy),
+                     ("fill-strategy", cmd_fill_strategy),
                      ("query-revise", cmd_query_revise), ("add-terms", cmd_add_terms), ("retire-terms", cmd_retire_terms),
                      ("anchors-revise", cmd_anchors_revise),
                      ("set-context", cmd_set_context),
@@ -1338,6 +1840,21 @@ def add_parsers(sub) -> None:
         if name == "set-protocol":
             sp.add_argument("--note", default="", help="why the protocol is (re)written; goes into protocol.history")
         sp.set_defaults(fn=fn)
+    for name, fn in (("replan-brief", _cmd_replan_brief),):
+        sp = fsub.add_parser(name)
+        sp.add_argument("research_dir")
+        sp.set_defaults(fn=fn)
+    sp = fsub.add_parser("replan-apply")
+    sp.add_argument("research_dir")
+    sp.add_argument("input_json")
+    sp.set_defaults(fn=_cmd_replan_apply)
+    sp = fsub.add_parser("schemas")
+    sp.add_argument("research_dir")
+    sp.add_argument("--depth", choices=sorted(DEPTH_STRATEGIES))
+    sp.set_defaults(fn=_cmd_schemas)
+    sp = fsub.add_parser("strategy-brief")
+    sp.add_argument("research_dir")
+    sp.set_defaults(fn=cmd_strategy_brief)
     sp = fsub.add_parser("eval-brief")
     sp.add_argument("research_dir")
     sp.set_defaults(fn=cmd_eval_brief)
