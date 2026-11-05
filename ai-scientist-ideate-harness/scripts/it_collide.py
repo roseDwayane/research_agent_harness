@@ -298,29 +298,53 @@ def default_moves(r: dict | None) -> set:
     return set(DEFAULT_MOVES.get(res, set())) if res else set(MOVES_EXT)
 
 
+def _cell(I: dict, r: dict) -> tuple[str, str, list[str], list[str]]:
+    """An empty cell's dataset, method family, and the papers on each."""
+    ds, _, fm = str(r["sides"][0].get("id") or "").removeprefix("cell:").partition("|")
+    rows = I["rows"].values()
+    on_ds = sorted({x["citation_key"] for x in rows if ds in [d.get("name") for d in x.get("data") or []]})
+    on_fm = sorted({x["citation_key"] for x in rows if fm in (x.get("method_family") or [])})
+    return ds, fm, on_ds, on_fm
+
+
+def hint_papers(I: dict, r: dict) -> set:
+    """The papers a gap resting on this collision draws on: its sides, or for an empty cell the papers on each side."""
+    if r["result"] == "empty-cell" and r.get("sides"):
+        _, _, on_ds, on_fm = _cell(I, r)
+        return set(on_ds) | set(on_fm)
+    return {x.get("paper") for x in r.get("sides") or [] if x.get("paper")}
+
+
+def open_moves_of(I: dict, r: dict, papers: set | None = None) -> tuple[list[str], set]:
+    """(the collision's papers with a full text, the moves open to a gap resting on it): a contradiction move or
+    confirm-assumed needs a full-text source check, so without a full text on its papers it is not open."""
+    moves = default_moves(r)
+    if papers is None:
+        papers = hint_papers(I, r)
+    full = sorted(k for k in papers if (I["recs"].get(k) or {}).get("basis") == "full-text")
+    return full, {m for m in moves if full or not (m in MOVES_CON or m == "confirm-assumed")}
+
+
 def gap_hint(I: dict, r: dict) -> str:
     """What the B3 rules settle for a gap resting on this collision, worked out by code so the model only judges: the
     moves open to it (a contradiction move or confirm-assumed needs a full-text source check: without a full text on
     its papers it is not open), the severity bound, and for an empty cell the papers on each side of the cell and the
     lens verdicts that cap feasibility."""
     moves = default_moves(r)
-    papers = {x.get("paper") for x in r.get("sides") or [] if x.get("paper")}
+    papers = hint_papers(I, r)
     out = []
     if r["result"] == "empty-cell" and r.get("sides"):
-        ds, _, fm = str(r["sides"][0].get("id") or "").removeprefix("cell:").partition("|")
-        rows = I["rows"].values()
-        on_ds = sorted({x["citation_key"] for x in rows if ds in [d.get("name") for d in x.get("data") or []]})
-        on_fm = sorted({x["citation_key"] for x in rows if fm in (x.get("method_family") or [])})
-        papers = set(on_ds) | set(on_fm)
+        ds, fm, on_ds, on_fm = _cell(I, r)
         out.append(f"supporting from: {ds} - {', '.join(on_ds[:6]) or 'none'}; {fm} - {', '.join(on_fm[:6]) or 'none'}")
         by_name, on = concept_by_name(I), I["lens"].get("on_coords") or {}
         caps = {c: FEAS_CAP.get(on[c].get("affordable") or on[c].get("on_disk"), 5)
                 for c in (by_name.get(("dataset", ds)), by_name.get(("method-family", fm))) if c in on}
         if caps:
             out.append(f"feasibility at most {min(caps.values())} (basis {', '.join('lens:' + c for c in caps)})")
-    full = sorted(k for k in papers if (I["recs"].get(k) or {}).get("basis") == "full-text")
+    full, open_moves = open_moves_of(I, r, papers)
     checked = {m for m in moves if m in MOVES_CON or m == "confirm-assumed"}
-    open_ = sorted(moves - checked) + [f"{m} (source check on {' or '.join(full)})" for m in sorted(checked) if full]
+    open_ = sorted(open_moves - checked) + [f"{m} (source check on {' or '.join(full)})" for m in sorted(checked)
+                                            if m in open_moves]
     sev = "severity 1-5" if r["result"] in CONSEQUENCE else "severity 1-3 (an absence; 4-5 only with a consequence collision)"
     head = f"moves {' / '.join(open_)}" + ("" if any("source check" in m for m in open_) else " (no source check)") \
         if open_ else "no move open without a full text: not_gaps, or an extension move with move_reason"
@@ -744,8 +768,17 @@ def gaps_schema(rd) -> dict:
     rd = Path(rd)
     I = inputs(rd)
     import it_decon
-    cur = sorted(r["collision_id"] for r in current(log(rd)))
+    rows = current(log(rd))
+    cur = sorted(r["collision_id"] for r in rows)
     keys = sorted(it_decon.papers(rd))
+    # the moves and source-check papers the digest's `gap:` lines leave open (gap_hint): an extension move is always
+    # open (with move_reason), a move that needs a source check only where a collision has a full text on its papers
+    moves, checkable = {"add-evidence", "apply-wider"}, set()
+    for r in rows:
+        full, om = open_moves_of(I, r)
+        moves |= om
+        if any(m in MOVES_CON or m == "confirm-assumed" for m in om):
+            checkable |= set(full)
     nd = sorted(u for u, x in I["units"].items() if x.get("kind") == "not-done")
     fw = sorted(u for u in I["units"] if re.search(r"#F\d+$", u))
     basis = [f"lens:{c}" for c in sorted(I["lens"].get("on_coords") or {})] + \
@@ -756,13 +789,16 @@ def gaps_schema(rd) -> dict:
     obj = lambda props, req: {"type": "object", "additionalProperties": False, "properties": props,  # noqa: E731
                               "required": req}
     score = {"type": "integer", "enum": [1, 2, 3, 4, 5]}
-    paper = lambda *ks: obj({"key": one(keys), **{k: s for k in ks}}, ["key", *ks])            # noqa: E731
+    paper = lambda *ks, of=keys: obj({"key": one(of), **{k: s for k in ks}}, ["key", *ks])    # noqa: E731
+    checked = paper("where", "quote", of=sorted(checkable))
     gap = obj({"id": s, "title": s, "description": s,
                "type": obj({"primary": one(GAP_TYPES), "secondary": one(GAP_TYPES)}, ["primary"]),
-               "move": one(MOVES_EXT + MOVES_CON), "move_reason": s, "collisions": arr(one(cur)),
+               "move": one(m for m in MOVES_EXT + MOVES_CON if m in moves), "move_reason": s,
+               "collisions": arr(one(cur)),
                "not_done": arr(one(nd)), "axes": arr(one(dict.fromkeys(GAP_AXES))),
                "supporting": arr(paper("how"), minItems=2), "counter": arr(paper("why_open")),
-               "source_check": {"anyOf": [paper("where", "quote"), arr(paper("where", "quote"))]}, "why_it_matters": s,
+               "source_check": {"anyOf": [checked, arr(checked)]} if checkable else arr(checked, maxItems=0),
+               "why_it_matters": s,
                "consequence_evidence": arr(one(cur + fw)), "severity": score, "novelty": score, "novelty_basis": s,
                "feasibility": score, "feasibility_basis": arr(one(basis), minItems=1)},
               ["id", "title", "description", "type", "move", "collisions", "axes", "supporting", "counter",

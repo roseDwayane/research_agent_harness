@@ -217,7 +217,9 @@ class StepAgent:
             rounds, replan = loops.relevance_rounds(ctx.rd)
             if not replan:
                 return out
-            if not loops.allowed(ctx, "LOOP-01", completed, unit="A2.c", step=self.step_id)["allowed"]:
+            share = loops.replan_new_share(ctx.rd) if completed else None   # min_new_share needs it after round 1
+            if not loops.allowed(ctx, "LOOP-01", completed, {"new_share": share} if share is not None else None,
+                                 unit="A2.c", step=self.step_id)["allowed"]:
                 return out                                # bound reached: A2.c accepts weak, with the caveat
             for u, ph in (("A2.c", "replan"), ("A2.m", "main"), ("A2.c", "main")):
                 r = self.rerun(ctx, u, phase=ph)
