@@ -272,6 +272,36 @@ class States(Fixture):
         s = it_ledger.states(rd, "fusion")
         self.assertEqual((s["A7.X1"]["state"], s["A7.X2"]["state"]), ("done", "done"))
 
+    def _rebuild(self, rd: Path, seeds=("1", "2", "3", "4", "5")) -> set:
+        """build-methods run again in fresh processes (as A7.R2 does), one per string-hash seed: the matrix hashes."""
+        kd = rd / "knowledge"
+        args = [kd / "methods_matrix_input.json", *sorted((kd / "decon").glob("*.json"))]
+        spec = {"file": "knowledge/methods_matrix.json", "strip": ["theme", "generated_at"]}
+        seen = set()
+        for seed in seeds:
+            p = subprocess.run([sys.executable, str(TOOLS), "build-methods", str(rd), *map(str, args)],
+                               capture_output=True, text=True, env={**os.environ, "PYTHONHASHSEED": seed})
+            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+            seen.add(it_ledger.spec_hash(rd, spec))
+        return seen
+
+    def test_rebuilding_the_matrix_keeps_the_collisions_current(self):
+        """A7.R2 re-runs build-methods itself: A7.X1 and A7.X2, which read the matrix, stay done."""
+        rd = self.copy()
+        self.assertEqual(len(self._rebuild(rd)), 1)
+        s = it_ledger.states(rd, "fusion")
+        self.assertEqual((s["A7.X1"]["state"], s["A7.X2"]["state"]), ("done", "done"))
+
+    def test_the_matrix_rebuilds_the_same_whatever_the_hash_seed(self):
+        """Items with equal counts (here six metrics of one row) keep one order: counted over a set(), their order
+        followed the process's string-hash seed, so each rebuild wrote a different matrix and left A7.X1 on stale."""
+        rd = self.copy()
+        f = rd / "knowledge" / "decon" / "parketal2019.json"
+        d = json.loads(f.read_text())
+        d["experiments"][0]["metrics"] = ["accuracy", "kappa", "F1", "AUC", "sensitivity", "specificity"]
+        f.write_text(json.dumps(d))
+        self.assertEqual(len(self._rebuild(rd)), 1, "the matrix differs between rebuilds of the same input")
+
     def test_r1_attaches_collisions_to_a_concept_point(self):
         rd = self.copy()
         ok("unit-begin", rd, "A7.R1")

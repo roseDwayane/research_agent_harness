@@ -323,3 +323,15 @@ def test_a_refused_a1e_waits_on_loop02(tmp_path):
     (ctx.rd / "step1_protocol_evaluation.json").write_text(json.dumps({
         "rounds": [{"round": 2, "verdict": "revision-required"}], "final": {"status": "accepted-with-doubts"}}))
     assert step._pending_loop(ctx, "A1.e") is None                 # round 2 settles it: no further loop
+
+
+def test_loop01_reads_the_new_share_of_the_latest_re_plan_round(tmp_path):
+    """LOOP-01's min_new_share condition refuses a missing measurement: the conductor reads it from search-check."""
+    from harness import loops
+    d = tmp_path / "_state" / "A2c"
+    d.mkdir(parents=True)
+    assert loops.replan_new_share(tmp_path) is None
+    (d / "signals_r0.json").write_text('{"latest_round": 0}')
+    (d / "signals_r10.json").write_text('{"new_share_latest_round": 0.02}')
+    (d / "signals_r2.json").write_text('{"new_share_latest_round": 0.4762}')
+    assert loops.replan_new_share(tmp_path) == 0.02

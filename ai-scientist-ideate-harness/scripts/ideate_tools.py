@@ -1280,7 +1280,8 @@ def cmd_build_methods(a):
     def freq(rs, get):
         c, papers = Counter(), defaultdict(set)
         for r in rs:
-            for x in set(real(get(r))):
+            for x in dict.fromkeys(real(get(r))):     # not set(): its order follows the per-process string hash,
+                                                      # and ties keep first-seen order - the matrix must rebuild the same
                 c[x] += 1
                 papers[x].add(r["citation_key"])
         return [{"item": x, "experiments": n, "papers": sorted(papers[x])} for x, n in c.most_common()]

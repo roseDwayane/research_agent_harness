@@ -447,6 +447,15 @@ class GapHint(unittest.TestCase):
         self.assertIn("cause (source check on b)", it_collide.gap_hint(self.I, r))
         self.assertIn("severity 1-5", it_collide.gap_hint(self.I, r))
 
+    def test_the_schema_offers_only_the_moves_the_gap_line_leaves_open(self):
+        """gaps_schema reads open_moves_of: a move that needs a source check is not offered without a full text."""
+        r = {"result": "conflict", "axes_differ": ["none"], "sides": [{"id": "a#C1", "paper": "a"}]}
+        self.assertEqual(it_collide.open_moves_of(self.I, r), ([], set()))
+        r["sides"].append({"id": "b#C1", "paper": "b"})
+        self.assertEqual(it_collide.open_moves_of(self.I, r), (["b"], {"cause", "kind", "perspective"}))
+        cell = {"result": "empty-cell", "sides": [{"id": "cell:SEED|cnn"}]}            # a only, abstract
+        self.assertEqual(it_collide.open_moves_of(self.I, cell), ([], {"add-evidence", "apply-wider"}))
+
 
 class Ranking(unittest.TestCase):
     g = staticmethod(lambda i, m, s, n, f: {"id": i, "move": m, "severity": s, "novelty": n, "feasibility": f})
