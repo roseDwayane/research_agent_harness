@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -241,16 +242,11 @@ def paper_candidates(I: dict) -> list[dict]:
 
 def lens_candidates(I: dict) -> list[dict]:
     """B3.c: the field's conventions against what this machine can do; the cells nobody filled."""
-    import it_align
     lens, mm = I["lens"], I["mm"]
     if not lens:
         return []
-    V = it_align.Vocab((I["al"].get("vocab") or {}))
     on = lens.get("on_coords") or {}
-    by_name = {}
-    for cid, c in V.concepts.items():
-        by_name[(c.get("kind"), c.get("name"))] = cid
-        by_name[(c.get("kind"), cid.partition(":")[2])] = cid
+    by_name = concept_by_name(I)
     out = []
     conv = (mm.get("aggregates") or {}).get("conventions_full_text") or {}
     for dim, items in sorted(conv.items()):
@@ -280,6 +276,79 @@ def lens_candidates(I: dict) -> list[dict]:
         out.append({"id": _key("empty-cell", members), "type": "empty-cell", "key": f"dataset={ds} x method_family={fm}",
                     "members": members, "papers": []})
     return out
+
+
+def concept_by_name(I: dict) -> dict:
+    """(kind, name or slug) -> concept id: how the matrix's names (a dataset's, a family's) meet the vocabulary."""
+    import it_align
+    by_name = {}
+    for cid, c in it_align.Vocab(I["al"].get("vocab") or {}).concepts.items():
+        by_name[(c.get("kind"), c.get("name"))] = cid
+        by_name[(c.get("kind"), cid.partition(":")[2])] = cid
+    return by_name
+
+
+def default_moves(r: dict | None) -> set:
+    """The moves a gap's primary collision suggests (question-craft.md section 3); none (recurring not-done): an
+    extension move."""
+    res = (r or {}).get("result")
+    if res == "conflict":
+        return {"cause", "kind", "perspective"} if r.get("axes_differ") == ["none"] else \
+            {"kind", "part-whole", "cause", "apply-wider"}
+    return set(DEFAULT_MOVES.get(res, set())) if res else set(MOVES_EXT)
+
+
+def _cell(I: dict, r: dict) -> tuple[str, str, list[str], list[str]]:
+    """An empty cell's dataset, method family, and the papers on each."""
+    ds, _, fm = str(r["sides"][0].get("id") or "").removeprefix("cell:").partition("|")
+    rows = I["rows"].values()
+    on_ds = sorted({x["citation_key"] for x in rows if ds in [d.get("name") for d in x.get("data") or []]})
+    on_fm = sorted({x["citation_key"] for x in rows if fm in (x.get("method_family") or [])})
+    return ds, fm, on_ds, on_fm
+
+
+def hint_papers(I: dict, r: dict) -> set:
+    """The papers a gap resting on this collision draws on: its sides, or for an empty cell the papers on each side."""
+    if r["result"] == "empty-cell" and r.get("sides"):
+        _, _, on_ds, on_fm = _cell(I, r)
+        return set(on_ds) | set(on_fm)
+    return {x.get("paper") for x in r.get("sides") or [] if x.get("paper")}
+
+
+def open_moves_of(I: dict, r: dict, papers: set | None = None) -> tuple[list[str], set]:
+    """(the collision's papers with a full text, the moves open to a gap resting on it): a contradiction move or
+    confirm-assumed needs a full-text source check, so without a full text on its papers it is not open."""
+    moves = default_moves(r)
+    if papers is None:
+        papers = hint_papers(I, r)
+    full = sorted(k for k in papers if (I["recs"].get(k) or {}).get("basis") == "full-text")
+    return full, {m for m in moves if full or not (m in MOVES_CON or m == "confirm-assumed")}
+
+
+def gap_hint(I: dict, r: dict) -> str:
+    """What the B3 rules settle for a gap resting on this collision, worked out by code so the model only judges: the
+    moves open to it (a contradiction move or confirm-assumed needs a full-text source check: without a full text on
+    its papers it is not open), the severity bound, and for an empty cell the papers on each side of the cell and the
+    lens verdicts that cap feasibility."""
+    moves = default_moves(r)
+    papers = hint_papers(I, r)
+    out = []
+    if r["result"] == "empty-cell" and r.get("sides"):
+        ds, fm, on_ds, on_fm = _cell(I, r)
+        out.append(f"supporting from: {ds} - {', '.join(on_ds[:6]) or 'none'}; {fm} - {', '.join(on_fm[:6]) or 'none'}")
+        by_name, on = concept_by_name(I), I["lens"].get("on_coords") or {}
+        caps = {c: FEAS_CAP.get(on[c].get("affordable") or on[c].get("on_disk"), 5)
+                for c in (by_name.get(("dataset", ds)), by_name.get(("method-family", fm))) if c in on}
+        if caps:
+            out.append(f"feasibility at most {min(caps.values())} (basis {', '.join('lens:' + c for c in caps)})")
+    full, open_moves = open_moves_of(I, r, papers)
+    checked = {m for m in moves if m in MOVES_CON or m == "confirm-assumed"}
+    open_ = sorted(open_moves - checked) + [f"{m} (source check on {' or '.join(full)})" for m in sorted(checked)
+                                            if m in open_moves]
+    sev = "severity 1-5" if r["result"] in CONSEQUENCE else "severity 1-3 (an absence; 4-5 only with a consequence collision)"
+    head = f"moves {' / '.join(open_)}" + ("" if any("source check" in m for m in open_) else " (no source check)") \
+        if open_ else "no move open without a full text: not_gaps, or an extension move with move_reason"
+    return " · ".join([head, sev, *out])
 
 
 def empty_cells(mm: dict, by_name: dict) -> list:
@@ -370,6 +439,10 @@ def _member_info(I: dict, mid: str) -> dict | None:
     return None
 
 
+def _kinds(ks: Counter) -> str:
+    return ", ".join(f"{n} {k}{'s' if n > 1 else ''}" for k, n in sorted(ks.items())) or "nothing"
+
+
 def judgement_problems(I: dict, cand: dict, rels: list[dict], model: str) -> list[str]:
     out = []
     lens = cand["type"] in LENS_TYPES
@@ -402,7 +475,8 @@ def judgement_problems(I: dict, cand: dict, rels: list[dict], model: str) -> lis
             out.append(f"H03 {tag}: reason missing")
         papers = {x.get("paper") for x in info if x.get("paper")}
         if res in RELATIONAL and (len(sides) < 2 or len(papers) < 2):
-            out.append(f"H05 {tag}: a relation needs sides from at least two papers")
+            out.append(f"H05 {tag}: a relation needs sides from at least two papers"
+                       + (f" (every side here is {next(iter(papers))}'s)" if len(papers) == 1 else ""))
         if res == "conflict" and ax == ["none"]:
             weak = [x["id"] for x in info if x.get("kind") == "claim" and
                     (x.get("strength") not in ARGUED or str(x.get("overreach") or "").strip())]
@@ -419,7 +493,8 @@ def judgement_problems(I: dict, cand: dict, rels: list[dict], model: str) -> lis
         if res == "assumption-at-stake":
             ks = Counter(x.get("kind") for x in info)
             if ks.get("assumption") != 1 or not (ks.get("claim") or ks.get("row")):
-                out.append(f"H05 {tag}: one assumption and the other papers' results that show what rides on it")
+                out.append(f"H05 {tag}: one assumption and the other papers' results that show what rides on it"
+                           f" (the sides hold {_kinds(ks)})")
         if res == "criterion-unmet":
             crit_paper = info[0].get("paper") if info else None
             head = [x for x in info if x.get("paper") == crit_paper]
@@ -431,7 +506,7 @@ def judgement_problems(I: dict, cand: dict, rels: list[dict], model: str) -> lis
         if res == "assumption-challenged":
             ks = Counter(x.get("kind") for x in info)
             if ks.get("assumption") != 1 or not (ks.get("claim") or ks.get("row")):
-                out.append(f"H05 {tag}: one assumption and the claims or rows that challenge it")
+                out.append(f"H05 {tag}: one assumption and the claims or rows that challenge it (the sides hold {_kinds(ks)})")
         if res == "extends" and all(x.get("year") for x in info):      # an undated paper: order by builds_on, unchecked
             years = [x.get("year") for x in info]
             if years != sorted(years):
@@ -475,6 +550,24 @@ def evidence_level(info: list[dict]) -> str:
     return "full-text" if b == {"full-text"} else "abstract" if b == {"abstract"} else "mixed" if b else "n/a"
 
 
+def judgement_schema(items: list[dict], lens: bool) -> dict:
+    """One batch's answer, for a worker whose answer is decoded under a schema: one judgement per candidate, results
+    from the candidate type's list, sides from the batch's members, axes_differ codes. Which sides belong to which
+    candidate, and what each result needs, are judgement_problems' to say."""
+    s = {"type": "string"}
+    members = sorted({m["id"] for c in items for m in c["members"] if m and m.get("id")})
+    rel = {"type": "object", "additionalProperties": False, "required": ["result", "sides", "axes_differ", "reason"],
+           "properties": {"result": {"enum": list(RESULTS_LENS if lens else RESULTS_PAPER)},
+                          "sides": {"type": "array", "items": {"enum": members or [""]}},
+                          "axes_differ": {"type": "array", "items": {"enum": list(AXES_DIFFER)}}, "reason": s}}
+    j = {"type": "object", "additionalProperties": False, "required": ["candidate", "relations"],
+         "properties": {"candidate": {"enum": [c["id"] for c in items]},
+                        "relations": {"type": "array", "items": rel, "minItems": 1}}}
+    return {"type": "object", "additionalProperties": False, "required": ["model", "judgements"],
+            "properties": {"model": s, "judgements": {"type": "array", "items": j, "minItems": len(items),
+                                                      "maxItems": len(items)}}}
+
+
 def plan(rd, size=10, lens=False) -> dict:
     rd = Path(rd)
     cands = read_json(rd / CANDS)
@@ -484,7 +577,7 @@ def plan(rd, size=10, lens=False) -> dict:
     wd = rd / WORK
     (wd / "answers").mkdir(parents=True, exist_ok=True)
     pre = "lens_batch" if lens else "batch"      # the two plans never touch each other's files
-    for old in wd.glob(f"{pre}_*.json"):
+    for old in [*wd.glob(f"{pre}_*.json"), *(wd / "schemas").glob(f"{pre}_*.json")]:
         old.unlink()
     # batch numbers restart with every plan: earlier answers move out of the way, or a new batch_001 would be answered
     # by an old one
@@ -496,6 +589,7 @@ def plan(rd, size=10, lens=False) -> dict:
             f.rename(arch / f.name)
     V = (I["al"].get("vocab") or {}).get("concepts") or []
     eq = {c["id"]: c.get("equivalence") for c in V if c.get("equivalence")}
+    refused_before = read_json(wd / "refused.json") if (wd / "refused.json").exists() else {}
     batches = []
     for i in range(0, len(want), size):
         n = len(batches) + 1
@@ -505,10 +599,12 @@ def plan(rd, size=10, lens=False) -> dict:
             members = [_member_info(I, m) for m in c["members"]]
             cnt = Counter(x for m in members for x in {y for v in ((m or {}).get("coords") or {}).values() for y in _vals(v)})
             used = {x for x, k in cnt.items() if k >= 2} | {c["key"].partition("=")[2]}
-            items.append({**c, "members": members, "equivalence_notes": {k: eq[k] for k in sorted(used) if k in eq}})
+            items.append({**c, "members": members, "equivalence_notes": {k: eq[k] for k in sorted(used) if k in eq},
+                          **({"refused_before": refused_before[c["id"]][:6]} if refused_before.get(c["id"]) else {})})
         b = {"batch": n, "rules": RULES, "results": list(RESULTS_LENS if lens else RESULTS_PAPER),
              "axes_differ": list(AXES_DIFFER), "answer": f"{WORK}/answers/{pre}_{n:03d}.json", "candidates": items}
         write_json(wd / f"{pre}_{n:03d}.json", b)
+        write_json(wd / "schemas" / f"{pre}_{n:03d}.json", judgement_schema(items, lens))
         batches.append({"batch": n, "candidates": [c["id"] for c in part]})
     out = {"at": now_iso(), "lens": lens, "unjudged": len(want), "batches": batches}
     write_json(wd / ("plan_lens.json" if lens else "plan.json"), out)
@@ -530,7 +626,7 @@ def merge(rd, revise: str | None = None) -> dict:
     new, refused, kept, now = [], [], 0, set()
     for f in sorted([*(rd / WORK / "answers").glob("batch_*.json"), *(rd / WORK / "answers").glob("lens_batch_*.json")]):
         ans = read_json(f)
-        model = str(ans.get("model") or "").strip()
+        model = str(ans.get("model") or os.environ.get("IDEATE_LLM_MODEL") or "").strip()
         for j in ans.get("judgements") or []:
             cid = j.get("candidate")
             cand = cands.get(cid)
@@ -562,8 +658,11 @@ def merge(rd, revise: str | None = None) -> dict:
                             "batch": f.name, **({"supersedes": by_cand[cid], "revision": revise} if cid in by_cand else {})})
             now.add(cid)
     append_jsonl(rd / LOG, new)
+    if not (rd / LOG).exists():          # nothing judged (a quick run judges no paper candidates): the log, empty
+        (rd / LOG).write_text("", encoding="utf-8")
     import it_decon
     it_decon.render_all(rd)          # Disagrees with: is a projection of the log
+    write_json(rd / WORK / "refused.json", {cid: why for cid, why in refused})     # collide-plan shows them again
     return {"written": len(new), "kept": kept, "refused": refused, "duplicates": sum(1 for r in new if r.get("duplicate_of"))}
 
 
@@ -628,9 +727,94 @@ def collision_problems(rd, cands: dict | None = None) -> list[dict]:
 
 
 # ================================================================================================ B3 gaps
+LIST_FIELDS = ("collisions", "not_done", "axes", "supporting", "counter", "consequence_evidence", "feasibility_basis")
+ID_FIELDS = ("collisions", "not_done", "axes", "consequence_evidence", "feasibility_basis")
+
+
+def must_account(cur: dict) -> list[str]:
+    """The collisions a gap list must account for, in a gap or in not_gaps with a reason (W10): every straight conflict
+    and every premise collision."""
+    return sorted(c for c, r in cur.items() if r["result"] in MUST_ACCOUNT
+                  or (r["result"] == "conflict" and r.get("axes_differ") == ["none"]))
+
+
+def feasibility_cap(lens_on: dict, basis: list) -> tuple[int, str] | None:
+    """The highest feasibility the cited lens verdicts allow and the weakest of them, or None when none is cited."""
+    caps = [(FEAS_CAP.get(lens_on[x[5:]].get("affordable") or lens_on[x[5:]].get("on_disk"), 5), x)
+            for x in basis if str(x).startswith("lens:") and x[5:] in lens_on]
+    return min(caps) if caps else None
+
+
+def cap_feasibility(rd, doc: dict) -> list[str]:
+    """gaps-set: a feasibility above what its cited verdicts allow is lowered to it - the cap is the rule's, not a
+    judgement - and each change said."""
+    lens_on = inputs(rd)["lens"].get("on_coords") or {}
+    out = []
+    for g in doc.get("gaps") or []:
+        if not isinstance(g, dict) or not isinstance(g.get("feasibility"), int):
+            continue
+        fb = g.get("feasibility_basis")
+        cap = feasibility_cap(lens_on, fb if isinstance(fb, list) else [fb])
+        if cap and g["feasibility"] > cap[0]:
+            out.append(f"{g.get('id')}: feasibility {g['feasibility']} -> {cap[0]}, the cap of {cap[1]}")
+            g["feasibility"] = cap[0]
+    return out
+
+
+def gaps_schema(rd) -> dict:
+    """B3's answer, for a worker whose answer is decoded under a schema (recon-digest B3 writes it beside the digest):
+    the codes, and the ids this run holds - current collisions, not-done and future-work units, shortlisted papers, lens
+    verdicts and own data - so an answer names nothing that does not exist. What each gap needs is gaps_problems'."""
+    rd = Path(rd)
+    I = inputs(rd)
+    import it_decon
+    rows = current(log(rd))
+    cur = sorted(r["collision_id"] for r in rows)
+    keys = sorted(it_decon.papers(rd))
+    # the moves and source-check papers the digest's `gap:` lines leave open (gap_hint): an extension move is always
+    # open (with move_reason), a move that needs a source check only where a collision has a full text on its papers
+    moves, checkable = {"add-evidence", "apply-wider"}, set()
+    for r in rows:
+        full, om = open_moves_of(I, r)
+        moves |= om
+        if any(m in MOVES_CON or m == "confirm-assumed" for m in om):
+            checkable |= set(full)
+    nd = sorted(u for u, x in I["units"].items() if x.get("kind") == "not-done")
+    fw = sorted(u for u in I["units"] if re.search(r"#F\d+$", u))
+    basis = [f"lens:{c}" for c in sorted(I["lens"].get("on_coords") or {})] + \
+            [f"own:{d.get('name')}" for d in I["lens"].get("own_data") or []]
+    s = {"type": "string"}
+    one = lambda xs: {"enum": list(xs) or [""]}                                                # noqa: E731
+    arr = lambda item, **kw: {"type": "array", "items": item, **kw}                            # noqa: E731
+    obj = lambda props, req: {"type": "object", "additionalProperties": False, "properties": props,  # noqa: E731
+                              "required": req}
+    score = {"type": "integer", "enum": [1, 2, 3, 4, 5]}
+    paper = lambda *ks, of=keys: obj({"key": one(of), **{k: s for k in ks}}, ["key", *ks])    # noqa: E731
+    checked = paper("where", "quote", of=sorted(checkable))
+    gap = obj({"id": s, "title": s, "description": s,
+               "type": obj({"primary": one(GAP_TYPES), "secondary": one(GAP_TYPES)}, ["primary"]),
+               "move": one(m for m in MOVES_EXT + MOVES_CON if m in moves), "move_reason": s,
+               "collisions": arr(one(cur)),
+               "not_done": arr(one(nd)), "axes": arr(one(dict.fromkeys(GAP_AXES))),
+               "supporting": arr(paper("how"), minItems=2), "counter": arr(paper("why_open")),
+               "source_check": {"anyOf": [checked, arr(checked)]} if checkable else arr(checked, maxItems=0),
+               "why_it_matters": s,
+               "consequence_evidence": arr(one(cur + fw)), "severity": score, "novelty": score, "novelty_basis": s,
+               "feasibility": score, "feasibility_basis": arr(one(basis), minItems=1)},
+              ["id", "title", "description", "type", "move", "collisions", "axes", "supporting", "counter",
+               "source_check", "why_it_matters", "consequence_evidence", "severity", "novelty", "feasibility",
+               "feasibility_basis"])          # source_check asked of every gap: an extension move leaves it []
+    return obj({"topic": s, "gaps": arr(gap, minItems=1),
+                "not_gaps": arr(obj({"collision": one(cur), "why": s}, ["collision", "why"])),
+                "single_paper": arr(s), "adjacent": arr(s), "revisions_needed": arr(paper("where", "quote", "why"))},
+               ["gaps", "not_gaps"])
+
+
 def gaps_problems(rd, doc: dict) -> list[dict]:
     U = "B3"
     rd = Path(rd)
+    if not isinstance(doc, dict) or not isinstance(doc.get("gaps") or [], list):
+        return [F("ERROR", "W01", U, "the gap list is an object {gaps: [...], not_gaps: [...], ...}")]
     fs = []
     cur = {r["collision_id"]: r for r in current(log(rd))}
     I = inputs(rd)
@@ -640,17 +824,37 @@ def gaps_problems(rd, doc: dict) -> list[dict]:
     ids = []
     used = set()
     for g in doc.get("gaps") or []:
+        if not isinstance(g, dict):
+            fs.append(F("ERROR", "W01", U, f"a gap must be an object, got {g!r:.60}"))
+            continue
         gid = str(g.get("id") or "")
         ids.append(gid)
         tag = gid or "?"
+        # a wrong shape is one finding, then read as meant (a string for a list): never a crash, never a finding a letter
+        g = dict(g)
+        for k in LIST_FIELDS:
+            if g.get(k) is not None and not isinstance(g[k], list):
+                fs.append(F("ERROR", "W01", U, f"{tag}: `{k}` must be a list, got {g[k]!r:.60}"))
+                g[k] = [g[k]]
+        for k in ID_FIELDS:            # ids are strings; anything else is an id no check knows, never a crash
+            g[k] = [x if isinstance(x, str) else json.dumps(x) for x in g.get(k) or []]
+        for k in ("supporting", "counter"):
+            if any(not isinstance(x, dict) for x in g.get(k) or []):
+                fs.append(F("ERROR", "W01", U, f"{tag}: every `{k}` entry is an object {{key, ...}}"))
+                g[k] = [x for x in g[k] if isinstance(x, dict)]
         if not re.fullmatch(r"GAP_\d{3}", gid):
             fs.append(F("ERROR", "W01", U, f"{tag}: id must be GAP_NNN"))
         for k in ("title", "description", "why_it_matters"):
             if not str(g.get(k) or "").strip():
                 fs.append(F("ERROR", "W01", U, f"{tag}: `{k}` missing"))
         ty = g.get("type") or {}
-        if ty.get("primary") not in GAP_TYPES or (ty.get("secondary") and ty["secondary"] not in GAP_TYPES):
-            fs.append(F("ERROR", "W01", U, f"{tag}: type.primary (and secondary) from {GAP_TYPES}"))
+        if not isinstance(ty, dict):
+            fs.append(F("ERROR", "W01", U, f"{tag}: `type` is an object {{primary, secondary?}}, got {ty!r:.60}"))
+        else:
+            bad_ty = {k: ty.get(k) for k in ("primary", "secondary") if (k == "primary" or ty.get(k)) and
+                      ty.get(k) not in GAP_TYPES}
+            if bad_ty:
+                fs.append(F("ERROR", "W01", U, f"{tag}: type {bad_ty} - type.primary (and secondary) from {GAP_TYPES}"))
         for s in ("severity", "novelty", "feasibility"):
             if g.get(s) not in (1, 2, 3, 4, 5):
                 fs.append(F("ERROR", "W01", U, f"{tag}: {s} must be an integer 1-5"))
@@ -675,21 +879,13 @@ def gaps_problems(rd, doc: dict) -> list[dict]:
             fs.append(F("ERROR", "W04", U, f"{tag}: move must be one of {MOVES_EXT + MOVES_CON}"))
         else:
             # the defaults come from the gap's PRIMARY collision (listed first): adding collisions never widens them
-            r = cur.get(cols[0]) or {} if cols else {}
-            res = r.get("result")
-            if res == "conflict":
-                dflt = {"cause", "kind", "perspective"} if r.get("axes_differ") == ["none"] else \
-                    {"kind", "part-whole", "cause", "apply-wider"}
-            elif res:
-                dflt = DEFAULT_MOVES.get(res, set())
-            else:
-                dflt = set(MOVES_EXT)                    # recurring not-done: an absence
+            dflt = default_moves(cur.get(cols[0]) if cols else None)
             if dflt and move not in dflt and not str(g.get("move_reason") or "").strip():
                 fs.append(F("ERROR", "W04", U, f"{tag}: move {move!r} is not a default of its primary collision "
                                                 f"({cols[0] if cols else 'not-done'}: {sorted(dflt)}) - give move_reason"))
         if move in MOVES_CON or move == "confirm-assumed":
             scs = g.get("source_check") or []
-            scs = scs if isinstance(scs, list) else [scs]
+            scs = [x for x in (scs if isinstance(scs, list) else [scs]) if isinstance(x, dict)]
             if not scs or any(s.get("key") not in pp for s in scs):
                 fs.append(F("ERROR", "W05", U, f"{tag}: a {move} gap needs source_check {{key, where, quote}} (or a list) on "
                                                 "the paper(s) whose claim or premise it turns on"))
@@ -728,19 +924,22 @@ def gaps_problems(rd, doc: dict) -> list[dict]:
             fs.append(F("ERROR", "W08", U, f"{tag}: feasibility_basis must cite lens verdicts (lens:<concept>) or own data "
                                             f"(own:<name>); unknown: {sorted(set(fb) - set(known))}"))
         else:
-            caps = [FEAS_CAP.get(lens_on[x[5:]].get("affordable") or lens_on[x[5:]].get("on_disk"), 5)
-                    for x in fb if x.startswith("lens:")]
-            if caps and (g.get("feasibility") or 0) > min(caps):
+            cap = feasibility_cap(lens_on, fb)
+            if cap and isinstance(g.get("feasibility"), int) and g["feasibility"] > cap[0]:
                 fs.append(F("ERROR", "W08", U, f"{tag}: feasibility {g.get('feasibility')} above what its weakest cited "
-                                                f"verdict allows ({min(caps)}: yes 5, partial / obtainable 4, no 2)"))
+                                                f"verdict allows ({cap[0]}: yes 5, partial / obtainable 4, no 2)"))
     for d in {i for i in ids if ids.count(i) > 1}:
         fs.append(F("ERROR", "W01", U, f"{d} appears twice"))
     # every collision a gap could turn on is either used or set aside with a reason
-    must = [r for r in cur.values() if r["result"] in MUST_ACCOUNT
-            or (r["result"] == "conflict" and r.get("axes_differ") == ["none"])]
-    set_aside = {x.get("collision"): x for x in doc.get("not_gaps") or []}
-    left = [r["collision_id"] for r in must if r["collision_id"] not in used and
-            not str((set_aside.get(r["collision_id"]) or {}).get("why") or "").strip()]
+    ng = doc.get("not_gaps") or []
+    if not isinstance(ng, list) or any(not isinstance(x, dict) for x in ng):
+        fs.append(F("ERROR", "W01", U, "not_gaps is a list of {collision, why}"))
+        ng = [x for x in ng if isinstance(x, dict)] if isinstance(ng, list) else []
+    set_aside = {str(x.get("collision")): x for x in ng}
+    unknown = sorted(str(c) for c in set_aside if c not in cur)
+    if unknown:
+        fs.append(F("ERROR", "W10", U, f"not_gaps names {unknown}, not current collision ids (X + four digits)"))
+    left = [c for c in must_account(cur) if c not in used and not str((set_aside.get(c) or {}).get("why") or "").strip()]
     if left:
         fs.append(F("ERROR", "W10", U, f"{len(left)} straight-conflict or premise collision(s) neither in a gap nor set "
                                         f"aside with a reason in not_gaps: {left[:8]}"))
@@ -935,6 +1134,8 @@ def cmd_gaps(a):
 def _cmd_gaps(a):
     rd = Path(a.research_dir)
     doc = read_json(Path(a.gaps_json))
+    for note in cap_feasibility(rd, doc) if isinstance(doc, dict) else []:
+        print(f"  {note}")
     fs = gaps_problems(rd, doc)
     _print(fs)
     if errors(fs):

@@ -24,12 +24,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date
 from pathlib import Path
 
-from it_common import (die, http_json, now_iso, preflight_says, quote, read_json, require_protocol, sha256_file,
+from it_common import (die, http_json, now_iso, preflight_says, quote, read_json, repair_quote, require_protocol, sha256_file,
                        with_legacy, write_json, write_json_stable, write_text)
 import it_legacy
 
@@ -395,7 +396,8 @@ exactly as written; or the literal "not stated"):
 A score of relevance 3 or more needs a quoted `problem` and `method` (a paper with no abstract: a quoted `problem`
 from the title is enough). Quotes are checked against the text, ignoring case, punctuation (hyphens too) and spacing: curly or
 straight quotes, a non-breaking space or a line break do not matter; copy a hyphenated line break as written
-("em- bedded").
+("em- bedded"). A paper with `refused_before` was refused last time for the reasons listed there: quote it again
+from the text itself (where a reason names the nearest words in the text, those words pass), never the refused phrase.
 
 If the abstract plainly describes **another** paper than the title (a different subject altogether), add
 `"record_problem": "abstract-mismatch"`, and judge the paper on its **title only**: quotes from the title, the
@@ -451,6 +453,10 @@ Two records of the same paper: score one, mark the other `{{"id": "...", "duplic
 copy is an open-access preprint, add `"carry": {{"arxiv_id": "..."}}` so the kept record keeps the route to the text.
 
 ## Output - exactly one JSON object
+
+An entry may also carry `"decision": "include" | "exclude"` (written after the scores): then `violates` counts only
+for `exclude`, and an included paper's `violates` is ignored. With a soft or linked criterion it may carry
+`"other_reading"`: one line on the criterion's other reading (how the paper meets it, or why it fails it too).
 
 ```json
 {{"model": "the model you are",
@@ -603,25 +609,118 @@ def _cmd_plan(a):
     fan.mkdir(parents=True, exist_ok=True)
     existing = sorted(fan.glob("batch_*.in.json"))
     start = len(existing)
-    batches = [(todo[i:i + a.size], None) for i in range(0, len(todo), a.size)]
+    max_chars = getattr(a, "max_chars", 0) or 0
+    batches = [(c, None) for c in _chunks(todo, a.size, max_chars)]
     taken = {p["id"] for p in todo}
     for kind in a.rescore or []:
         again = [p for p in rescore_targets(rd, scores, cand, gate, kind) if p["id"] not in taken]
         taken |= {p["id"] for p in again}                    # one new reading per paper, whatever asked for it
-        batches += [(again[i:i + a.size], {"reason": RESCORE_REASONS[kind], "kind": kind})
-                    for i in range(0, len(again), a.size)]
+        batches += [(c, {"reason": RESCORE_REASONS[kind], "kind": kind}) for c in _chunks(again, a.size, max_chars)]
         print(f"A3: {len(again)} entr(y/ies) to read again ({kind}): {RESCORE_REASONS[kind]}")
+    crit = sorted(criteria_ids(cfg))
+    last_refusal = {r["id"]: r.get("problems") for r in scores.get("refused") or [] if r.get("id")}
     for k, (chunk, rescore) in enumerate(batches, start=start):
         write_json(fan / f"batch_{k:02d}.in.json", {
             "batch": k, "brief": BRIEF_VERSION, "ids": [p["id"] for p in chunk], "out": f"batch_{k:02d}.out.json",
             **({"rescore": rescore} if rescore else {}),
-            "papers": [{"id": p["id"], "title": p.get("title"), "abstract": p.get("abstract"), "year": p.get("year"),
-                        "flags": _flags(p, None)} for p in chunk]})
+            "papers": [{**_paper_entry(p), **({"refused_before": last_refusal[p["id"]]} if last_refusal.get(p["id"])
+                                                 else {})} for p in chunk]})
+        write_json(fan / "schemas" / f"batch_{k:02d}.json",
+                   answer_schema([p["id"] for p in chunk], crit, sorted(set(_soft(rd)) | _soft_sets(rd)[1])))
     write_text(fan / "brief.md", BRIEF.format(batch="<this batch's .in.json>", out="<the matching .out.json>",
                                               criteria=_criteria_text(cfg, scores, _soft(rd)), scope=_scope_text(cfg)))
-    print(f"A3: {sum(len(c) for c, _ in batches)} paper(s) to score in {len(batches)} batch(es) of <= {a.size} -> {fan}")
+    print(f"A3: {sum(len(c) for c, _ in batches)} paper(s) to score in {len(batches)} batch(es) of <= {a.size}"
+          + (f" (and <= {max_chars} characters)" if max_chars else "") + f" -> {fan}")
     for k in range(start, start + len(batches)):
         print(f"  subagent {k}: read {fan / 'brief.md'} and {fan / f'batch_{k:02d}.in.json'}; write {fan / f'batch_{k:02d}.out.json'}")
+
+
+def _paper_entry(p: dict) -> dict:
+    return {"id": p["id"], "title": p.get("title"), "abstract": p.get("abstract"), "year": p.get("year"),
+            "flags": _flags(p, None)}
+
+
+def _chunks(items: list[dict], size: int, max_chars: int = 0) -> list[list[dict]]:
+    """Batches of at most `size` papers and, when max_chars > 0 (the harness's $BUDGET for a worker that is given
+    the batch inside its prompt), at most max_chars characters of paper entries - so no batch is ever cut."""
+    out, cur, n = [], [], 0
+    for p in items:
+        c = len(json.dumps(_paper_entry(p), ensure_ascii=False)) + 2
+        if cur and (len(cur) >= size or (max_chars and n + c > max_chars)):
+            out.append(cur)
+            cur, n = [], 0
+        cur.append(p)
+        n += c
+    return out + ([cur] if cur else [])
+
+
+def answer_schema(ids: list[str], crit: list[str], soft: list[str] = ()) -> dict:
+    """The JSON schema of one batch's answer (an Ollama worker's answer is decoded under it): one entry per paper of
+    the batch, in reading order - the verbatim evidence, the two scores, the decision, and the criteria an excluded
+    paper violates. A schema-decoded answer fills every field it is given, so nothing rare is asked: duplicates are
+    the merge's (A2.m), and with soft criteria one plain line, `other_reading`, from which _normal builds
+    soft_violates / both_readings."""
+    s_ = {"type": "string"}
+    props = {"id": {"enum": ids},
+             "evidence": {"type": "object", "properties": {k: s_ for k in ("problem", "method", "data", "code")},
+                          "required": ["problem", "method", "data", "code"], "additionalProperties": False},
+             "rel": {"enum": [1, 2, 3, 4, 5]}, "qual": {"enum": [1, 2, 3, 4, 5]},
+             "decision": {"enum": ["include", "exclude"]},
+             "violates": {"type": "array", "items": {"enum": crit}}, "rationale": s_}
+    if soft:
+        props["other_reading"] = s_
+    entry = {"type": "object", "properties": props, "additionalProperties": False, "required": list(props)}
+    return {"type": "object", "properties": {"model": s_, "scores": {"type": "array", "items": entry,
+                                                                     "minItems": len(ids), "maxItems": len(ids)}},
+            "required": ["model", "scores"], "additionalProperties": False}
+
+
+def _normal(e: dict, paper: dict | None = None, softish: set = frozenset()) -> dict:
+    """What code settles in a scorer's entry before it is judged (the scorer chose; the letters are the source's):
+
+    - evidence: a near copy of the title or abstract becomes its exact words (repair_quote); `data` and `code` are
+      optional evidence, so one that is still no phrase of the source is not recorded ("not stated") instead of
+      keeping the paper unscored - `problem` and `method` stay the scorer's to quote (relevance 3+ needs them);
+    - `decision` says whether the paper is excluded: only then do its `violates` count;
+    - soft criteria (`other_reading`, the scorer's line on the other reading): an included paper that a soft criterion
+      excludes on one reading carries soft_violates; an excluded one carries both_readings - and without a line on
+      the other reading it is kept (recall first: a missed close paper costs a false novelty claim);
+    - empty fields are absent, and an excluded paper is not scored."""
+    e = dict(e)
+    ev = e.get("evidence")
+    if paper and isinstance(ev, dict):
+        text = f"{paper.get('title') or ''}. {paper.get('abstract') or ''}"
+        fixed = {}
+        for k, v in ev.items():
+            v = str(v or "")
+            if v.strip().lower() != NOT_STATED and _norm(v) not in _norm(text):
+                v = repair_quote(v, text) or v
+            if k in ("data", "code") and v.strip().lower() != NOT_STATED and \
+                    (len(_norm(v).split()) < 2 or _norm(v) not in _norm(text)):
+                v = NOT_STATED
+            fixed[k] = v
+        e["evidence"] = fixed
+    decision = e.pop("decision", None)
+    other = str(e.pop("other_reading", "") or "").strip()
+    soft_only = bool(e.get("violates")) and set(e["violates"]) <= set(softish)
+    if decision == "include":
+        if soft_only:
+            e["soft_violates"] = {c: other or "meets it under the other reading" for c in e["violates"]}
+        e.pop("violates", None)
+        e.pop("both_readings", None)
+    elif decision == "exclude" and soft_only:
+        if other:
+            e["both_readings"] = {c: other for c in e["violates"]}
+        else:
+            e["soft_violates"] = {c: "excluded on one reading only; the other reading was not ruled out"
+                                  for c in e.pop("violates")}
+    for k in ("violates", "soft_violates", "both_readings", "duplicate_of"):
+        if k in e and not e[k]:
+            del e[k]
+    if "violates" in e:
+        for k in ("rel", "qual", "evidence", "soft_violates"):
+            e.pop(k, None)
+    return e
 
 
 RESCORE_REASONS = {
@@ -697,13 +796,25 @@ def _cmd_rescue(a):
         "rescue": {"reason": reason, "by": a.by or "", "at": now_iso(), "supersedes": (cur or {}).get("batch", "bulk")},
         "note": "A later step asks for a second reading of this paper. Judge it against the protocol exactly like any "
                 "other paper; the earlier reading is not shown. Reason given: " + reason,
-        "papers": [{"id": pid, "title": p.get("title"), "abstract": p.get("abstract"), "year": p.get("year"),
-                    "flags": _flags(p, None)}]})
+        "papers": [_paper_entry(p)]})
+    write_json(fan / "schemas" / f"batch_{k:02d}.json",
+               answer_schema([pid], sorted(criteria_ids(cfg)), sorted(set(_soft(rd)) | _soft_sets(rd)[1])))
     write_text(fan / "brief.md", BRIEF.format(batch="<this batch's .in.json>", out="<the matching .out.json>",
                                               criteria=_criteria_text(cfg, scores, _soft(rd)), scope=_scope_text(cfg)))
     print(f"A3 rescue: {pid} in batch {k}")
     print(f"  subagent: read {fan / 'brief.md'} and {fan / f'batch_{k:02d}.in.json'}; write {fan / f'batch_{k:02d}.out.json'}")
     print("  then: screen-merge, screen-build, export, mcp_bridge.py bibliography, fulltext-status")
+
+
+def shared_rationales(entries: list[dict]) -> dict[str, list[str]]:
+    """The included-range entries (rel >= 3, no hard violation) whose rationale another rel >= 3 entry has word for word
+    (C04: a template, not a judgement): {paper id: the papers it shares the rationale with}."""
+    by = defaultdict(list)
+    for e in entries:
+        if "duplicate_of" not in e and (e.get("rel") or 0) >= 3:
+            by[str(e.get("rationale", "")).strip()].append(e)
+    return {e["id"]: sorted(x["id"] for x in es if x is not e) for es in by.values() if len(es) > 1
+            for e in es if "violates" not in e}
 
 
 def cmd_merge(a):
@@ -726,6 +837,10 @@ def cmd_merge(a):
         return not probs
     scores["scores"] = [e for e in scores.get("scores") or [] if admissible(e, e.get("batch"))]
     have = {s["id"] for s in scores["scores"]}
+    # an answer refused for C04 stays refused: each merge reads every batch again, and the templated answer, which
+    # passes on its own, would come back first and shut out the batch that asked it again
+    templated = {(r.get("id"), r.get("batch")) for r in scores.get("refused") or []
+                 if any(str(x).startswith("C04") for x in r.get("problems") or [])}
     added, missing_all = 0, []
     for fin in sorted(fan.glob("batch_*.in.json")):
         bi = read_json(fin)
@@ -733,17 +848,24 @@ def cmd_merge(a):
         if not fout.exists():
             missing_all.append((bi["batch"], bi["ids"], "no answer file"))
             continue
-        ans = read_json(fout)
-        model = ans.get("model") or "unknown"
+        try:
+            ans = read_json(fout)
+        except ValueError as e:
+            missing_all.append((bi["batch"], bi["ids"], f"answer file is not JSON ({e})"))
+            continue
+        model = ans.get("model") or os.environ.get("IDEATE_LLM_MODEL") or "unknown"
         stamp = {"brief": bi["brief"]} if bi.get("brief") else {}       # the rules this answer was written under
         ids = set(bi["ids"])
         got = {}
         for e in ans.get("scores") or []:
-            if e.get("id") not in ids:
-                die(f"batch {bi['batch']}: answer for {e.get('id')!r}, which is not in the batch", 2)
+            if not isinstance(e, dict) or e.get("id") not in ids:
+                print(f"  batch {bi['batch']}: ignored an answer for {e.get('id') if isinstance(e, dict) else e!r}, "
+                      "which is not in the batch")
+                continue
             if e["id"] in got:
-                die(f"batch {bi['batch']}: {e['id']} answered twice", 2)
-            got[e["id"]] = e
+                print(f"  batch {bi['batch']}: {e['id']} answered twice - the first answer is kept")
+                continue
+            got[e["id"]] = _normal(e, papers.get(e["id"]), soft | linked)
         for pid in bi["ids"]:
             if pid not in cand:
                 continue                                         # an earlier batch's work the snowball dropped
@@ -767,11 +889,19 @@ def cmd_merge(a):
                 continue
             if pid in have:
                 continue
-            if pid in got and admissible({**got[pid], **seen}, bi["batch"], bi.get("brief") or 1):
+            if pid in got and (pid, bi["batch"]) not in templated and \
+                    admissible({**got[pid], **seen}, bi["batch"], bi.get("brief") or 1):
                 scores["scores"].append({**got[pid], "batch": bi["batch"], "model": model, **stamp, **seen})
                 have.add(pid)
                 added += 1
         missing_all.append((bi["batch"], [pid for pid in bi["ids"] if pid in cand], "not answered or refused"))
+    shared = shared_rationales(scores["scores"])       # C04 asked again here, not only refused by screen-build at the end
+    for e in [e for e in scores["scores"] if e.get("id") in shared]:
+        refused.append({"id": e["id"], "batch": e.get("batch"), "problems": [
+            f"C04: the rationale is word for word that of {shared[e['id']]} ({str(e.get('rationale'))[:80]!r}) - a "
+            "template, not a judgement: write this paper's own, from its own abstract"]})
+        have.discard(e["id"])
+    scores["scores"] = [e for e in scores["scores"] if e.get("id") not in shared]
     missing_all = [(b, [i for i in ids if i not in have], why) for b, ids, why in missing_all]
     missing_all = [m for m in missing_all if m[1]]                           # a later batch may have answered it
     known = {(r["id"], r["batch"]) for r in scores.get("refused") or []}
@@ -814,14 +944,17 @@ def evidence_problems(e: dict, paper: dict) -> list[str]:
     if not isinstance(ev, dict) or set(ev) != set(EVIDENCE_KEYS):
         return [f"evidence must have exactly {EVIDENCE_KEYS}"]
     mismatch = e.get("record_problem") == "abstract-mismatch"
-    text = _norm(paper.get("title") if mismatch else
-                 f"{paper.get('title') or ''} {paper.get('abstract') or ''} {paper.get('abstract_raw') or ''}")
+    raw = paper.get("title") if mismatch else \
+        f"{paper.get('title') or ''} {paper.get('abstract') or ''} {paper.get('abstract_raw') or ''}"
+    text = _norm(raw)
     for k in EVIDENCE_KEYS:
         v = str(ev.get(k) or "").strip()
         if v.lower() == NOT_STATED:
             continue
         if len(_norm(v).split()) < 2 or _norm(v) not in text:          # "ParaNMT-Small" is two words
-            out.append(f"evidence.{k} is not a verbatim phrase of the {'title (abstract-mismatch: title only)' if mismatch else 'title or abstract'}: {v[:60]!r}")
+            near = repair_quote(v, str(raw or ""), 0.6)                  # the source's own words, for the next reading
+            hint = f" (the nearest words in the text: {near!r})" if near and _norm(near) in text else ""
+            out.append(f"evidence.{k} is not a verbatim phrase of the {'title (abstract-mismatch: title only)' if mismatch else 'title or abstract'}: {v[:60]!r}{hint}")
     # an entry its scorer wrote before A3.b found the abstract is judged on the text it saw: the title alone
     seen_less = bool(paper.get("abstract_filled_by")) and e.get("text_sha") != text_sha(paper)
     no_abs = mismatch or not has_abstract(paper) or seen_less
@@ -970,7 +1103,7 @@ def check_scores(cfg, rd, scores: dict | None = None) -> list[dict]:
                                       "screen-merge withdraw, and only works the snowball dropped)"))
     ex_ids = criteria_ids(cfg)
     soft, linked = _soft_sets(rd)
-    rationales = Counter(str(e.get("rationale", "")).strip() for e in entries if (e.get("rel") or 0) >= 3)
+    shared = shared_rationales(entries)
     fan = Path(rd) / "_state" / "fanout" / "A3"
     batch_ids = {}
     for f in fan.glob("batch_*.in.json") if fan.is_dir() else []:
@@ -989,7 +1122,7 @@ def check_scores(cfg, rd, scores: dict | None = None) -> list[dict]:
         else:
             fs += [F("ERROR", code, U, f"{pid}: {msg}") for code, msg in entry_problems(e, papers[pid], ex_ids, soft, linked)]
             r = str(e.get("rationale", "")).strip()
-            if "violates" not in e and (e.get("rel") or 0) >= 3 and rationales.get(r, 0) > 1:
+            if pid in shared:
                 fs.append(F("ERROR", "C04", U, f"{pid}: rationale shared word for word with another included-range paper "
                                               f"(a template, not a judgement): {r[:60]!r}"))
         if "batch" not in e or "model" not in e:
@@ -1498,6 +1631,8 @@ def add_parsers(sub) -> None:
     sp = sub.add_parser("screen-plan", help="A3: the brief and the batches for the scoring subagents")
     sp.add_argument("research_dir")
     sp.add_argument("--size", type=int, default=BATCH_SIZE)
+    sp.add_argument("--max-chars", type=int, default=0, help="at most this many characters of papers per batch "
+                    "(0: no limit; the harness passes $BUDGET for a worker that is given the batch in its prompt)")
     sp.add_argument("--rescore", action="append", choices=sorted(RESCORE_REASONS),
                     help="also batch entries to read again: soft (scored before brief 2 on a soft or linked criterion), "
                          "filled (scored before A3.b found the abstract); the answer supersedes the earlier entry")

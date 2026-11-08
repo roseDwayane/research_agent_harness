@@ -92,6 +92,7 @@ The one part of the original system prompt that is *not* verbatim is the tool bl
 
 ---
 
+<a id="b2-sota"></a>
 ## 2. B2 — sota, angle-specific synthesis
 
 **Choose the angle first — before looking for gaps.** In practice this, together with the `also_uses` steering below, is

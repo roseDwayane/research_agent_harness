@@ -142,9 +142,9 @@ class StepAgent:
             r = agent.run(ctx, gen, ph, force=force, strict=blocking)
             res.units.append(r)
             looped = False
-            if not r.ok and self._replan_pending(ctx, u):
-                # A2.c's own check refuses while a re-plan is pending (R08): LOOP-01 is what resolves it
-                extra = self._loop01(ctx)
+            loop = self._pending_loop(ctx, u) if not r.ok else None
+            if loop:                     # the Unit's own check refuses until its loop has run: the loop resolves it
+                extra = loop(ctx)
                 res.units += extra
                 r, looped = (extra[-1] if extra else r), True
             if not r.ok:
@@ -202,13 +202,24 @@ class StepAgent:
     def _replan_pending(ctx: RunContext, unit: str) -> bool:
         return unit == "A2.c" and bool(loops.relevance_rounds(ctx.rd)[1])
 
+    def _pending_loop(self, ctx: RunContext, unit: str):
+        """The loop a refused Unit is waiting on: A2.c's check refuses while a re-plan is pending (R08, LOOP-01), A1.e's
+        while the revision its round asked for is not made (E04, LOOP-02)."""
+        if self._replan_pending(ctx, unit):
+            return self._loop01
+        if unit == "A1.e" and loops.protocol_verdict(ctx.rd)[1] == "revision-required":
+            return self._loop02
+        return None
+
     def _loop01(self, ctx: RunContext) -> list[UnitResult]:
         out, completed = [], 0
         while True:
             rounds, replan = loops.relevance_rounds(ctx.rd)
             if not replan:
                 return out
-            if not loops.allowed(ctx, "LOOP-01", completed, unit="A2.c", step=self.step_id)["allowed"]:
+            share = loops.replan_new_share(ctx.rd) if completed else None   # min_new_share needs it after round 1
+            if not loops.allowed(ctx, "LOOP-01", completed, {"new_share": share} if share is not None else None,
+                                 unit="A2.c", step=self.step_id)["allowed"]:
                 return out                                # bound reached: A2.c accepts weak, with the caveat
             for u, ph in (("A2.c", "replan"), ("A2.m", "main"), ("A2.c", "main")):
                 r = self.rerun(ctx, u, phase=ph)

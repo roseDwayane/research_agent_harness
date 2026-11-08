@@ -1757,8 +1757,12 @@ class TestEnvProbe(unittest.TestCase):
         self.cached = tmp / "cache_root"
         for name in ("MNE-eegbci-data", "MNE-fsaverage-data"):
             (self.cached / name).mkdir(parents=True)
-        self.config = json.loads(json.dumps(self.CONFIG).replace("CACHED_ROOT", str(self.cached)))
-        dump(self.rd / "step0_session_config.json", self.config)
+        config = json.loads(json.dumps(self.CONFIG).replace("CACHED_ROOT", str(self.cached)))
+        # as a run leaves it: ideate_tools' writer adds the archived engine's keys (it_legacy), so --write adds the probe only
+        sys.path.insert(0, str(SCRIPT.parent))
+        from ideate_tools import write_json
+        write_json(self.rd / "step0_session_config.json", config)
+        self.config = json.loads((self.rd / "step0_session_config.json").read_text(encoding="utf-8"))
 
     def tearDown(self):
         self._tmp.cleanup()

@@ -49,7 +49,12 @@ mcp = FastMCP("paper_pdf_mcp")
 UNPAYWALL_EMAIL = (os.environ.get("PAPER_PDF_UNPAYWALL_EMAIL") or os.environ.get("SCHOLAR_CONTACT_EMAIL")
                    or "research-agent@example.com")
 UNPAYWALL_BASE = "https://api.unpaywall.org/v2"
+UNPAYWALL_REFUSED = False      # set once Unpaywall answers 422 to the contact email: a failure names the fix
 NCBI_IDCONV = "https://www.ncbi.nlm.nih.gov/pmc/utils/idconv/v1.0/"
+# PMC's open-access articles as NCBI publishes them for programs (the PMC Cloud Service): metadata/{PMCID}.{v}.json
+# names the article's PDF. Europe PMC's ?pdf=render answers 403 to programs now.
+PMC_OPENDATA = "https://pmc-oa-opendata.s3.amazonaws.com"
+OPENALEX_WORKS = "https://api.openalex.org/works"
 ARXIV_API = "http://export.arxiv.org/api/query"
 
 # Browser-like UA — some publishers block default httpx/python UAs.
@@ -383,9 +388,31 @@ def load_candidates(path: str) -> tuple[List[Dict[str, Any]], str]:
 # ---------------------------------------------------------------------------
 
 def _pmcid_from_url(url: str) -> Optional[str]:
-    '''Extract a PMCxxxx id from a PMC article URL, if present.'''
-    m = re.search(r"(PMC\d+)", url or "", flags=re.IGNORECASE)
-    return m.group(1).upper() if m else None
+    '''Extract a PMCxxxx id from a PMC article URL, if present (OpenAlex writes .../pmc/articles/5835235).'''
+    m = re.search(r"(PMC\d+)", url or "", flags=re.IGNORECASE) or re.search(r"/pmc/articles/(\d+)", url or "")
+    return ("PMC" + m.group(1).upper().removeprefix("PMC")) if m else None
+
+
+_PMC_PDF: Dict[str, List[Dict[str, str]]] = {}      # PMCID -> its candidates (asked once per run)
+
+
+async def _pmc_pdf(client: httpx.AsyncClient, pmcid: str, source: str) -> List[Dict[str, str]]:
+    '''The PDF of an open-access PMC article from the PMC Cloud Service (latest version), then Europe PMC.'''
+    if pmcid not in _PMC_PDF:
+        out: List[Dict[str, str]] = []
+        try:
+            r = await client.get(f"{PMC_OPENDATA}/", params={"list-type": "2", "prefix": f"metadata/{pmcid}."})
+            keys = sorted(re.findall(r"<Key>(metadata/[^<]+\.json)</Key>", r.text),
+                          key=lambda k: int(re.search(r"\.(\d+)\.json$", k).group(1)))
+            if keys:
+                pdf = (await client.get(f"{PMC_OPENDATA}/{keys[-1]}")).json().get("pdf_url") or ""
+                if pdf:
+                    out.append({"url": pdf.split("?")[0].replace("s3://pmc-oa-opendata", PMC_OPENDATA), "source": ""})
+        except (httpx.HTTPError, json.JSONDecodeError, AttributeError):
+            pass
+        out.append({"url": f"https://europepmc.org/articles/{pmcid}?pdf=render", "source": ""})
+        _PMC_PDF[pmcid] = out
+    return [{**c, "source": source} for c in _PMC_PDF[pmcid]]
 
 
 def _direct_pdf_from_landing(doi: str, url: str) -> List[str]:
@@ -449,12 +476,15 @@ async def _candidates_from_unpaywall(client: httpx.AsyncClient, doi: str) -> Lis
       - its explicit url_for_pdf (if any)
       - a Europe PMC render URL (if the location is a PMC article)
       - a constructed publisher PDF URL (PLOS/MDPI/Nature landing pages)
-    NCBI's own /pdf/ endpoint now serves an anti-bot HTML page, so PMC always
-    routes through europepmc.org instead.
+    NCBI's own /pdf/ endpoint now serves an anti-bot HTML page, so PMC routes
+    through the PMC Cloud Service (_pmc_pdf) instead.
     '''
+    global UNPAYWALL_REFUSED
     url = f"{UNPAYWALL_BASE}/{doi}"
     try:
         resp = await client.get(url, params={"email": UNPAYWALL_EMAIL})
+        if resp.status_code == 422:                  # "Please use your own email address"
+            UNPAYWALL_REFUSED = True
         if resp.status_code != 200:
             return []
         data = resp.json()
@@ -476,7 +506,7 @@ async def _candidates_from_unpaywall(client: httpx.AsyncClient, doi: str) -> Lis
             out.append({"url": loc["url_for_pdf"], "source": "unpaywall"})
         pmcid = _pmcid_from_url(loc_url)
         if pmcid:
-            out.append({"url": f"https://europepmc.org/articles/{pmcid}?pdf=render", "source": "unpaywall+pmc"})
+            out += await _pmc_pdf(client, pmcid, "unpaywall+pmc")
         for constructed in _direct_pdf_from_landing(doi, loc_url):
             out.append({"url": constructed, "source": "unpaywall+publisher"})
     # Last-resort: Unpaywall says is_oa but no PDF/PMC/publisher transform fired
@@ -506,8 +536,31 @@ async def _candidates_from_pmc(client: httpx.AsyncClient, doi: str) -> List[Dict
     for rec in records:
         pmcid = rec.get("pmcid")
         if pmcid:
-            out.append({"url": f"https://europepmc.org/articles/{pmcid}?pdf=render", "source": "pmc"})
+            out += await _pmc_pdf(client, pmcid, "pmc")
     return out
+
+
+async def _candidates_from_openalex(client: httpx.AsyncClient, doi: str) -> List[Dict[str, str]]:
+    '''OpenAlex's PDF links and PMCID for the DOI: it needs no contact email, so it stands in when Unpaywall
+    refuses the placeholder address.'''
+    params = {"select": "locations,ids"}
+    if os.environ.get("OPENALEX_API_KEY"):
+        params["api_key"] = os.environ["OPENALEX_API_KEY"]
+    try:
+        resp = await client.get(f"{OPENALEX_WORKS}/doi:{doi}", params=params)
+        if resp.status_code != 200:
+            return []
+        data = resp.json()
+    except (httpx.HTTPError, json.JSONDecodeError):
+        return []
+    out = [{"url": loc["pdf_url"], "source": "openalex"} for loc in data.get("locations") or [] if loc.get("pdf_url")]
+    pmcid = _pmcid_from_url((data.get("ids") or {}).get("pmcid") or "")
+    return out + (await _pmc_pdf(client, pmcid, "openalex+pmc") if pmcid else [])
+
+
+async def _candidates_from_doi_prefix(client: httpx.AsyncClient, doi: str) -> List[Dict[str, str]]:
+    '''The open-access publishers' PDF URL patterns, keyed on the DOI prefix alone (no lookup needed).'''
+    return [{"url": u, "source": "publisher"} for u in _direct_pdf_from_landing(doi, "")]
 
 
 async def _candidates_from_arxiv(client: httpx.AsyncClient, doi: str) -> List[Dict[str, str]]:
@@ -555,14 +608,16 @@ async def _candidates_from_ieee(client: httpx.AsyncClient, doi: str) -> List[Dic
 async def resolve_pdf_candidates(client: httpx.AsyncClient, doi: str) -> List[Dict[str, str]]:
     '''Resolve a DOI to an ordered, de-duplicated list of candidate OA PDF URLs.
 
-    Aggregates Unpaywall (covers most OA, incl. publisher/PMC), then NCBI PMC
-    idconv, then arXiv, then IEEE Xplore (for 10.1109/ DOIs). Each entry is
+    Aggregates Unpaywall (covers most OA, incl. publisher/PMC), then OpenAlex,
+    then NCBI PMC idconv, then the OA publishers' DOI-prefix patterns, then arXiv,
+    then IEEE Xplore (for 10.1109/ DOIs). Each entry is
     {'url', 'source'}. The downloader tries them top-down until one returns a
     real PDF, so a 403 or HTML interstitial on one source falls through to the
     next. Empty list means no OA copy was found.
     '''
     candidates: List[Dict[str, str]] = []
-    for resolver in (_candidates_from_unpaywall, _candidates_from_pmc, _candidates_from_arxiv, _candidates_from_ieee):
+    for resolver in (_candidates_from_unpaywall, _candidates_from_openalex, _candidates_from_pmc,
+                     _candidates_from_doi_prefix, _candidates_from_arxiv, _candidates_from_ieee):
         candidates.extend(await resolver(client, doi))
 
     seen: set = set()
@@ -655,8 +710,9 @@ async def _download_one(
         return {**base, "status": "failed", "reason": "no DOI in candidate list"}
 
     candidates = await resolve_pdf_candidates(client, doi)
+    unpaywall = " (Unpaywall refused the contact email: set PAPER_PDF_UNPAYWALL_EMAIL)" if UNPAYWALL_REFUSED else ""
     if not candidates:
-        return {**base, "status": "failed", "reason": "no open-access copy found"}
+        return {**base, "status": "failed", "reason": "no open-access copy found" + unpaywall}
 
     attempts: List[str] = []
     for cand in candidates:
@@ -674,7 +730,8 @@ async def _download_one(
             }
         attempts.append(f"{cand['source']}: {note}")
 
-    return {**base, "status": "failed", "reason": "all sources failed [" + "; ".join(attempts) + "]", "source": None}
+    return {**base, "status": "failed", "reason": "all sources failed [" + "; ".join(attempts) + "]" + unpaywall,
+            "source": None}
 
 
 # ---------------------------------------------------------------------------

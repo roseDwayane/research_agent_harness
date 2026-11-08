@@ -49,6 +49,15 @@ class Executor(Protocol):
                 attempt: int) -> ExecResult: ...
 
 
+def _stamp(p: Path) -> tuple | None:
+    """What tells a file this call wrote from one it found: size and modification time (None: absent)."""
+    try:
+        st = p.stat()
+    except OSError:
+        return None
+    return st.st_size, st.st_mtime_ns
+
+
 def _add(m: dict, more: dict) -> dict:
     for k, v in more.items():
         m[k] = m.get(k, 0) + v
@@ -117,10 +126,15 @@ class RecipeExecutor:
                     err = {"error_category": "model_output", "severity": "error", "retryable": True,
                            "error_id": f"{unit}:{label}"}
                     d = retry.decide(ctx.reg, "RP-MODEL-OUTPUT", err, feedback_rounds, "unit-tool")
+                    more = ctx.cfg.feedback_rounds
+                    if d["action"] != "retry" and d.get("code") == "IDEATE.RETRY.EXHAUSTED" and more is not None \
+                            and feedback_rounds <= more:
+                        d = {**d, "action": "retry", "reason": f"revision {feedback_rounds} of {more} (feedback_rounds)"}
                     if d["action"] == "retry":
                         ctx.say(f"      ↺ {unit}: {r.command.split()[1] if len(r.command.split()) > 1 else ''} "
                                 f"refused - back to the worker ({d['reason']})")
-                        ok, m = self._feedback(ctx, unit, steps[last_write], subs, log, label, r, attempt)
+                        ok, m = self._feedback(ctx, unit, steps[last_write], subs, log,
+                                               label if feedback_rounds == 1 else f"{label}.r{feedback_rounds}", r, attempt)
                         _add(res.metrics, m)
                         feedback_rounds += 1
                         if ok:
@@ -193,6 +207,14 @@ class RecipeExecutor:
         return f"ollama:{ctx.cfg.model}" if ctx.cfg.worker == "ollama" else "claude -p"
 
     @staticmethod
+    def _scratch(ctx: RunContext, unit: str) -> list[str]:
+        """Where a worker may write besides its files: the Unit's own declared scratch (its card's io), as the ledger
+        allows it - the shared list let a model leave a note in _work/, and the done was refused for it - or, for a Unit
+        whose card declares none as a list, the shared one."""
+        sc = ((ctx.reg.legacy_card(unit) or {}).get("io") or {}).get("scratch")
+        return [*sc, "_state/harness/decisions/**"] if isinstance(sc, list) else list(ow.SCRATCH)
+
+    @staticmethod
     def _output_globs(ctx: RunContext, unit: str, subs: Subs) -> list[str]:
         """The Unit's contract outputs as research-folder-relative patterns (what else a worker may write)."""
         out = []
@@ -215,7 +237,10 @@ class RecipeExecutor:
         the state-changing commands the task asks the worker to run itself (it cannot)."""
         found, unavailable, done = [], [], set()
         task = str(body.get("task") or "")
-        for c in body.get("commands") or []:
+        cmds = body.get("commands") or []
+        if "lookups" in body:                      # the step names the lookups a tool-less worker is given
+            cmds = list(body["lookups"] or []) + [c for c in cmds if " ".join(c.split()[:2]) not in ow.LOOKUPS]
+        for c in cmds:
             words = c.split()
             key = " ".join(words[:2])
             if key in ow.LOOKUPS:
@@ -235,11 +260,17 @@ class RecipeExecutor:
     def _scope(self, ctx: RunContext, unit: str, body: dict, subs: Subs) -> ow.FileScope:
         exp = lambda x: Path(ctx.skill.expand(x, subs, quote=False))       # noqa: E731
         lookups, unavailable = self._lookups(ctx, body, subs) if ctx.cfg.worker == "ollama" else ([], [])
+        schema = None
+        if body.get("schema") and exp(body["schema"]).is_file():     # written by an earlier step (frame strategy-brief)
+            try:
+                schema = json.loads(exp(body["schema"]).read_text(encoding="utf-8"))
+            except ValueError:
+                schema = None                      # the files envelope then; the submit command still checks the file
         return ow.FileScope(base=subs.rd, reads=[(str(exp(x)), exp(x)) for x in body.get("reads") or []],
                             writes=[exp(x) for x in body.get("writes") or []],
-                            globs=list(ow.SCRATCH) + self._output_globs(ctx, unit, subs),
+                            globs=self._scratch(ctx, unit) + self._output_globs(ctx, unit, subs),
                             forbid=[exp(x) for x in body.get("forbid") or []], lookups=lookups,
-                            unavailable=unavailable, max_file_chars=ctx.cfg.max_file_chars)
+                            unavailable=unavailable, max_file_chars=ctx.cfg.file_chars(), schema=schema)
 
     def _worker_kw(self, ctx: RunContext, unit: str, body: dict, subs: Subs, log: Path) -> dict:
         if ctx.cfg.worker == "ollama":
@@ -256,18 +287,28 @@ class RecipeExecutor:
         """One worker call with the transport retry (RP-TRANSPORT, owner unit-transport)."""
         attempt = 1
         while True:
-            backend = ow.run_worker if ctx.cfg.worker == "ollama" else cw.run_worker
-            wr = backend(ctx.cfg, label=f"{label}.a{attempt}", **kw)
+            if ctx.cfg.worker == "ollama":
+                wr = ow.run_worker(ctx.cfg, label=f"{label}.a{attempt}", say=lambda m: ctx.say(f"      … {unit}: {m}"), **kw)
+            else:
+                wr = cw.run_worker(ctx.cfg, label=f"{label}.a{attempt}", **kw)
             ctx.add_usage(wr.metrics)
             if wr.ok or wr.error_category not in ("external_service", "timeout"):
                 return wr
-            d = retry.decide(ctx.reg, "RP-TRANSPORT", {"error_category": wr.error_category, "severity": "degraded",
-                                                       "retryable": True, "error_id": f"{unit}:{label}"},
-                             attempt, "unit-transport")
-            if d["action"] != "retry":
-                return wr
-            ctx.say(f"      … {unit}: worker {wr.error_category}, again in {d['delay_s']}s")
-            time.sleep(d["delay_s"])
+            if ctx.cfg.worker == "ollama":           # one server, one answer at a time: when it is busy, a request
+                if attempt > ctx.cfg.ollama_busy_retries:   # waits and a proxy closes it (524) - and the server may
+                    return wr                               # still finish the dropped answer. Wait for it to drain:
+                delay = min(ctx.cfg.ollama_busy_wait_s * 2 ** (attempt - 1), 900.0)   # 2, 4, 8, 15 minutes
+            else:
+                d = retry.decide(ctx.reg, "RP-TRANSPORT", {"error_category": wr.error_category, "severity": "degraded",
+                                                           "retryable": True, "error_id": f"{unit}:{label}"},
+                                 attempt, "unit-transport")
+                if d["action"] != "retry":
+                    return wr
+                delay = d["delay_s"]
+            ctx.say(f"      … {unit}: worker {wr.error_category}, again in {delay:.0f}s")
+            time.sleep(0 if ctx.cfg.dry_run else delay)
+            if ctx.cfg.worker == "ollama" and not ctx.cfg.dry_run:     # never re-send to a server still busy
+                ow.wait_idle(ctx.cfg, say=lambda m: ctx.say(f"      … {unit}: {m}"))
             attempt += 1
 
     def _write(self, ctx: RunContext, unit: str, s: Step, subs: Subs, log: Path, label: str, attempt: int):
@@ -275,6 +316,7 @@ class RecipeExecutor:
         inst = instance_of(subs.gen, subs.phase)
         task, system = self._prompt(ctx, unit, body, subs)
         writes = [Path(ctx.skill.expand(x, subs, quote=False)) for x in body.get("writes") or []]
+        before = {w: _stamp(w) for w in writes}         # a file left from an earlier run is not this call's answer
         kw = self._worker_kw(ctx, unit, body, subs, log)
         cwd = subs.rd
         if body.get("isolated"):
@@ -293,7 +335,7 @@ class RecipeExecutor:
                     shown.append((str(src), cwd / src.name))
             if ctx.cfg.worker == "ollama":                 # it reads its copies, and writes into its folder only
                 kw["scope"] = ow.FileScope(base=cwd, reads=shown, writes=[cwd / w.name for w in writes],
-                                           max_file_chars=ctx.cfg.max_file_chars)
+                                           max_file_chars=ctx.cfg.file_chars(), schema=kw["scope"].schema)
             task = task.replace(str(subs.rd) + "/", "./")
             task += ("\n\nYou are an independent reader: work only with the files in this folder. Write your answer as "
                      + ", ".join(f"./{w.name}" for w in writes) + ".")
@@ -316,7 +358,7 @@ class RecipeExecutor:
                 if (cwd / w.name).is_file():
                     w.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(cwd / w.name, w)
-        missing = [w for w in writes if not w.exists()]
+        missing = [w for w in writes if not w.exists() or _stamp(w) == before[w]]
         metrics = dict(wr.metrics)
         rounds = 1
         while missing:
@@ -332,7 +374,7 @@ class RecipeExecutor:
                             **kw)
             _add(metrics, wr.metrics)
             rounds += 1
-            missing = [w for w in writes if not w.exists()]
+            missing = [w for w in writes if not w.exists() or _stamp(w) == before[w]]
         return True, metrics, None
 
     def _feedback(self, ctx: RunContext, unit: str, write_step: Step, subs: Subs, log: Path, label: str,
@@ -386,14 +428,18 @@ class RecipeExecutor:
         pattern = ctx.skill.expand(body["batches"], subs, quote=False)
         root = subs.rd
         batches = sorted(root.glob(pattern[len(str(root)) + 1:] if pattern.startswith(str(root)) else pattern))
-        brief = Path(ctx.skill.expand(body["brief"], subs, quote=False)) if body.get("brief") else None
+        brief_spec = str(body.get("brief") or "")
+        brief = Path(ctx.skill.expand(brief_spec, subs, quote=False)) if brief_spec and \
+            not brief_spec.startswith("field:") else None
         todo = []
         for b in batches:
             outs = self._batch_outs(b, body["out"], root)
             if not all(_valid_answer(o) for o in outs):
                 todo.append((b, outs))
-        ctx.say(f"      ⇉ {unit}: {len(todo)} of {len(batches)} batch(es) to answer, {ctx.cfg.max_parallel} at once")
+        ctx.say(f"      ⇉ {unit}: {len(todo)} of {len(batches)} batch(es) to answer, {ctx.cfg.parallel()} at once")
         if not batches:
+            if body.get("allow_empty"):                # the plan wrote none of this kind (A7.D: no full text at quick)
+                return True, {}, None
             return False, {}, ctx.error("IDEATE.ARTIFACT.MISSING", f"no batch files match {body['batches']}", unit=unit,
                                         instance=inst, attempt=attempt, context={"step": label})
         metrics: dict = {}
@@ -404,20 +450,31 @@ class RecipeExecutor:
         def one(item, tries=1):
             b, outs = item
             out = outs[0] if len(outs) == 1 else ", ".join(str(o) for o in outs)
-            task = body["task"].format(batch=b, out=out, brief=brief or "")
+            bb = _batch_brief(b, brief_spec, root) or brief
+            task = body["task"]                # not str.format: a task may spell out a JSON shape ({unit id: ...})
+            for k, v in (("{batch}", b), ("{out}", out), ("{brief}", bb or "")):
+                task = task.replace(k, str(v))
             task = ctx.skill.expand(task, subs, quote=False)
             kw_b = dict(kw)
             if ctx.cfg.worker == "ollama":
-                shown = ([(str(brief), brief)] if brief else []) + [(str(b), b)] + _named_files(b, root, outs)
-                kw_b["scope"] = replace(kw["scope"], reads=shown, writes=list(outs))
+                shown = ([(str(bb), bb)] if bb else []) + [(str(b), b)] + _named_files(b, root, outs)
+                kw_b["scope"] = replace(kw["scope"], reads=shown, writes=list(outs), schema=_batch_schema(b))
             wr = self._call(ctx, unit, f"{label}.{b.stem}.t{tries}", task=task, system=system, cwd=root, **kw_b)
+            missing = [o for o in outs if not _valid_answer(o)]
+            if wr.ok and missing and wr.session_id:   # a note alone is no answer (a B3.5 model declined, then its retry
+                fix = self._call(ctx, unit, f"{label}.{b.stem}.t{tries}.fix", resume=wr.session_id,   # did again)
+                                 task="You have not written: " + ", ".join(str(m) for m in missing) + ". Write them now "
+                                      "- where the batch lacks something, write (TBD) there and say so in the note - "
+                                      "then stop.", system=system, cwd=root, **kw_b)
+                _add(fix.metrics, wr.metrics)
+                wr = fix
             return item, wr
 
         tries = 1
         while todo:
             ctx.emit("TOOL_CALLED", unit_id=unit, instance=inst, attempt=attempt, tool=self._tool(ctx) + " fan-out",
                      actor="worker", context={"step": label, "batches": len(todo), "try": tries})
-            with ThreadPoolExecutor(max_workers=ctx.cfg.max_parallel) as pool:
+            with ThreadPoolExecutor(max_workers=ctx.cfg.parallel()) as pool:
                 results = list(pool.map(lambda it: one(it, tries), todo))
             failed = []
             for (b, outs), wr in results:
@@ -441,6 +498,30 @@ class RecipeExecutor:
             todo = [it for it, _ in failed]
             tries += 1
         return True, metrics, None
+
+
+def _batch_brief(batch: Path, spec: str, root: Path) -> Path | None:
+    """`"brief": "field:<key>"`: each batch names its own brief (A7.D: one for full texts, one for abstracts)."""
+    if not spec.startswith("field:"):
+        return None
+    try:
+        name = json.loads(batch.read_text(encoding="utf-8")).get(spec[len("field:"):])
+    except (ValueError, AttributeError):
+        return None
+    if not name:
+        return None
+    p = Path(name)
+    return p if p.is_absolute() else root / p
+
+
+def _batch_schema(batch: Path) -> dict | None:
+    """The JSON schema a plan command wrote for this batch's answer (<batch dir>/schemas/<batch>.json), if any: an
+    Ollama worker's answer is decoded under it. A batch with several answer files is one object keyed by their stems."""
+    f = batch.parent / "schemas" / f"{batch.name.split('.')[0]}.json"
+    try:
+        return json.loads(f.read_text(encoding="utf-8")) if f.is_file() else None
+    except ValueError:
+        return None
 
 
 def _named_files(batch: Path, root: Path, outs: list[Path], limit: int = 20) -> list[tuple[str, Path]]:

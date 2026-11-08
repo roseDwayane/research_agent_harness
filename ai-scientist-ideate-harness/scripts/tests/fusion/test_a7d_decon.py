@@ -9,6 +9,7 @@ out ineligible (MEG only), one abstract-only. One counter-example per check live
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -246,12 +247,31 @@ class Plan(unittest.TestCase):
             self.assertEqual(code, 0, out)
             plan = json.loads((rd / it_decon.WORK / "plan.json").read_text())
             self.assertEqual([b["basis"] for b in plan["batches"]], ["full-text", "full-text", "abstract"])
-            b1 = json.loads((rd / it_decon.WORK / "batch_001.json").read_text())
-            self.assertEqual(b1["rules"], it_decon.RULES)
+            b1 = json.loads((rd / it_decon.WORK / "batch_ft_001.json").read_text())
+            self.assertEqual(b1["rules"], it_decon.RULES + "#a7d-method")     # the section a full-text reader needs
             self.assertIn("criteria", b1["context"])
-            self.assertTrue((SCRIPTS.parent / b1["rules"]).exists())
-            b3 = json.loads((rd / it_decon.WORK / "batch_003.json").read_text())
+            self.assertTrue((SCRIPTS.parent / b1["rules"].split("#")[0]).exists())
+            self.assertTrue((rd / b1["papers"][0]["full_text"]).exists())      # the reading copy, references left out
+            self.assertTrue((rd / it_decon.WORK / "schemas" / "batch_ft_001.json").exists())
+            b3 = json.loads((rd / it_decon.WORK / "batch_ab_003.json").read_text())
             self.assertIn("abstract", b3["papers"][0])
+
+    def test_a_batch_names_only_its_own_figure_pages_within_the_budget(self):
+        """A worker given every file a batch names: the topic's figure index would be pasted whole into each prompt."""
+        with tempfile.TemporaryDirectory() as t:
+            rd = make_topic(Path(t))
+            keys = sorted(f.stem for f in (rd / "step5_full_text").glob("*.md"))
+            fig = rd / "step5_full_text" / "figure"
+            fig.mkdir(parents=True, exist_ok=True)
+            (fig / "index.json").write_text(json.dumps(
+                [{"key": k, "file": f"{k}_p{i}.png", "page": i, "captions": ["Table 1: " + "x" * 400]}
+                 for k in [*keys, "elsewhere2019"] for i in range(10)]))
+            self.assertEqual(run("decon-plan", rd, "--max-chars", "9000")[0], 0)
+            for b in sorted((rd / it_decon.WORK).glob("batch_ft_*.json")):
+                for e in json.loads(b.read_text())["papers"]:
+                    own = json.loads((rd / e["figure_index"]).read_text())
+                    self.assertEqual({x["key"] for x in own}, {e["citation_key"]})
+                    self.assertLessEqual(len((rd / e["full_text"]).read_text()) + len((rd / e["figure_index"]).read_text()), 9000)
 
     def test_refused_answers_are_not_written(self):
         with tempfile.TemporaryDirectory() as t:
@@ -297,6 +317,106 @@ class Squash(unittest.TestCase):
         text = it_decon.squash("Wireless ear-eeg sensor\n")
         self.assertIsNone(it_decon.quote_problem("Wireless ear-eeg sensor", text))
         self.assertIn("too short", it_decon.quote_problem("ear-eeg sensor", text))
+
+
+def long_paper(sections: dict) -> str:
+    """A converted paper: plain-text headings, numbered lines of body, back matter and a reference list."""
+    out = ["A Title\nThe Authors\n"]
+    for name, n in sections.items():
+        out += [name] + [f"{name.split()[-1].lower()} sentence {i} of the paper body." for i in range(n)] + [""]
+    out += ["ACKNOWLEDGMENTS", "We thank everyone.", "", "REFERENCES"] + [f"Ref {i}. A cited work." for i in range(40)]
+    return "\n".join(out) + "\n"
+
+
+class Excerpt(unittest.TestCase):
+    def test_without_a_budget_only_the_reference_list_goes(self):
+        text = long_paper({"1. Introduction": 50, "2. Methods": 50})
+        out = it_decon.reading_text(text)
+        self.assertTrue(out.endswith("[reference list left out by decon-plan]\n"))
+        self.assertIn("ACKNOWLEDGMENTS", out)
+
+    def test_a_long_paper_keeps_the_beginning_of_every_section(self):
+        text = long_paper({"ABSTRACT": 5, "1. Introduction": 400, "2. Methods": 900, "3. Results": 900,
+                           "4. Discussion": 300, "5. Conclusion": 10})
+        out = it_decon.reading_text(text, 12000)
+        self.assertLessEqual(len(out), 12000)
+        self.assertTrue(out.startswith("[an excerpt of a paper of"))
+        for h in ("ABSTRACT", "1. Introduction", "2. Methods", "3. Results", "4. Discussion", "5. Conclusion",
+                  "results sentence 0 of", "conclusion sentence 9 of"):
+            self.assertIn(h, out)
+        self.assertNotIn("ACKNOWLEDGMENTS", out)
+        self.assertNotIn("Ref 1.", out)
+        kept = [l for l in out.splitlines() if l and not l.startswith("[")]
+        self.assertEqual([l for l in kept if l not in text], [])          # every kept line is the paper's own
+
+    def test_a_paper_without_headings_is_read_along_its_length(self):
+        """No heading found (a "methods" a wrap left alone on its line is none): pieces of the whole text."""
+        text = "\n".join([f"body line {i} of a paper whose headings were lost." for i in range(3000)] + ["methods"])
+        self.assertEqual(it_decon.heading_offsets(text, it_decon.MAIN_SECTION), [])
+        out = it_decon.reading_text(text, 20000)
+        self.assertLessEqual(len(out), 20000)
+        seen = [int(n) for n in re.findall(r"^body line (\d+) of", out, re.M)]
+        self.assertEqual(seen[0], 0)
+        self.assertGreater(max(seen), 2500)                                # its last part too, not only the top
+
+
+class Refusals(unittest.TestCase):
+    """What a refused answer is told, and what a source cannot give."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.rd = build_good(self.tmp)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp)
+
+    def check_answer(self, key, ops):
+        f = FIX / "good" / "answers" / f"{key}.json"
+        out = self.rd / "probe_answer.json"
+        out.write_text(json.dumps(apply_ops(json.loads(f.read_text()), ops)))
+        return run("decon-check", self.rd, "--answer", out)[1]
+
+    def test_a_paraphrased_quote_is_told_the_nearest_words_of_the_source(self):
+        out = self.check_answer("smithetal2020", [{"op": "set", "path": "units.0.quote",
+                                                    "value": "automatic removal of artifacts raises the decoding accuracy"}])
+        self.assertIn("D05", out)
+        self.assertIn("the nearest words in the source:", out)
+
+    def test_a_title_alone_may_leave_the_scope_unstated(self):
+        """parketal2019 is read from its abstract; without one its title states no population, data or conditions."""
+        tbd = [{"op": "set", "path": "units.0.scope", "value": {"population": "(TBD)", "data": "(TBD)", "conditions": "(TBD)"}}]
+        self.assertIn("D06", self.check_answer("parketal2019", tbd))          # an abstract that could have stated it
+        p = self.rd / "step3_shortlist.json"
+        sl = json.loads(p.read_text())
+        for x in sl["papers"]:
+            if x.get("citation_key") == "parketal2019":
+                x["abstract"] = ""
+        p.write_text(json.dumps(sl))
+        self.assertNotIn("D06", self.check_answer("parketal2019", tbd))
+
+
+class DropUnquoted(unittest.TestCase):
+    def test_the_last_round_leaves_out_a_unit_it_cannot_verify_instead_of_the_paper(self):
+        import it_ledger
+        with tempfile.TemporaryDirectory() as t:
+            rd = make_topic(Path(t))
+            self.assertEqual(run("decon-plan", rd)[0], 0)
+            ad = answers_into(rd)
+            f = ad / "smithetal2020.json"
+            ans = json.loads(f.read_text())
+            i = next(n for n, u in enumerate(ans["units"]) if u["kind"] == "assumption")
+            ans["units"][i]["quote"] = "a sentence the paper never wrote about anything at all"
+            f.write_text(json.dumps(ans))
+            code, out = run("decon-merge", rd)
+            self.assertEqual(code, 1, out)
+            self.assertIn("REFUSED smithetal2020", out)
+            code, out = run("decon-merge", rd, "--drop-unquoted")
+            self.assertEqual(code, 0, out)
+            rec = json.loads((it_decon.decon_dir(rd) / "smithetal2020.json").read_text())
+            self.assertEqual(len(rec["dropped_units"]), 1)
+            self.assertNotIn(rec["dropped_units"][0], [u["id"] for u in rec["units"]])
+            self.assertIn("claim", [u["kind"] for u in rec["units"]])                # the rest of the record stands
+            self.assertIn("units-dropped", [c["code"] for c in it_ledger.fusion_caveats(rd)])
 
 
 class Negative(unittest.TestCase):

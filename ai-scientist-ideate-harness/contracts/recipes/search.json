@@ -10,6 +10,9 @@
    "phases": {
     "main": [
      {
+      "run": "ideate_tools.py frame schemas $RD --depth $DEPTH"
+     },
+     {
       "write": {
        "task": "Frame the literature search for the topic file $TOPIC (A1.p, protocol): write the protocol draft $RD/_state/A1/protocol.json with the keys topic, topic_file (= \"$TOPIC\"), depth (= \"$DEPTH\") and protocol, exactly as the rules describe (framework by the question's semantics, slots with operational roles, 2-4 search axes as OR-clusters, outcomes, timeframe, eligibility criteria, completion criterion).",
        "rules": [
@@ -20,7 +23,8 @@
        ],
        "writes": [
         "$RD/_state/A1/protocol.json"
-       ]
+       ],
+       "schema": "$RD/_state/A1/protocol.schema.json"
       }
      },
      {
@@ -29,6 +33,9 @@
      }
     ],
     "revise": [
+     {
+      "run": "ideate_tools.py frame schemas $RD --depth $DEPTH"
+     },
      {
       "write": {
        "task": "The independent protocol evaluation (A1.e) asked for a revision. Read $RD/step1_protocol_evaluation.md and revise the protocol draft $RD/_state/A1/protocol.json to answer every finding (keep the keys topic, topic_file, depth, protocol).",
@@ -43,7 +50,8 @@
        ],
        "writes": [
         "$RD/_state/A1/protocol.json"
-       ]
+       ],
+       "schema": "$RD/_state/A1/protocol.schema.json"
       }
      },
      {
@@ -63,23 +71,26 @@
    "phases": {
     "main": [
      {
+      "run": "ideate_tools.py frame strategy-brief $RD"
+     },
+     {
       "write": {
-       "task": "Write the search strategy draft $RD/_state/A1/strategy.json (A1.q): queries as combinations of the protocol's axes, the variants depth $DEPTH needs, anchor terms, sources and known items, as the rules say.",
+       "task": "Fill in the search strategy (A1.q): the tool has fixed the queries and their axes in the brief; write each query's flat words, then anchor_terms, sources and known_items, into $RD/_state/A1/strategy_fill.json as the rules say.",
        "rules": [
-        "references/search/A1-frame.md#a1q"
+        "references/search/A1-frame.md#a1q-fill"
        ],
        "reads": [
         "$TOPIC",
-        "$RD/step1_protocol.md",
-        "$RD/step0_session_config.json"
+        "$RD/_state/A1/strategy_brief.md"
        ],
        "writes": [
-        "$RD/_state/A1/strategy.json"
-       ]
+        "$RD/_state/A1/strategy_fill.json"
+       ],
+       "schema": "$RD/_state/A1/strategy_fill.schema.json"
       }
      },
      {
-      "run": "ideate_tools.py frame set-strategy $RD $RD/_state/A1/strategy.json",
+      "run": "ideate_tools.py frame fill-strategy $RD $RD/_state/A1/strategy_fill.json",
       "submit": true
      },
      {
@@ -92,22 +103,27 @@
     ],
     "revise": [
      {
+      "run": "ideate_tools.py frame strategy-brief $RD"
+     },
+     {
       "write": {
-       "task": "The protocol evaluation (A1.e) asked for a revision: bring the strategy draft $RD/_state/A1/strategy.json in line with the revised protocol and the evaluation's findings.",
+       "task": "The protocol evaluation (A1.e) asked for a revision; the brief is rebuilt from the revised protocol. Fill $RD/_state/A1/strategy_fill.json again, answering the evaluation's findings that concern the flat words, anchor terms, sources or known items.",
        "rules": [
-        "references/search/A1-frame.md#a1q"
+        "references/search/A1-frame.md#a1q-fill"
        ],
        "reads": [
-        "$RD/step1_protocol_evaluation.md",
-        "$RD/step1_protocol.md"
+        "$TOPIC",
+        "$RD/_state/A1/strategy_brief.md",
+        "$RD/step1_protocol_evaluation.md"
        ],
        "writes": [
-        "$RD/_state/A1/strategy.json"
-       ]
+        "$RD/_state/A1/strategy_fill.json"
+       ],
+       "schema": "$RD/_state/A1/strategy_fill.schema.json"
       }
      },
      {
-      "run": "ideate_tools.py frame set-strategy $RD $RD/_state/A1/strategy.json",
+      "run": "ideate_tools.py frame fill-strategy $RD $RD/_state/A1/strategy_fill.json",
       "submit": true
      },
      {
@@ -150,7 +166,8 @@
        "writes": [
         "$RD/_state/A1e/round_$N.json"
        ],
-       "isolated": true
+       "isolated": true,
+       "schema": "$RD/_state/A1e/schema_r$N.json"
       }
      },
      {
@@ -171,8 +188,11 @@
    "phases": {
     "main": [
      {
+      "run": "ideate_tools.py frame schemas $RD --depth $DEPTH"
+     },
+     {
       "write": {
-       "task": "Write the context draft $RD/_state/A1/context.json (A1.v): target venues, the expert domain and the local environment (artefacts, cached data, packages present and missing - check them, do not guess).",
+       "task": "Write the context draft $RD/_state/A1/context.json (A1.v): 2-4 target venues, the expert domain, and `packages` - the Python packages (import names) this topic's methods would need. Do not say what is installed: set-context imports each package and lists the data on this machine itself.",
        "rules": [
         "references/search/A1-frame.md#a1v"
        ],
@@ -183,9 +203,7 @@
        "writes": [
         "$RD/_state/A1/context.json"
        ],
-       "commands": [
-        "ideate_tools.py env-probe"
-       ]
+       "schema": "$RD/_state/A1/context.schema.json"
       }
      },
      {
@@ -239,12 +257,12 @@
      },
      {
       "write": {
-       "task": "Judge every query of the search (A2.c) from the signals search-check computed: ok, replan or accept-weak, each with its reason, and keep / retire every ambiguous term; write the verdicts to $RD/_state/A2c/verdicts.json in the format relevance-set takes.",
+       "task": "Judge every query of the search (A2.c) from the signals search-check computed (the brief): a verdict from each query's allowed list with its reason, an action for every missing known item and keep / retire for every ambiguous term; write $RD/_state/A2c/verdicts.json as the brief's answer section shows.",
        "rules": [
         "references/search/A2-search.md#a2c"
        ],
        "reads": [
-        "$RD/_state/A2c"
+        "$RD/_state/A2c/brief.md"
        ],
        "writes": [
         "$RD/_state/A2c/verdicts.json"
@@ -256,7 +274,9 @@
        ],
        "forbid": [
         "$RD/step3_bibliometrics.json"
-       ]
+       ],
+       "schema": "$RD/_state/A2c/verdicts.schema.json",
+       "lookups": []
       }
      },
      {
@@ -266,23 +286,34 @@
     ],
     "replan": [
      {
+      "run": "ideate_tools.py frame replan-brief $RD"
+     },
+     {
       "write": {
-       "task": "Re-plan the queries judged replan in the last round of $RD/step2_relevance_check.json: write each revision (frame query-revise, frame add-terms) and run them, then re-run only the revised queries with `ideate-bridge search <RD> --only <id>`.",
+       "task": "Re-plan the queries judged replan (A2.c): for each query in the brief, new flat words - one word per item, from its own terms - and, if one of its terms pulled it off topic, a smaller subset of that axis's terms, with the reason; write $RD/_state/A2c/replan.json.",
        "rules": [
-        "references/search/A2-search.md#a2c",
-        "references/search/A1-frame.md#a1q"
+        "references/search/A2-search.md#a2c"
        ],
        "reads": [
-        "$RD/step2_relevance_check.md"
+        "$RD/_state/A2c/replan_brief.md"
        ],
-       "writes": [],
-       "commands": [
-        "ideate_tools.py frame query-revise",
-        "ideate_tools.py frame add-terms",
-        "mcp_bridge.py search",
-        "ideate_tools.py search-check"
-       ]
+       "writes": [
+        "$RD/_state/A2c/replan.json"
+       ],
+       "schema": "$RD/_state/A2c/replan.schema.json",
+       "lookups": []
       }
+     },
+     {
+      "run": "ideate_tools.py frame replan-apply $RD $RD/_state/A2c/replan.json",
+      "submit": true,
+      "capture": {
+       "name": "IDS",
+       "regex": "replan-ids: (\\S+)"
+      }
+     },
+     {
+      "run": "mcp_bridge.py search $RD --only $IDS"
      }
     ]
    },
@@ -331,7 +362,7 @@
    "phases": {
     "main": [
      {
-      "run": "ideate_tools.py screen-plan $RD"
+      "run": "ideate_tools.py screen-plan $RD --max-chars $BUDGET"
      },
      {
       "fanout": {
@@ -339,9 +370,47 @@
        "brief": "$RD/_state/fanout/A3/brief.md",
        "task": "Read {brief} and {batch}; write {out}.",
        "out": "field:out",
-       "rules": [
-        "references/search/A3-screen.md#a3"
-       ],
+       "rules": [],
+       "forbid": [
+        "$RD/step3_bibliometrics.json",
+        "$RD/screening_scores.json",
+        "$RD/step3_shortlist.json"
+       ]
+      }
+     },
+     {
+      "run": "ideate_tools.py screen-merge $RD"
+     },
+     {
+      "run": "ideate_tools.py screen-plan $RD --max-chars $BUDGET"
+     },
+     {
+      "fanout": {
+       "batches": "$RD/_state/fanout/A3/batch_*.in.json",
+       "brief": "$RD/_state/fanout/A3/brief.md",
+       "task": "Read {brief} and {batch}; write {out}.",
+       "out": "field:out",
+       "rules": [],
+       "forbid": [
+        "$RD/step3_bibliometrics.json",
+        "$RD/screening_scores.json",
+        "$RD/step3_shortlist.json"
+       ]
+      }
+     },
+     {
+      "run": "ideate_tools.py screen-merge $RD"
+     },
+     {
+      "run": "ideate_tools.py screen-plan $RD --max-chars $BUDGET"
+     },
+     {
+      "fanout": {
+       "batches": "$RD/_state/fanout/A3/batch_*.in.json",
+       "brief": "$RD/_state/fanout/A3/brief.md",
+       "task": "Read {brief} and {batch}; write {out}.",
+       "out": "field:out",
+       "rules": [],
        "forbid": [
         "$RD/step3_bibliometrics.json",
         "$RD/screening_scores.json",

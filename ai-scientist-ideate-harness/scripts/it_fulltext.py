@@ -4,14 +4,16 @@
                   PDFs (download: paper_pdf by DOI; arxiv-pdfs: arXiv directly), every attempt recorded with its reason
                                         -> step3_tier1_candidates.json, pdfs/<key>.pdf, step5_fetch_log.json,
                                            step3_missing_pdfs.md (paper_pdf's report)
-  A6.c  convert   markdown (pdf2md.sh; pdftotext when the service is down), the figure pages (figures), and the access
-                  level of every shortlisted paper (fulltext-status, the command that closes the Unit)
+  A6.c  convert   markdown (pmc-text: PMC's own XML of an open-access paper, first; then pdf2md.sh, pdftotext when the
+                  service is down), the figure pages (figures), and the access level of every shortlisted paper
+                  (fulltext-status, the command that closes the Unit)
                                         -> step5_full_text/<key>.md, step5_full_text/figure/index.json + _processed.json,
                                            step5_full_text/_access_log.md, step3_shortlist.json access_level
 
 The two Units are a ledger block of their own (`fulltext`, between `search` and `fusion`): a topic whose full texts were
 fetched before these Units existed has no fulltext events, so its fusion Units do not go stale for want of them.
 
+  ideate_tools.py pmc-text <RD>
   ideate_tools.py a6-check <RD> [--unit A6.d|A6.c|all] [--json]
 """
 
@@ -23,7 +25,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
-from it_common import now_iso, read_json, read_jsonl, sha256_file, write_json
+from it_common import http_json, http_text, now_iso, read_json, read_jsonl, sha256_file, write_json, write_text
 
 STANDARD_FULLTEXT_CAP = 20
 CANDIDATES = "step3_tier1_candidates.json"
@@ -90,9 +92,13 @@ def fetch_log(rd: Path) -> dict:
 def record_attempts(rd: Path, route: str, results: list[dict]) -> None:
     """Append one attempt per paper - {key, status: ok | failed | skipped, reason} - to step5_fetch_log.json. The file is
     rewritten whole (temporary file, rename), never appended to."""
-    if route not in ROUTES or not results:
+    if route not in ROUTES:
         return
     log = fetch_log(rd)
+    if not results:                              # nothing to fetch (quick depth): the log still says so - A6.d's
+        if not (Path(rd) / FETCH_LOG).exists():  # output is the record of what was tried, even when that is nothing
+            write_json(Path(rd) / FETCH_LOG, {**log, "at": now_iso()})
+        return
     at = now_iso()
     for r in results:
         log["attempts"].setdefault(r["key"], []).append(
@@ -102,8 +108,8 @@ def record_attempts(rd: Path, route: str, results: list[dict]) -> None:
 
 
 def access_level(rd: Path, key: str) -> str:
-    """full-text (pdf2md, which leaves {key}_meta.json beside its markdown) · full-text-plain (pdftotext: tables and
-    equations degraded) · pdf-only (fetched, nothing converted it) · abstract-only."""
+    """full-text (pdf2md or pmc-text, which leave {key}_meta.json beside the markdown) · full-text-plain (pdftotext:
+    tables and equations degraded) · pdf-only (fetched, nothing converted it) · abstract-only."""
     ft = Path(rd) / "step5_full_text"
     if (ft / f"{key}.md").exists():
         return "full-text" if (ft / f"{key}_meta.json").exists() else "full-text-plain"
@@ -322,6 +328,153 @@ def trace(rd: Path, key: str) -> list[tuple[str, str, str]]:
     return out
 
 
+# ============================================================================================ A6.c: PMC's own text
+# An open-access paper in PubMed Central has its full text as JATS XML, published by NCBI for programs (the PMC Cloud
+# Service): sections, tables and captions as the publisher marked them up - better than any PDF conversion, and there
+# for author manuscripts that have no PDF to download. The archived engine read most of its full texts this way.
+PMC_OPENDATA = "https://pmc-oa-opendata.s3.amazonaws.com"
+PMC_IDCONV = "https://www.ncbi.nlm.nih.gov/pmc/utils/idconv/v1.0/?format=json&tool=ai-scientist-ideate&ids="
+PMC_MIN_CHARS = 5000          # less is a front page or an abstract, not a full text
+FLOATS = ("fig", "table-wrap")
+
+
+def _pmcid(v) -> str | None:
+    m = re.search(r"(?:PMC)?(\d{4,})", str(v or ""), re.I)
+    return f"PMC{m.group(1)}" if m else None
+
+
+def pmc_ids(rd: Path, cands: list[dict]) -> dict:
+    """{key: PMCID} for the candidates: the search record's pmc_id, else NCBI's ID converter by DOI."""
+    sl = {p.get("citation_key"): p for p in (_j(rd, "step3_shortlist.json") or {}).get("papers") or []}
+    out = {c["citation_key"]: _pmcid(sl.get(c["citation_key"], {}).get("pmc_id")) for c in cands}
+    by_doi = {str(c["doi"]).lower(): c["citation_key"] for c in cands if not out[c["citation_key"]] and c.get("doi")}
+    dois = sorted(by_doi)
+    for i in range(0, len(dois), 100):
+        try:
+            recs = http_json(PMC_IDCONV + ",".join(dois[i:i + 100]), rd).get("records") or []
+        except RuntimeError:
+            continue
+        for r in recs:
+            doi = str(r.get("requested-id") or r.get("doi") or "").lower()
+            if r.get("pmcid") and doi in by_doi:
+                out[by_doi[doi]] = r["pmcid"]
+    return {k: v for k, v in out.items() if v}
+
+
+def pmc_xml(rd: Path, pmcid: str) -> tuple[str, dict] | None:
+    """The article's XML (latest version) and its PMC Cloud metadata, or None when PMC does not publish it."""
+    listing = http_text(f"{PMC_OPENDATA}/?list-type=2&prefix=metadata/{pmcid}.", rd)
+    versions = sorted(re.findall(r"<Key>(metadata/[^<]+?\.(\d+)\.json)</Key>", listing), key=lambda kv: int(kv[1]))
+    if not versions:
+        return None
+    meta = http_json(f"{PMC_OPENDATA}/{versions[-1][0]}", rd)
+    url = str(meta.get("xml_url") or "").split("?")[0].replace("s3://pmc-oa-opendata", PMC_OPENDATA)
+    return (http_text(url, rd), meta) if url else None
+
+
+def pmc_xml_to_markdown(xml_text: str) -> str:
+    """JATS XML -> markdown: title, abstract, the body's sections as headings, tables as markdown tables, figure
+    captions, then the reference list (the archived engine's converter, with the tables' cells kept)."""
+    import xml.etree.ElementTree as ET
+    root = ET.fromstring(xml_text)
+    art = root if root.tag.split("}")[-1] == "article" else root.find(".//article")
+    if art is None:
+        return ""
+    tag = lambda el: el.tag.split("}")[-1]                                           # noqa: E731
+    text = lambda el: re.sub(r"\s+", " ", "".join(el.itertext())).strip()           # noqa: E731
+    lines = []
+    title = art.find(".//front//article-title")
+    if title is not None:
+        lines.append(f"# {text(title)}\n")
+    abstract = art.find(".//front//abstract")
+    if abstract is not None:
+        lines += ["## Abstract\n"] + [text(p) + "\n" for p in abstract.iter() if tag(p) == "p"]
+
+    def table(el):
+        rows = [[text(c).replace("|", "\\|") for c in tr if tag(c) in ("td", "th")] for tr in el.iter() if tag(tr) == "tr"]
+        rows = [r for r in rows if r]
+        if not rows:
+            return
+        width = max(len(r) for r in rows)
+        rows = [r + [""] * (width - len(r)) for r in rows]
+        lines.extend(["| " + " | ".join(rows[0]) + " |", "|" + "---|" * width] + ["| " + " | ".join(r) + " |" for r in rows[1:]] + [""])
+
+    def floating(el):                              # a figure's caption; a table's caption and its cells
+        label, cap = el.find("label"), el.find(".//caption")
+        lines.append(f"> **{text(label) + ': ' if label is not None else ''}{text(cap) if cap is not None else ''}**\n")
+        if tag(el) == "table-wrap":
+            table(el)
+
+    def paragraph(el):                             # a table or figure set inside a paragraph is rendered after it
+        inner = [e for e in el.iter() if tag(e) in FLOATS]
+        words = [el.text or ""] + [("" if tag(c) in FLOATS else "".join(c.itertext())) + (c.tail or "") for c in el]
+        lines.append(re.sub(r"\s+", " ", "".join(words)).strip() + "\n")
+        for e in inner:
+            floating(e)
+
+    def walk(sec, level):
+        t = sec.find("title")
+        if t is not None and text(t):
+            lines.append("\n" + "#" * min(level, 4) + " " + text(t) + "\n")
+        for child in sec:
+            if tag(child) == "p":
+                paragraph(child)
+            elif tag(child) == "sec":
+                walk(child, level + 1)
+            elif tag(child) in FLOATS:
+                floating(child)
+            elif tag(child) == "list":
+                lines.extend([f"- {text(li)}" for li in child.iter() if tag(li) == "list-item"] + [""])
+
+    body = art.find(".//body")
+    if body is not None:
+        walk(body, 1)                              # the body has no title: its sections become level-2 headings
+    floats = art.find(".//floats-group")           # where many journals put every table and figure
+    if floats is not None and len(floats):
+        lines.append("\n## Figures and tables\n")
+        for el in floats.iter():
+            if tag(el) in FLOATS:
+                floating(el)
+    refs = list(art.iterfind(".//back//ref"))
+    if refs:
+        lines += ["\n## References\n"] + [f"{i}. {text(r)}" for i, r in enumerate(refs, 1)]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip() + "\n"
+
+
+def cmd_pmc_text(a):
+    """A6.c's first step: every candidate without a full text yet that PMC publishes gets PMC's own text, so pdf2md.sh
+    (which skips a key that has its markdown) only converts the rest."""
+    rd = Path(a.research_dir)
+    cands = (_j(rd, CANDIDATES) or {}).get("candidates") or []
+    ft = rd / "step5_full_text"
+    todo = [c for c in cands if not (ft / f"{c['citation_key']}.md").exists()]
+    ids = pmc_ids(rd, todo) if todo else {}
+    got, failed = [], []
+    for c in todo:
+        k, pmcid = c["citation_key"], ids.get(c["citation_key"])
+        if not pmcid:
+            continue
+        try:
+            found = pmc_xml(rd, pmcid)
+            md = pmc_xml_to_markdown(found[0]) if found else ""
+        except Exception as e:  # noqa: BLE001 - one paper's failure is reported, the rest go on
+            failed.append(f"{k} ({pmcid}): {type(e).__name__}: {str(e)[:120]}")
+            continue
+        if len(md) < PMC_MIN_CHARS:
+            failed.append(f"{k} ({pmcid}): {'not in the PMC Cloud Service' if not found else 'no full text in the XML'}")
+            continue
+        write_text(ft / f"{k}.md", md)
+        meta = found[1]
+        write_json(ft / f"{k}_meta.json", {"converter": "pmc-xml", "source": "PMC Cloud Service", "pmcid": pmcid,
+                                           "version": meta.get("version"), "license": meta.get("license_code"),
+                                           "chars": len(md), "at": now_iso()})
+        got.append(k)
+    print(f"pmc-text: {len(got)} full text(s) from PMC's XML, {len(failed)} not available, of {len(todo)} candidate(s) "
+          f"without one ({len(ids)} with a PMCID)")
+    for line in failed:
+        print(f"  {line}")
+
+
 # ======================================================================================================== commands
 def cmd_a6_check(a):
     rd = Path(a.research_dir)
@@ -341,3 +494,6 @@ def add_parsers(sub) -> None:
     sp.add_argument("--unit", default="all", choices=["all", "A6.d", "A6.c"])
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(fn=cmd_a6_check)
+    sp = sub.add_parser("pmc-text", help="A6.c: the full text of open-access candidates from PMC's XML (before pdf2md.sh)")
+    sp.add_argument("research_dir")
+    sp.set_defaults(fn=cmd_pmc_text)

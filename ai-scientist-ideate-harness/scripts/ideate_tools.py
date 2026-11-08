@@ -4,7 +4,7 @@ free-form generation. The literature-search commands are registered by their Uni
 
 Literature search (references/search/; the network runs are mcp_bridge.py probe / search / merge / bibliometrics /
 snowball / bibliography):
-  python ideate_tools.py frame {set-protocol|set-strategy|query-revise|add-terms|set-context|eval-brief|set-evaluation|check|render} <RD> [...]
+  python ideate_tools.py frame {set-protocol|set-strategy|strategy-brief|fill-strategy|query-revise|add-terms|set-context|eval-brief|set-evaluation|check|render} <RD> [...]
                                                                      # A1 frame        (it_frame.py)
   python ideate_tools.py search-check | relevance-set | a2-check <RD> [...]
                                                                      # A2 search       (it_search.py)
@@ -334,8 +334,11 @@ def _cmd_figures(a):
     rd = Path(a.research_dir)
     fd = rd / "step5_full_text" / "figure"
     fd.mkdir(parents=True, exist_ok=True)
+    if not any((rd / "pdfs").glob("*.pdf")):                 # quick depth, or nothing fetched: nothing to render
+        print("figures: no PDF in pdfs/ - nothing to render")
+        return
     if not (shutil.which("pdftoppm") and shutil.which("pdftotext") and shutil.which("pdfinfo")):
-        die("pdftoppm / pdftotext / pdfinfo not found - install poppler (brew install poppler)")
+        die("pdftoppm / pdftotext / pdfinfo not found - install poppler (apt install poppler-utils, brew install poppler or conda install -c conda-forge poppler)")
     index = {(e["key"], e["file"]): e for e in _figure_index(fd)}
     from it_common import sha256_file
     from it_fulltext import PROCESSED
@@ -425,13 +428,15 @@ def _cmd_fulltext_status(a):
         if not k:
             continue
         md, pdf = (rd / "step5_full_text" / f"{k}.md").exists(), (rd / "pdfs" / f"{k}.pdf").exists()
-        # pdf2md (marker) leaves a {key}_meta.json beside its output; a markdown file without one came from pdftotext,
+        # pdf2md (marker) and pmc-text leave a {key}_meta.json beside their output; a markdown file without one came from pdftotext,
         # where equations and tables are degraded - numbers read from it deserve a second look.
         level = access_level(rd, k)
         counts[level] = counts.get(level, 0) + 1
         p["access_level"] = level
         nfig = figs.get(k, 0)
-        rows.append(f"| `{k}` | {'yes' if k in targeted else 'no'} | {'yes' if pdf else '-'} | {'yes' if md else '-'} | {level} | {nfig or '-'} |")
+        meta = rd / "step5_full_text" / f"{k}_meta.json"              # pmc-text names its converter: pmc-xml
+        conv = (read_json(meta).get("converter") or "yes") if md and meta.exists() else ("yes" if md else "-")
+        rows.append(f"| `{k}` | {'yes' if k in targeted else 'no'} | {'yes' if pdf else '-'} | {conv} | {level} | {nfig or '-'} |")
     atomic_json(rd / "step3_shortlist.json", data)
     # Some open-access publishers (MDPI among them) answer 403 to every automated client, and paywalls block the rest.
     # The pipeline does not fight that - but it says exactly which missing papers matter and where to put them.
@@ -920,6 +925,75 @@ def _fusion_fields(c: dict) -> str:
     return out
 
 
+def normal_planes(rd: Path, planes: list, assign: dict | None = None) -> list:
+    """What code settles in a Planes part (A7.R2): the questions under q1..q5 (a model writes Q1); the members from
+    `assign` (paper -> Plane n, the answer under A7.R2's schema) when given; each evidence paper in one Plane at most -
+    a key that is no evidence paper dropped, a paper listed twice kept in its first Plane; and the Plane's records as
+    its source_files. A paper in no Plane is left for the check to name: where it belongs is the model's call."""
+    import it_align
+    evidence, seen, out = set(it_align.evidence_records(rd)), set(), []
+    for x in planes:
+        x = {(k.lower() if re.fullmatch(r"Q[1-5]", k) else k): v for k, v in x.items()}
+        for q in ("q3", "q5"):                  # an id list (A7.R2's schema): the card's line of ids, (TBD) when empty
+            if isinstance(x.get(q), list):
+                x[q] = ", ".join(str(i) for i in x[q] if str(i).strip()) or "(TBD)"
+        papers = [k for k, n in sorted(assign.items()) if n == x.get("n")] if assign else x.get("member_papers") or []
+        kept = []
+        for k in papers:
+            if k in evidence and k not in seen:
+                kept.append(k)
+                seen.add(k)
+        x["member_papers"] = kept
+        x.setdefault("source_files", [f"knowledge/decon/{k}.json" for k in kept])
+        out.append(x)
+    fid = {x.get("n"): plane_id(x) for x in out}                # adjacent Planes by number -> their ids
+    for x in out:
+        x["adjacent_planes"] = [fid.get(a, a) for a in x.get("adjacent_planes") or [] if a != x.get("n")]
+    return out
+
+
+def plane_id(c: dict) -> str:
+    """A Plane's card id, as build-cards names its file."""
+    return f"F_draft_T{c['n']}_" + re.sub(r"[^A-Za-z0-9_]+", "_", str(c.get("slug") or "")).strip("_")
+
+
+def cmd_cards_merge(a):
+    """A Unit's own part of knowledge_cards.json merged into it (a worker writes only what it decides, never the
+    other Units' cards back): --origin O replaces every Point of that origin with the part's Points; --planes replaces
+    the Planes; `methodology` and `bridges` are merged key by key. Everything else in the file is kept as it was."""
+    rd = Path(a.research_dir)
+    part = {}
+    for f in a.part_json:                       # several parts (a fan-out's answers): their points and planes, joined
+        try:
+            one = json.loads(Path(f).read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            die(f"{f}: not readable JSON ({e})", 2)
+        if not isinstance(one, dict):
+            die(f"{f}: one JSON object, points or planes", 2)
+        for k, v in one.items():
+            part[k] = (part.get(k) or []) + v if isinstance(v, list) else {**(part.get(k) or {}), **v} \
+                if isinstance(v, dict) else v
+    cp = rd / "knowledge_cards.json"
+    cards = json.loads(cp.read_text(encoding="utf-8")) if cp.exists() else {}
+    bad = sorted(set(part) - {"points", "planes", "assign", "methodology", "bridges"})
+    if bad:
+        die(f"the parts have keys a card part does not have: {bad} (points, planes, assign, methodology, bridges)", 2)
+    if a.origin:
+        pts = [dict(x, origin=x.get("origin") or a.origin) for x in part.get("points") or [] if isinstance(x, dict)]
+        if any(not str(x.get("slug") or "").strip() for x in pts):
+            die("every Point needs a `slug`", 2)
+        cards["points"] = [x for x in cards.get("points") or [] if x.get("origin") != a.origin] + pts
+    if a.planes:
+        cards["planes"] = normal_planes(rd, [x for x in part.get("planes") or [] if isinstance(x, dict)],
+                                        part.get("assign") if isinstance(part.get("assign"), dict) else None)
+    for k in ("methodology", "bridges"):
+        if isinstance(part.get(k), dict):
+            cards[k] = {**(cards.get(k) or {}), **part[k]}
+    write_json(cp, cards)
+    print(f"cards-merge: {len(cards.get('points') or [])} Point(s), {len(cards.get('planes') or [])} Plane(s) -> "
+          "knowledge_cards.json")
+
+
 def cmd_build_cards(a):
     """Render Point and Plane cards from a compact JSON so the frontmatter stays consistent and the six Point fields /
     five Plane questions are always present. Content the agent leaves out becomes (TBD) - never invented text.
@@ -998,7 +1072,7 @@ claim_type: {c.get('claim_type', 'methodological')}
         (kd / "points" / f"{pid}.md").write_text(body, encoding="utf-8", newline="\n")
         n_pt, n_tbd = n_pt + 1, n_tbd + body.count(TBD)
     for c in spec.get("planes", []):
-        fid = f"F_draft_T{c['n']}_" + re.sub(r"[^A-Za-z0-9_]+", "_", c["slug"]).strip("_")
+        fid = plane_id(c)
         body = f"""---
 id: {fid}
 type: plane
@@ -1206,7 +1280,8 @@ def cmd_build_methods(a):
     def freq(rs, get):
         c, papers = Counter(), defaultdict(set)
         for r in rs:
-            for x in set(real(get(r))):
+            for x in dict.fromkeys(real(get(r))):     # not set(): its order follows the per-process string hash,
+                                                      # and ties keep first-seen order - the matrix must rebuild the same
                 c[x] += 1
                 papers[x].add(r["citation_key"])
         return [{"item": x, "experiments": n, "papers": sorted(papers[x])} for x, n in c.most_common()]
@@ -2934,7 +3009,7 @@ def main():
 
     rd = (("research_dir",), {})
     add("paths", cmd_paths, (("--topic",), {"required": True}))
-    add("tier1", cmd_tier1, rd, (("--depth",), {"choices": ["quick", "standard", "deep"], "default": "standard"}),
+    add("tier1", cmd_tier1, rd, (("--depth",), {"choices": ["quick", "standard", "deep"], "default": None, "help": "default: step0's depth"}),
         (("--top-up",), {"action": "store_true", "help": "after a download: add next-ranked papers to replace paywalled ones"}),
         (("--targets",), {"action": "store_true", "help": "planning F-M4: add the questions' abstract-only attack targets "
                                                            "(section 9) to the candidates, at most 5 per topic"}))
@@ -2957,6 +3032,9 @@ def main():
         (("--slice",), {"default": "0:30"}), (("--abstract-chars",), {"type": int, "default": 400}),
         (("--ids",), {"default": "", "help": "comma-separated paper ids: print these in full instead of a slice"}))
     add("build-cards", cmd_build_cards, rd, (("cards_json",), {}))
+    add("cards-merge", cmd_cards_merge, rd, (("part_json",), {"nargs": "+"}), (("--origin",), {"default": None,
+        "help": "the Points of this origin are replaced by the part's (align: A7.A3, collide: A7.R1)"}),
+        (("--planes",), {"action": "store_true", "help": "the Planes are replaced by the part's (A7.R2)"}))
     add("build-methods", cmd_build_methods, rd, (("input_json",), {"nargs": "+", "help": "one or more batch files"}))
     add("list-methods", cmd_list_methods, rd, (("--family",), {"default": ""}), (("--theme",), {"default": ""}),
         (("--dataset",), {"default": "", "help": "substring of a dataset name"}), (("--ids",), {"default": ""}),

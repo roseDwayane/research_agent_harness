@@ -53,8 +53,22 @@ class HarnessConfig:
     num_predict: int = 16384                     # the longest answer
     think: bool | None = None                    # a thinking model's reasoning on/off (None: the model's default)
     temperature: float | None = None             # None: the model's (Modelfile) default
-    max_file_chars: int = 60000                  # a file put into an Ollama prompt is cut beyond this
+    max_file_chars: int | None = None            # a file put into an Ollama prompt is cut beyond this; None:
+                                                 # half of num_ctx (a digest that fits the context is never cut)
+    feedback_rounds: int | None = None           # revisions a refused submission gets (RP-MODEL-OUTPUT); None: the
+                                                 # contract's one - a smaller model may be given two or three
+    batch_chars: int | None = None               # the material one fan-out call may carry ($BUDGET); None: the
+                                                 # worker's own - 0 for claude (the tools' batch sizes), and for ollama
+                                                 # what fits num_ctx and max_file_chars, so no batch is ever cut
     max_parallel: int = 4
+    ollama_keep_alive: str | None = "30m"        # how long the server keeps the model loaded after a call: the
+                                                 # network steps between model Units run longer than Ollama's 5 min,
+                                                 # and a reload before the first byte trips a proxy's timeout
+    ollama_busy_retries: int = 4                 # an Ollama call that the server or its proxy dropped (busy, a
+    ollama_busy_wait_s: float = 120.0            # model reload, error 524) is tried again after this, then twice
+                                                 # as long each time (at most 15 minutes)
+    ollama_parallel: int = 1                     # fan-out calls at once to one Ollama server: it answers one at a
+                                                 # time, and a queued request sends nothing (a proxy closes it)
     default_budget_usd: float | None = None
     unit_budget_usd: dict[str, float] = field(default_factory=dict)
     worker_timeout_s: float = 3600.0
@@ -81,6 +95,27 @@ class HarnessConfig:
         if self.worker == "ollama" and not self.model:
             raise ValueError('worker = "ollama" needs a model (e.g. model = "qwen3.8")')
         self.module_root = Path(self.module_root)
+
+    def parallel(self) -> int:
+        """Fan-out workers at once: max_parallel, but for an Ollama server at most ollama_parallel."""
+        return max(1, min(self.max_parallel, self.ollama_parallel)) if self.worker == "ollama" else self.max_parallel
+
+    def batch_budget(self) -> int:
+        """$BUDGET: characters of papers, candidates or terms one worker call is given (a plan command's --max-chars).
+        0 keeps the tools' own batch sizes (a claude worker reads its files itself); an Ollama worker gets everything
+        pasted into one prompt, so its batches are cut to what the context and max_file_chars hold."""
+        if self.batch_chars is not None:
+            return max(0, int(self.batch_chars))
+        if self.worker != "ollama":
+            return 0
+        # at most 40k characters (~12k tokens) whatever the context: a server reads such a prompt and sends its first
+        # byte before a proxy gives up (100 s at Cloudflare; ~17k tokens took longer on a 27B model), and a refused
+        # batch costs little to ask again
+        return max(8000, min(self.file_chars(), int(self.num_ctx * 3.0 * 0.4), 40000))
+
+    def file_chars(self) -> int:
+        """The most of one file an Ollama prompt carries: max_file_chars, or half of num_ctx (~3 characters a token)."""
+        return int(self.max_file_chars) if self.max_file_chars else int(self.num_ctx * 3.0 * 0.5)
 
     def budget(self, unit_id: str) -> float | None:
         return self.unit_budget_usd.get(unit_id, self.default_budget_usd)

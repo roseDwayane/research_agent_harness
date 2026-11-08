@@ -57,6 +57,16 @@ def relevance_rounds(rd: Path) -> tuple[int, list[str]]:
                          if isinstance(v, dict) and v.get("verdict") == "replan"]
 
 
+def replan_new_share(rd: Path) -> float | None:
+    """A2.c: the share of new papers the latest re-plan round brought (search-check's signals_r<N>.json)."""
+    files = sorted((rd / "_state" / "A2c").glob("signals_r*.json"),
+                   key=lambda f: int(f.stem[len("signals_r"):]) if f.stem[len("signals_r"):].isdigit() else -1)
+    if not files:
+        return None
+    v = read_json(files[-1]).get("new_share_latest_round")
+    return float(v) if isinstance(v, (int, float)) else None
+
+
 def protocol_verdict(rd: Path) -> tuple[int, str | None]:
     """A1.e: (rounds, the latest verdict)."""
     p = rd / "step1_protocol_evaluation.json"
@@ -65,6 +75,8 @@ def protocol_verdict(rd: Path) -> tuple[int, str | None]:
     data = read_json(p)
     rounds = data.get("rounds") or []
     final = (data.get("final") or {}).get("status")
+    if final == "pending-revision":                       # set-evaluation's mark: the round's verdict stands
+        final = None
     last = (rounds[-1] if rounds else {}).get("verdict") if rounds else None
     return len(rounds), final or last
 

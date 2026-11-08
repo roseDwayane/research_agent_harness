@@ -795,7 +795,7 @@ def fulltext_caveats(rd: Path) -> list[dict]:
             for code, text, must in raw(Path(rd))]
 
 
-FUSION_CAVEAT_UNITS = {"abstract-heavy": "A7.D", "lens-stale": "B1", "candidates-cut": "A7.X1",
+FUSION_CAVEAT_UNITS = {"abstract-heavy": "A7.D", "units-dropped": "A7.D", "lens-stale": "B1", "candidates-cut": "A7.X1",
                        "incommensurable-open": "A7.X2", "record-revisions-queued": "B3", "questions-short": "B3.5"}
 
 
@@ -812,6 +812,10 @@ def fusion_caveats(rd: Path) -> list[dict]:
         ab = sum(1 for r in recs if r.get("basis") == "abstract")
         if ab / len(recs) > 0.5:
             add("abstract-heavy", f"{ab} of {len(recs)} papers were read from the abstract only", True)
+        short = [f"{r.get('citation_key')} ({len(r['dropped_units'])})" for r in recs if r.get("dropped_units")]
+        if short:
+            add("units-dropped", "units left out because their quotes are not the source's words (decon-merge "
+                                 f"--drop-unquoted): {', '.join(short[:8])}", False)
     lens, cfg = _j(rd, "lens.json"), _cfg(rd)
     if lens and (lens.get("local") or {}).get("date") != ((cfg.get("local_environment") or {}).get("probe") or {}).get("date"):
         add("lens-stale", "the machine was probed again after the lens was set (lens-set)", False)

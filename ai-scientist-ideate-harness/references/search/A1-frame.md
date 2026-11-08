@@ -179,6 +179,13 @@ re-run:
 | `recent` | every search axis, `"year": "last-12-months"` | preprints of the last year | | | ✔ |
 | `rigor` | every search axis + a rigor axis | only when the topic has a validity question | opt. | opt. | opt. |
 
+**The anchor slot's axes** are the search axes whose `slot` is the framework's anchor slot: PICO, PICOC, CIMO
+`intervention`; PECO, PEO `exposure`; PCC `concept`; PICo, SPIDER `phenomenon`; custom the protocol's `anchor_slot`.
+`anchor-methods` and `contrast` leave those axes out — the named tools, or the comparator, stand in their place;
+AND-ing both would ask for papers that name the tool *and* the generic method. Example, PICO with C1 population,
+C2 intervention, C3 outcome, C5 anchor, C6 contrast: anchor-methods = C5 + C1 + C3, contrast = C6 + C1 + C3, never
+with C2.
+
 Add variants when they ask something new — another anchor subset, a second synonym-swap. A variant that repeats
 another's axes and terms is refused. Every term of every search axis is asked by some active variant, or listed in
 `dropped_terms` with a reason.
@@ -189,7 +196,8 @@ another's axes and terms is refused. Every term of every search axis is asked by
   rendered from the axes; editing it by hand is refused. A2.s sends it, in each engine's dialect, to the engines that
   parse Boolean.
 - **`flat_query`** (= `query`) — 3–5 plain content words, each from the query's own axis terms, for the engines that
-  rank flat text (Semantic Scholar). Prefer distinctive nouns ("motor imagery" over "classification"). An
+  rank flat text (Semantic Scholar). Only the terms of the axes this query uses count — not another axis's terms, not
+  an axis label. Prefer distinctive nouns ("motor imagery" over "classification"). An
   anchor-methods flat query names **one** anchor — the AND-ing backends answer two named tools with nothing; the
   Boolean form carries them all.
 
@@ -220,7 +228,8 @@ choose) at 10 hits each, OpenAlex's total count per query (the order-of-magnitud
 item. It changes nothing that bias control protects — no screening, no synthesis, and **its hits never enter the
 collection** (they stay in `_state/probes/A1q/`). It catches a query that returns nothing or tens of thousands, and an
 invented known item. The probe records which strategy it answered: re-running `set-strategy` with unchanged queries
-keeps it; a changed query drops it and `frame check` asks for a new probe.
+keeps it; a changed query drops it and `frame check` asks for a new probe. The probe runs after `set-strategy` and
+writes `scope_probe` into step0 itself — it is never part of the draft.
 
 Then print the pre-run estimate, one line per fact, and continue without waiting:
 
@@ -231,7 +240,9 @@ Pass M: 1 row per abstract-only paper + 1-4 per full text; ~5 subagents ≈ 5 mi
 generations=3 → research cycle runs 3×
 ```
 
-**5. The draft.**
+**5. The draft.** Its keys are `queries`, `dropped_terms`, `anchor_terms`, `sources`, `known_items` (and an optional
+`a1q_note`) — nothing else: `set-strategy` writes `strategy_basis` itself and `mcp_bridge.py probe` writes
+`scope_probe`; a draft carrying either is refused.
 
 ```json
 {"queries": [{"id": "Q1", "strategy": "primary", "axes": {"C1": "all", "C2": "all"},
@@ -255,8 +266,9 @@ revisions of A1, not a new protocol: they make neither A1.q nor the evaluation s
 (anchors: the merge, which recomputes `anchor_match`).
 
 ### Outputs
-step0 `queries` (with `boolean_query`, `flat_query`), `dropped_terms`, `anchor_terms`, `sources`, `known_items`,
-`strategy_basis` (the protocol it was built on), `scope_probe`; probe answers in `_state/probes/A1q/`.
+step0, from the draft by `set-strategy`: `queries` (with `boolean_query`, `flat_query`), `dropped_terms`,
+`anchor_terms`, `sources`, `known_items`, and `strategy_basis` (the protocol it was built on, stamped by the tool);
+`scope_probe`, by `mcp_bridge.py probe`; probe answers in `_state/probes/A1q/`.
 
 ### Done when
 `frame check --unit A1.q` passes: variants per depth, term coverage, flat-query length and vocabulary, one anchor per
@@ -264,13 +276,15 @@ anchor-methods flat query, anchor terms, sources, known items, a probe for the c
 protocol (Q01–Q03, Q11–Q21).
 
 ### When something fails
-The scholar server down during the probe: `scope_probe.skipped` records why, the search still runs, and the missing
+The scholar server down during the probe: the probe records why in `scope_probe.skipped`, the search still runs, and the missing
 yield estimate is reported at Finish. A known item no database has: fix or drop it. A1.p with errors: `set-strategy`
 refuses.
 
 ### Commands
 ```bash
 $PY $SK/scripts/ideate_tools.py frame set-strategy $RD $RD/_state/A1/strategy.json
+$PY $SK/scripts/ideate_tools.py frame strategy-brief $RD                    # the harness: brief + fill schema,
+$PY $SK/scripts/ideate_tools.py frame fill-strategy $RD $RD/_state/A1/strategy_fill.json   # then fill (#a1q-fill)
 $PY $SK/scripts/mcp_bridge.py probe $RD [--queries Q1,Q4]
 $PY $SK/scripts/ideate_tools.py frame query-revise $RD revision.json        # after the search, from A2.c
 $PY $SK/scripts/ideate_tools.py frame add-terms $RD terms.json              # after the search, from A2.c:
@@ -278,6 +292,34 @@ $PY $SK/scripts/ideate_tools.py frame add-terms $RD terms.json              # af
 $PY $SK/scripts/ideate_tools.py frame retire-terms $RD retire.json          # the same shape; an ambiguous term
 $PY $SK/scripts/ideate_tools.py frame anchors-revise $RD anchors.json       # after the search, from A2.c; then merge
 ```
+
+---
+
+<a id="a1q-fill"></a>
+## A1.q fill — the harness's worker path
+
+The harness splits A1.q, as the archived engine split its steps: the tool does what follows from the protocol, the
+model only what needs judgement. `frame strategy-brief` fixes the query variants the depth needs and the axes of each
+(§1 above) and writes `_state/A1/strategy_brief.md`. You read the brief and write `_state/A1/strategy_fill.json` with
+four keys — nothing else; `frame fill-strategy` merges it into the strategy and runs every A1.q check. The tool
+also renders the Boolean forms and, after you, runs the scope probe: neither is yours to do or to record.
+
+- **`flat`** — for each query of the brief, its flat query: a list of 3–5 words for the engines that rank plain
+  text, **one word per item** — a two-word term takes two items (`"artefact removal"` → `"artefact", "removal"`).
+  Every word comes from that query's own terms as the brief lists them; a stem is written out (`denois*` →
+  `denoising`). Never a word from another axis, never an axis label. Prefer distinctive nouns ("motor imagery" over
+  "classification"). An anchor-methods query is `{"anchor": <exactly one listed anchor>, "words": [2–3 more]}`.
+- **`anchor_terms`** — 2–5 short lower-case substrings, one of which any on-topic paper has in its title or abstract;
+  stems that mark this corner of the field (`onboard`, `lossless`), not a word every hit contains.
+- **`sources`** — biomedical / neuro / clinical: `semantic_scholar, openalex, pubmed, scopus`; pure ML / CV / signal
+  processing: `semantic_scholar, openalex, arxiv, ieee`; engineering / hardware: `semantic_scholar, openalex, ieee,
+  scopus, wos`; unclear: `semantic_scholar, openalex, arxiv`. A topic between rows takes their union.
+- **`known_items`** — `{"title", "why"}` for papers any expert expects this search to find: the anchor tools' own
+  papers, papers the topic names, the field's benchmark paper; two or more from standard depth. Name only papers you
+  are sure exist: the probe looks each one up.
+
+A refusal names every problem at once: fix them all in the same file. A finding about axes or terms (Q03, Q13, Q17,
+Q19, Q22) is the protocol's, not the fill's — say so in your note instead of working around it.
 
 ---
 
@@ -365,6 +407,9 @@ Write `$RD/_state/A1/context.json` with:
   different topic once you have read it), `cached_data` (`~/mne_data`, `~/.cache/torch`, `~/.cache/huggingface`,
   `~/scikit_learn_data`), `packages_present` / `packages_missing` (a quick `$PY -c "import x"` for the two or three
   libraries the experiments would lean on). Empty lists are fine — they say you looked.
+- **or `packages`** instead of `local_environment` (the harness's worker, which cannot look): the import names of the
+  libraries this topic's experiments would need. `set-context` imports each one and lists every data root that exists,
+  and writes `local_environment` from what it found — the model names, the code looks.
 
 ### Outputs
 step0 `target_venues`, `expert_domain`, `local_environment`.
@@ -379,6 +424,7 @@ generation), never this text, because Stage A may be weeks old; `set-context` ne
 ### Commands
 ```bash
 $PY $SK/scripts/ideate_tools.py frame set-context $RD $RD/_state/A1/context.json
+$PY $SK/scripts/ideate_tools.py frame schemas $RD                          # the harness: A1.p / A1.v answer schemas
 ```
 
 ---

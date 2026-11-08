@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 from collections import Counter
 from pathlib import Path
@@ -1246,13 +1247,75 @@ def _cmd_search_check(a):
     if a.json:
         print(json.dumps(sig, indent=2, ensure_ascii=False))
         return
+    ep = epoch(cfg, rel)
+    allowed = allowed_verdicts(sig, len(ep["rounds"]))
+    lines = signals_text(sig, n, allowed)
+    write_text(rd / "_state" / "A2c" / "brief.md", "\n".join(lines) + "\n\n" + ANSWER_HELP + "\n")
+    write_json(rd / "_state" / "A2c" / "verdicts.schema.json", verdicts_schema(sig, allowed))
+    print("\n".join(lines))
+
+
+def allowed_verdicts(sig: dict, rounds_before: int) -> dict:
+    """Per active query, the verdicts check_round would accept - code settles what the rules settle: not ok when
+    ok_forbidden says why, not replan in the last round or once a re-plan round added little (saturation)."""
+    final = rounds_before + 1 >= MAX_ROUNDS
+    saturated = sig.get("new_share_latest_round") is not None and sig["new_share_latest_round"] < SATURATED
+    out = {}
+    for qid, v in sig["queries"].items():
+        if v["status"] != "active":
+            continue
+        out[qid] = [x for x in VERDICTS if not (x == "ok" and ok_forbidden(v)) and not (x == "replan" and (final or saturated))]
+    return out
+
+
+ANSWER_HELP = """## Your answer (verdicts.json)
+
+{"verdicts": {"<query id>": {"verdict": "<one of its allowed verdicts>", "reason": "<one sentence>"}, ...},
+ "known_items": [{"ref": "<a missing known item>", "action": "<what to do: replan Qn / accept-weak / drop>", "reason": "..."}],
+ "term_pull": [{"axis": "<axis>", "term": "<an ambiguous term>", "action": "keep or retire", "reason": "..."}],
+ "vocabulary": [{"axis": "<axis>", "term": "<a candidate term from the vocabulary feedback>", "action": "added or rejected",
+                 "reason": "..."}],
+ "summary": "<two sentences on the search as a whole>"}
+
+Every active query gets a verdict from its allowed list; every missing known item and every ambiguous term listed
+above gets an answer. A replan or accept-weak verdict needs its reason."""
+
+
+def verdicts_schema(sig: dict, allowed: dict) -> dict:
+    s = {"type": "string"}
+    missing = [k["ref"] for k in sig.get("known_items") or [] if not k["resolved"]]
+    flagged = [t for t in sig.get("term_pull") or [] if t["flagged"]]
+    props = {"verdicts": {"type": "object", "additionalProperties": False, "required": list(allowed),
+                          "properties": {q: {"type": "object", "properties": {"verdict": {"enum": vs}, "reason": s},
+                                             "required": ["verdict", "reason"], "additionalProperties": False}
+                                         for q, vs in allowed.items()}},
+             "known_items": {"type": "array", "minItems": len(missing), "maxItems": len(missing), "items": {
+                 "type": "object", "properties": {"ref": {"enum": missing or [""]}, "action": s, "reason": s},
+                 "required": ["ref", "action", "reason"], "additionalProperties": False}},
+             "term_pull": {"type": "array", "minItems": len(flagged), "maxItems": len(flagged), "items": {
+                 "type": "object", "properties": {"axis": {"enum": sorted({t["axis"] for t in flagged}) or [""]},
+                                                  "term": {"enum": [t["term"] for t in flagged] or [""]},
+                                                  "action": {"enum": ["keep", "retire"]}, "reason": s},
+                 "required": ["axis", "term", "action", "reason"], "additionalProperties": False}},
+             "vocabulary": {"type": "array", "items": {
+                 "type": "object", "properties": {"axis": s, "term": s, "action": {"enum": ["added", "rejected"]}, "reason": s},
+                 "required": ["axis", "term", "action", "reason"], "additionalProperties": False}},
+             "summary": s}
+    return {"type": "object", "properties": props, "required": list(props), "additionalProperties": False}
+
+
+def signals_text(sig: dict, n: int, allowed: dict | None = None) -> list[str]:
+    """The signals as the judge reads them (printed by search-check, kept as _state/A2c/brief.md)."""
+    out = []
+    print = out.append                             # noqa: A001 - the printing code below, collected
     print(f"A2.c signals, round {n} ({sig['papers']} papers; on-anchor floor {ANCHOR_MIN:.0%}):")
     for qid, v in sig["queries"].items():
         src = " ".join(f"{s}={d['returned'] if d['status'] == 'ok' else d['status']}" + (f"/{d['total']}" if d.get("total") else "")
                        for s, d in v["per_source"].items())
         why = ok_forbidden(v)
         print(f"  {qid:<5} {v['strategy'] or '':<16} {v['status']:<8} papers={v['papers']:<4} only-here={v['only_this_query']:<4} "
-              f"on-anchor={v['on_anchor_share']:.0%}  {src}" + (f"   NOT OK: {why}" if why else ""))
+              f"on-anchor={v['on_anchor_share']:.0%}  {src}" + (f"   NOT OK: {why}" if why else "")
+              + (f"   allowed: {', '.join(allowed[qid])}" if allowed and qid in allowed else ""))
     ki = sig["known_items"]
     print(f"  known items in the collection: {sum(1 for k in ki if k['resolved'])}/{len(ki)}"
           + "".join(f"\n   MISSING: {k['ref']}" for k in ki if not k["resolved"]))
@@ -1280,15 +1343,28 @@ def _cmd_search_check(a):
                   + (": " + " | ".join(t["near_titles"]) if t["near_titles"] else ""))
     elif sig["term_pull"] is not None:
         print(f"  ambiguous terms: none (no term's own catch is >= {PULL_MIN} papers with half in the bottom {SEM_LOW_PCT}%)")
+    return out
+
+
+def _normal_round(rnd: dict) -> dict:
+    """A judge's answer in the shape relevance-set stores: `verdicts` keyed by query id (the schema-decoded form) is
+    the list [{query, verdict, reason}]; an absent model is the run's."""
+    rnd = dict(rnd)
+    if isinstance(rnd.get("verdicts"), dict):
+        rnd["verdicts"] = [{"query": q, **(v if isinstance(v, dict) else {"verdict": v})}
+                           for q, v in rnd["verdicts"].items()]
+    if not rnd.get("model") and os.environ.get("IDEATE_LLM_MODEL"):
+        rnd["model"] = os.environ["IDEATE_LLM_MODEL"]
+    return rnd
 
 
 def _cmd_relevance_set(a):
     rd = Path(a.research_dir)
     cfg = _cfg(rd)
-    rnd = read_json(Path(a.input_json))
+    rnd = _normal_round(read_json(Path(a.input_json)))
     extra = sorted(set(rnd) - {"verdicts", "known_items", "vocabulary", "term_pull", "summary", "model"})
-    if extra:
-        die(f"verdicts.json has keys A2.c does not own: {extra}", 2)
+    foreign = f"verdicts.json has keys A2.c does not own: {extra}" if extra else ""
+    rnd = {k: v for k, v in rnd.items() if k not in extra}
     rel = read_json(relevance_path(rd)) if relevance_path(rd).exists() else {"schema": "ideate-relevance/1", "rounds": []}
     sig = signals(cfg, rd)
     last = rel["rounds"][-1] if rel["rounds"] else None
@@ -1300,8 +1376,9 @@ def _cmd_relevance_set(a):
     fs = check_round(cfg, sig, rnd, len(ep["rounds"]), ep["rounds"][-1] if ep["rounds"] else None)
     for f in fs:
         print(f"  {f['level']:<5} {f['code']} [{f['unit']}] {f['msg']}")
-    if errors(fs):
-        die(f"{len(errors(fs))} error(s) in the verdicts; nothing was written", 2)
+    if errors(fs) or foreign:
+        die("; ".join(x for x in (foreign, f"{len(errors(fs))} error(s) in the verdicts" if errors(fs) else "") if x)
+            + "; nothing was written", 2)
     rel["rounds"].append({"round": len(rel["rounds"]), "epoch_round": len(ep["rounds"]),
                           "protocol_sha": ep["protocol_sha"], "at": now_iso(), "raw_sha": sig["raw_sha"],
                           # term_pull is a list in every round (empty when nothing was computed); whether it was

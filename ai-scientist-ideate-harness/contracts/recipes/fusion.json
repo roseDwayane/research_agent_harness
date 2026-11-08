@@ -43,6 +43,10 @@
    "phases": {
     "main": [
      {
+      "run": "ideate_tools.py pmc-text $RD",
+      "optional": true
+     },
+     {
       "run": "bash pdf2md.sh $RD",
       "optional": true
      },
@@ -65,20 +69,93 @@
    "phases": {
     "main": [
      {
-      "run": "ideate_tools.py decon-plan $RD"
+      "run": "ideate_tools.py decon-plan $RD --max-chars $BUDGET"
      },
      {
       "fanout": {
-       "batches": "$RD/knowledge/_work/A7D/batch_*.json",
+       "batches": "$RD/knowledge/_work/A7D/batch_ft_*.json",
        "out": "items:papers.answer",
        "task": "Read the batch file {batch}. For each paper in it, read only that paper's own source (its full_text file, else the abstract in the batch) and write its record to its answer file ({out}), as the rules say. Never use another paper.",
        "rules": [
-        "references/fusion/F1-deconstruct.md#a7d"
-       ]
+        "references/fusion/F1-deconstruct.md#a7d-method",
+        "references/fusion/F1-deconstruct.md#a7d-edge"
+       ],
+       "allow_empty": true
       }
      },
      {
-      "run": "ideate_tools.py decon-merge $RD"
+      "fanout": {
+       "batches": "$RD/knowledge/_work/A7D/batch_ab_*.json",
+       "out": "items:papers.answer",
+       "task": "Read the batch file {batch}. For each paper in it, write its record from its own title and abstract only (in the batch) to its answer file ({out}), as the rules say. Never use another paper.",
+       "rules": [
+        "references/fusion/F1-deconstruct.md#a7d-abstract"
+       ],
+       "allow_empty": true
+      }
+     },
+     {
+      "run": "ideate_tools.py decon-merge $RD",
+      "optional": true
+     },
+     {
+      "run": "ideate_tools.py decon-plan $RD --max-chars $BUDGET"
+     },
+     {
+      "fanout": {
+       "batches": "$RD/knowledge/_work/A7D/batch_ft_*.json",
+       "out": "items:papers.answer",
+       "task": "Read the batch file {batch}. For each paper in it, read only that paper's own source (its full_text file, else the abstract in the batch) and write its record to its answer file ({out}), as the rules say. Never use another paper.",
+       "rules": [
+        "references/fusion/F1-deconstruct.md#a7d-method",
+        "references/fusion/F1-deconstruct.md#a7d-edge"
+       ],
+       "allow_empty": true
+      }
+     },
+     {
+      "fanout": {
+       "batches": "$RD/knowledge/_work/A7D/batch_ab_*.json",
+       "out": "items:papers.answer",
+       "task": "Read the batch file {batch}. For each paper in it, write its record from its own title and abstract only (in the batch) to its answer file ({out}), as the rules say. Never use another paper.",
+       "rules": [
+        "references/fusion/F1-deconstruct.md#a7d-abstract"
+       ],
+       "allow_empty": true
+      }
+     },
+     {
+      "run": "ideate_tools.py decon-merge $RD",
+      "optional": true
+     },
+     {
+      "run": "ideate_tools.py decon-plan $RD --max-chars $BUDGET"
+     },
+     {
+      "fanout": {
+       "batches": "$RD/knowledge/_work/A7D/batch_ft_*.json",
+       "out": "items:papers.answer",
+       "task": "Read the batch file {batch}. For each paper in it, read only that paper's own source (its full_text file, else the abstract in the batch) and write its record to its answer file ({out}), as the rules say. Never use another paper.",
+       "rules": [
+        "references/fusion/F1-deconstruct.md#a7d-method",
+        "references/fusion/F1-deconstruct.md#a7d-edge"
+       ],
+       "allow_empty": true
+      }
+     },
+     {
+      "fanout": {
+       "batches": "$RD/knowledge/_work/A7D/batch_ab_*.json",
+       "out": "items:papers.answer",
+       "task": "Read the batch file {batch}. For each paper in it, write its record from its own title and abstract only (in the batch) to its answer file ({out}), as the rules say. Never use another paper.",
+       "rules": [
+        "references/fusion/F1-deconstruct.md#a7d-abstract"
+       ],
+       "allow_empty": true
+      }
+     },
+     {
+      "run": "ideate_tools.py decon-merge $RD --drop-unquoted"
      }
     ]
    },
@@ -96,26 +173,41 @@
       "run": "ideate_tools.py align-terms $RD"
      },
      {
-      "write": {
-       "task": "Write one coherent vocabulary for the papers' terms (A7.A1) from the worklist align-terms wrote, to $RD/knowledge/_work/A7A/vocab.json in the format align-set takes.",
+      "run": "ideate_tools.py align-terms $RD --batches --max-chars $BUDGET"
+     },
+     {
+      "fanout": {
+       "batches": "$RD/knowledge/_work/A7A/vbatch_*.json",
+       "out": "rdfield:answer",
+       "allow_empty": true,
        "rules": [
         "references/fusion/F2-align.md#a7a1"
        ],
-       "reads": [
-        "$RD/knowledge/_work/A7A"
-       ],
-       "writes": [
-        "$RD/knowledge/_work/A7A/vocab.json"
-       ],
-       "commands": [
-        "ideate_tools.py list-papers",
-        "ideate_tools.py trace"
-       ]
+       "task": "Read the batch {batch}: for every word, the concept it names - its kind (one of the word's kinds), a short kebab slug, a name and a one-line definition - or `unaligned` with the reason as its definition; for a measure two papers define, whether their definitions are the same measure (same_measure, because). Words meaning the same thing share one slug. Write the answer to {out}."
       }
      },
      {
-      "run": "ideate_tools.py align-set $RD $RD/knowledge/_work/A7A/vocab.json",
-      "submit": true
+      "run": "ideate_tools.py align-terms $RD --merge-answers"
+     },
+     {
+      "run": "ideate_tools.py align-terms $RD --batches --max-chars $BUDGET"
+     },
+     {
+      "fanout": {
+       "batches": "$RD/knowledge/_work/A7A/vbatch_*.json",
+       "out": "rdfield:answer",
+       "allow_empty": true,
+       "rules": [
+        "references/fusion/F2-align.md#a7a1"
+       ],
+       "task": "Read the batch {batch}: for every word, the concept it names - its kind (one of the word's kinds), a short kebab slug, a name and a one-line definition - or `unaligned` with the reason as its definition; for a measure two papers define, whether their definitions are the same measure (same_measure, because). Words meaning the same thing share one slug. Write the answer to {out}."
+      }
+     },
+     {
+      "run": "ideate_tools.py align-terms $RD --merge-answers"
+     },
+     {
+      "run": "ideate_tools.py align-set $RD $RD/knowledge/_work/A7A/vocab.json"
      }
     ]
    },
@@ -130,28 +222,42 @@
    "phases": {
     "main": [
      {
-      "run": "ideate_tools.py align-coords $RD --suggest"
-     },
-     {
       "run": "ideate_tools.py align-coords $RD --auto"
      },
      {
-      "write": {
-       "task": "Settle the coordinates align-coords --auto left ambiguous (A7.A2): write your decisions to $RD/knowledge/_work/A7A/coords.json in the format align-coords --apply takes.",
+      "run": "ideate_tools.py align-coords $RD --batches --max-chars $BUDGET"
+     },
+     {
+      "fanout": {
+       "batches": "$RD/knowledge/_work/A7A/coord_batch_*.json",
+       "out": "rdfield:answer",
+       "allow_empty": true,
        "rules": [
         "references/fusion/F2-align.md#a7a2"
        ],
-       "reads": [
-        "$RD/knowledge/_work/A7A/coords_suggest.json"
-       ],
-       "writes": [
-        "$RD/knowledge/_work/A7A/coords.json"
-       ]
+       "task": "Read the batch {batch}: for every unit, choose the concept(s) of each axis in its `ask` - from its candidates, or, where the candidates are '*', from the batch's `choices` - or unstated / n/a, as the rules say; the `fixed` axes are already set. Write the answer {unit id: {axis: [concept ids]}} to {out}."
       }
      },
      {
-      "run": "ideate_tools.py align-coords $RD --apply $RD/knowledge/_work/A7A/coords.json",
-      "submit": true
+      "run": "ideate_tools.py align-coords $RD --apply-answers",
+      "optional": true
+     },
+     {
+      "run": "ideate_tools.py align-coords $RD --batches --max-chars $BUDGET"
+     },
+     {
+      "fanout": {
+       "batches": "$RD/knowledge/_work/A7A/coord_batch_*.json",
+       "out": "rdfield:answer",
+       "allow_empty": true,
+       "rules": [
+        "references/fusion/F2-align.md#a7a2"
+       ],
+       "task": "Read the batch {batch}: for every unit, choose the concept(s) of each axis in its `ask` - from its candidates, or, where the candidates are '*', from the batch's `choices` - or unstated / n/a, as the rules say; the `fixed` axes are already set. Write the answer {unit id: {axis: [concept ids]}} to {out}."
+      }
+     },
+     {
+      "run": "ideate_tools.py align-coords $RD --apply-answers"
      }
     ]
    },
@@ -169,29 +275,27 @@
       "run": "ideate_tools.py unit-begin $RD A7.A3"
      },
      {
-      "run": "ideate_tools.py align-points $RD"
+      "run": "ideate_tools.py align-points $RD --batches --max-chars $BUDGET"
      },
      {
-      "write": {
-       "task": "Decide which concept candidates become Points (A7.A3) and write their card fields into $RD/knowledge_cards.json (points with origin align), from the papers only.",
+      "fanout": {
+       "batches": "$RD/knowledge/_work/A7A/point_batch_*.json",
+       "out": "rdfield:answer",
+       "allow_empty": true,
        "rules": [
         "references/fusion/F2-align.md#a7a3"
        ],
-       "reads": [
-        "$RD/knowledge/_work/A7A/point_candidates.json"
-       ],
-       "writes": [
-        "$RD/knowledge_cards.json"
-       ],
-       "commands": [
-        "ideate_tools.py list-papers",
-        "ideate_tools.py trace"
-       ]
+       "task": "Read the batch {batch}: for every concept candidate, whether the topic turns on it (keep) and its card text - description, claim_type, purpose, core_claim, expanded, method, findings - written from its definition and the units shown only, (TBD) where they do not support a field, as the rules say. Write the answer to {out}."
       }
      },
      {
-      "run": "ideate_tools.py build-cards $RD $RD/knowledge_cards.json",
-      "submit": true
+      "run": "ideate_tools.py align-points $RD --merge-answers"
+     },
+     {
+      "run": "ideate_tools.py cards-merge $RD $RD/knowledge/_work/A7A/points_part.json --origin align"
+     },
+     {
+      "run": "ideate_tools.py build-cards $RD $RD/knowledge_cards.json"
      },
      {
       "run": "ideate_tools.py unit-done $RD A7.A3",
@@ -213,18 +317,22 @@
       "run": "ideate_tools.py env-probe $RD --write"
      },
      {
+      "run": "ideate_tools.py lens-brief $RD"
+     },
+     {
       "write": {
        "task": "Write the lens (B1): who is looking and what this machine holds today, on the aligned concepts - the persona text and the verdicts (dataset on disk, method family affordable) - to $RD/knowledge/_work/B1/lens.json in the format lens-set takes.",
        "rules": [
         "references/fusion/F2-align.md#b1"
        ],
        "reads": [
-        "$RD/step0_session_config.json",
-        "$RD/knowledge/alignment.json"
+        "$RD/knowledge/_work/B1/brief.md"
        ],
        "writes": [
         "$RD/knowledge/_work/B1/lens.json"
-       ]
+       ],
+       "schema": "$RD/knowledge/_work/B1/lens.schema.json",
+       "lookups": []
       }
      },
      {
@@ -275,7 +383,52 @@
        "commands": [
         "ideate_tools.py list-papers",
         "ideate_tools.py trace"
-       ]
+       ],
+       "allow_empty": true
+      }
+     },
+     {
+      "run": "ideate_tools.py collide-merge $RD",
+      "optional": true
+     },
+     {
+      "run": "ideate_tools.py collide-plan $RD"
+     },
+     {
+      "fanout": {
+       "batches": "$RD/knowledge/_work/A7X/batch_*.json",
+       "out": "rdfield:answer",
+       "task": "Read the batch file {batch} and judge every candidate in it exactly once, as the rules say; write the answer to {out}.",
+       "rules": [
+        "references/fusion/F3-collide.md#a7x2"
+       ],
+       "commands": [
+        "ideate_tools.py list-papers",
+        "ideate_tools.py trace"
+       ],
+       "allow_empty": true
+      }
+     },
+     {
+      "run": "ideate_tools.py collide-merge $RD",
+      "optional": true
+     },
+     {
+      "run": "ideate_tools.py collide-plan $RD"
+     },
+     {
+      "fanout": {
+       "batches": "$RD/knowledge/_work/A7X/batch_*.json",
+       "out": "rdfield:answer",
+       "task": "Read the batch file {batch} and judge every candidate in it exactly once, as the rules say; write the answer to {out}.",
+       "rules": [
+        "references/fusion/F3-collide.md#a7x2"
+       ],
+       "commands": [
+        "ideate_tools.py list-papers",
+        "ideate_tools.py trace"
+       ],
+       "allow_empty": true
       }
      },
      {
@@ -298,21 +451,19 @@
       "run": "ideate_tools.py collide-plan $RD --lens"
      },
      {
-      "write": {
-       "task": "Judge every lens candidate (B3.c) in $RD/knowledge/_work/A7X/lens_batch_*.json and write each batch's answer to the path its `answer` field names.",
+      "fanout": {
+       "batches": "$RD/knowledge/_work/A7X/lens_batch_*.json",
+       "out": "rdfield:answer",
+       "allow_empty": true,
        "rules": [
         "references/fusion/F3-collide.md#b3c",
         "references/fusion/F3-collide.md#a7x2"
        ],
-       "reads": [
-        "$RD/knowledge/_work/A7X"
-       ],
-       "writes": []
+       "task": "Read the lens batch {batch} and judge every candidate in it exactly once, as the rules say; write the answer to {out}."
       }
      },
      {
-      "run": "ideate_tools.py collide-merge $RD",
-      "submit": true
+      "run": "ideate_tools.py collide-merge $RD"
      }
     ]
    },
@@ -327,22 +478,27 @@
    "phases": {
     "main": [
      {
+      "run": "ideate_tools.py recon-digest $RD B3"
+     },
+     {
       "write": {
-       "task": "Write the gap list (B3), every gap with its collisions, supporting papers, type and move, checked verbatim against the sources, to $RD/knowledge/_work/B3/gaps.json in the format gaps-set takes.",
+       "task": "Write the gap list (B3) to $RD/knowledge/_work/B3/gaps.json in the format gaps-set takes: every collision that two or more papers support is a gap, with its collisions, supporting papers, type and move - its `gap:` line's severity bound and feasibility cap set its scores and so its rank, they are no reason to leave it out (the planning block picks from the list); not_gaps only for a collision no study could close. Source checks verbatim from the full texts.",
        "rules": [
         "references/fusion/F3-collide.md#b3"
        ],
        "reads": [
-        "$RD/knowledge/collisions.jsonl"
+        "$RD/knowledge/_work/digest/B3.md"
        ],
        "writes": [
         "$RD/knowledge/_work/B3/gaps.json"
        ],
+       "schema": "$RD/knowledge/_work/digest/B3.schema.json",
        "commands": [
         "ideate_tools.py list-papers",
         "ideate_tools.py trace",
         "ideate_tools.py decon-merge"
-       ]
+       ],
+       "lookups": []
       }
      },
      {
@@ -369,22 +525,25 @@
       "run": "ideate_tools.py recon-candidates $RD"
      },
      {
-      "write": {
-       "task": "Write the Lines (knowledge/lines/*.md) and the findings Points (in knowledge_cards.json, origin collide) the candidates allow (A7.R1), each citing its collisions.",
+      "run": "ideate_tools.py recon-batches $RD"
+     },
+     {
+      "fanout": {
+       "batches": "$RD/knowledge/_work/A7R/r1_batch_*.json",
+       "out": "rdfield:answer",
+       "allow_empty": true,
        "rules": [
         "references/fusion/F4-reconstruct.md#a7r1"
        ],
-       "reads": [
-        "$RD/knowledge/_work/A7R"
-       ],
-       "writes": [
-        "$RD/knowledge_cards.json"
-       ],
-       "commands": [
-        "ideate_tools.py list-papers",
-        "ideate_tools.py trace"
-       ]
+       "task": "Read the batch {batch}: one promotion candidate (its `kind`) with its collisions' sides, quotes and reasons, its papers and the concept Points on them. Write its answer to {out}: for a `point`, the findings Point's name, claim type and six fields, from the sides' units; for a debate, evolution or analogy, the Line card's title, endpoints and sections, each claim with its id - or, where `card_required` is false, `patch` with why the relation is no card (a debate that is not a major axis of disagreement, an analogy that is not a major cross-theme axis). Keep within the lengths: a Point's name a few words, `core_claim` one sentence under 300 characters, its other fields one to three sentences; a card's sections a short paragraph each, under 900 characters. Cite only ids that appear in the batch."
       }
+     },
+     {
+      "run": "ideate_tools.py recon-merge $RD"
+     },
+     {
+      "run": "ideate_tools.py cards-merge $RD $RD/knowledge/_work/A7R/points_collide.json --origin collide",
+      "submit": true
      },
      {
       "run": "ideate_tools.py unit-done $RD A7.R1",
@@ -403,23 +562,34 @@
    "phases": {
     "main": [
      {
+      "run": "ideate_tools.py recon-digest $RD A7.R2"
+     },
+     {
       "run": "ideate_tools.py unit-begin $RD A7.R2"
      },
      {
       "write": {
-       "task": "Group the papers into Planes (A7.R2) after the collisions - each paper in exactly one Plane - in $RD/knowledge_cards.json (planes), Q3/Q5 citing Lines, collisions and the papers' units.",
+       "task": "Group the papers into Planes (A7.R2) after the collisions: the Planes (n, name, slug, member_points, q1-q5; Q3/Q5 citing Lines, collisions and the papers' units from the digest, or (TBD)), in `assign` every evidence paper's Plane n and in `methodology` its methodology class, as one object in $RD/knowledge/_work/A7R/planes.json (the tool builds each Plane's members from `assign` and puts them into knowledge_cards.json).",
        "rules": [
         "references/fusion/F4-reconstruct.md#a7r2"
        ],
-       "reads": [],
-       "writes": [
-        "$RD/knowledge_cards.json"
+       "reads": [
+        "$RD/knowledge/_work/digest/A7.R2.md"
        ],
+       "writes": [
+        "$RD/knowledge/_work/A7R/planes.json"
+       ],
+       "schema": "$RD/knowledge/_work/digest/A7.R2.schema.json",
        "commands": [
         "ideate_tools.py list-papers",
         "ideate_tools.py trace"
-       ]
+       ],
+       "lookups": []
       }
+     },
+     {
+      "run": "ideate_tools.py cards-merge $RD $RD/knowledge/_work/A7R/planes.json --planes",
+      "submit": true
      },
      {
       "run": "ideate_tools.py build-cards $RD $RD/knowledge_cards.json",
@@ -445,16 +615,24 @@
    "phases": {
     "main": [
      {
+      "run": "ideate_tools.py recon-digest $RD A7.R3"
+     },
+     {
       "run": "ideate_tools.py unit-begin $RD A7.R3"
      },
      {
       "write": {
-       "task": "Write the descriptive Body (A7.R3): the field's seven questions from Planes, Lines and collisions only, to knowledge/body/B_draft_<topic>_descriptive.md (the name the rules give).",
+       "task": "Write the descriptive Body (A7.R3): the field's seven questions from Planes, Lines and collisions only (the digest lists every id you may cite), to $RD/knowledge/body/$DESC_BODY with the frontmatter the rules give.",
        "rules": [
-        "references/fusion/F4-reconstruct.md#a7r3"
+        "references/fusion/F4-reconstruct.md#a7r3",
+        "references/knowledge-passes.md#pass-4"
        ],
-       "reads": [],
-       "writes": []
+       "reads": [
+        "$RD/knowledge/_work/digest/A7.R3.md"
+       ],
+       "writes": [
+        "$RD/knowledge/body/$DESC_BODY"
+       ]
       }
      },
      {
@@ -474,15 +652,21 @@
    "phases": {
     "main": [
      {
+      "run": "ideate_tools.py recon-digest $RD B2"
+     },
+     {
       "run": "ideate_tools.py unit-begin $RD B2"
      },
      {
       "write": {
-       "task": "Write the topic's SOTA review $RD/step6_sota_review.md (B2): consensus, debates and reported numbers, every statement citing a collision or a matrix-row id, else (TBD).",
+       "task": "Write the topic's SOTA review $RD/step6_sota_review.md (B2): consensus, debates and reported numbers, every statement citing a collision or a matrix-row id, else (TBD). Leave out the Methodology legend and the Paper-theme mapping: the tool writes them from the Planes.",
        "rules": [
-        "references/fusion/F4-reconstruct.md#b2"
+        "references/fusion/F4-reconstruct.md#b2",
+        "references/research-cycle.md#b2-sota"
        ],
-       "reads": [],
+       "reads": [
+        "$RD/knowledge/_work/digest/B2.md"
+       ],
        "writes": [
         "$RD/step6_sota_review.md"
        ],
@@ -490,8 +674,13 @@
         "ideate_tools.py list-papers",
         "ideate_tools.py trace",
         "ideate_tools.py list-methods"
-       ]
+       ],
+       "lookups": []
       }
+     },
+     {
+      "run": "ideate_tools.py sota-tables $RD",
+      "submit": true
      },
      {
       "run": "ideate_tools.py unit-done $RD B2",
@@ -513,22 +702,100 @@
       "run": "ideate_tools.py unit-begin $RD B3.5"
      },
      {
-      "write": {
-       "task": "Write the research questions (B3.5) in the gaps' rank order: for each gap run `ideate-tool questions-prefill <RD> GAP_NNN`, write questions/Q_NNN.md (common ground, condition, consequence ladder, one question, the four screens, section 9), then `ideate-tool questions-handover <RD> Q_NNN`.",
+      "run": "ideate_tools.py questions-plan $RD"
+     },
+     {
+      "fanout": {
+       "batches": "$RD/knowledge/_work/B35/q_batch_*.json",
+       "out": "rdfield:out",
+       "allow_empty": true,
        "rules": [
-        "references/fusion/F4-reconstruct.md#b35"
+        "references/fusion/F4-reconstruct.md#b35",
+        "references/question-craft.md#qc2"
        ],
-       "reads": [
-        "$RD/step7_gaps.json"
-       ],
-       "writes": [],
-       "commands": [
-        "ideate_tools.py questions-prefill",
-        "ideate_tools.py questions-handover",
-        "ideate_tools.py list-papers",
-        "ideate_tools.py trace"
-       ]
+       "task": "Read the batch {batch}: it holds one gap with everything its question may cite (prefill, the gap's collisions, the lens, the matrix rows) and, in `must_cite`, what each part has to cite. Write the question file {out} for that gap: the `frontmatter` values as given, and sections 1-8 as the rules say (section 9 is written later, from its own candidates). Cite only ids that appear in the batch. When the batch has `refused_before`, the question in `previous` was refused for those reasons: write it again with exactly those fixed."
       }
+     },
+     {
+      "run": "ideate_tools.py questions-handovers $RD"
+     },
+     {
+      "fanout": {
+       "batches": "$RD/knowledge/_work/B35/s9_batch_*.json",
+       "out": "rdfield:out",
+       "allow_empty": true,
+       "rules": [
+        "references/fusion/F4-reconstruct.md#b35-handover"
+       ],
+       "task": "Read the batch {batch}: a ready question and the candidates for its section 9. Write its section 9 to {out}, as the rules say: choose the units, collisions, accounts and rows; `holds` and `account` are one sentence each, under 300 characters. When the batch has `refused_before`, the section 9 in the question file was refused for those reasons: write it again with exactly those fixed."
+      }
+     },
+     {
+      "run": "ideate_tools.py questions-attach $RD"
+     },
+     {
+      "run": "ideate_tools.py questions-plan $RD"
+     },
+     {
+      "fanout": {
+       "batches": "$RD/knowledge/_work/B35/q_batch_*.json",
+       "out": "rdfield:out",
+       "allow_empty": true,
+       "rules": [
+        "references/fusion/F4-reconstruct.md#b35",
+        "references/question-craft.md#qc2"
+       ],
+       "task": "Read the batch {batch}: it holds one gap with everything its question may cite (prefill, the gap's collisions, the lens, the matrix rows) and, in `must_cite`, what each part has to cite. Write the question file {out} for that gap: the `frontmatter` values as given, and sections 1-8 as the rules say (section 9 is written later, from its own candidates). Cite only ids that appear in the batch. When the batch has `refused_before`, the question in `previous` was refused for those reasons: write it again with exactly those fixed."
+      }
+     },
+     {
+      "run": "ideate_tools.py questions-handovers $RD"
+     },
+     {
+      "fanout": {
+       "batches": "$RD/knowledge/_work/B35/s9_batch_*.json",
+       "out": "rdfield:out",
+       "allow_empty": true,
+       "rules": [
+        "references/fusion/F4-reconstruct.md#b35-handover"
+       ],
+       "task": "Read the batch {batch}: a ready question and the candidates for its section 9. Write its section 9 to {out}, as the rules say: choose the units, collisions, accounts and rows; `holds` and `account` are one sentence each, under 300 characters. When the batch has `refused_before`, the section 9 in the question file was refused for those reasons: write it again with exactly those fixed."
+      }
+     },
+     {
+      "run": "ideate_tools.py questions-attach $RD"
+     },
+     {
+      "run": "ideate_tools.py questions-plan $RD"
+     },
+     {
+      "fanout": {
+       "batches": "$RD/knowledge/_work/B35/q_batch_*.json",
+       "out": "rdfield:out",
+       "allow_empty": true,
+       "rules": [
+        "references/fusion/F4-reconstruct.md#b35",
+        "references/question-craft.md#qc2"
+       ],
+       "task": "Read the batch {batch}: it holds one gap with everything its question may cite (prefill, the gap's collisions, the lens, the matrix rows) and, in `must_cite`, what each part has to cite. Write the question file {out} for that gap: the `frontmatter` values as given, and sections 1-8 as the rules say (section 9 is written later, from its own candidates). Cite only ids that appear in the batch. When the batch has `refused_before`, the question in `previous` was refused for those reasons: write it again with exactly those fixed."
+      }
+     },
+     {
+      "run": "ideate_tools.py questions-handovers $RD"
+     },
+     {
+      "fanout": {
+       "batches": "$RD/knowledge/_work/B35/s9_batch_*.json",
+       "out": "rdfield:out",
+       "allow_empty": true,
+       "rules": [
+        "references/fusion/F4-reconstruct.md#b35-handover"
+       ],
+       "task": "Read the batch {batch}: a ready question and the candidates for its section 9. Write its section 9 to {out}, as the rules say: choose the units, collisions, accounts and rows; `holds` and `account` are one sentence each, under 300 characters. When the batch has `refused_before`, the section 9 in the question file was refused for those reasons: write it again with exactly those fixed."
+      }
+     },
+     {
+      "run": "ideate_tools.py questions-attach $RD"
      },
      {
       "run": "ideate_tools.py unit-done $RD B3.5",

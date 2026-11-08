@@ -241,6 +241,7 @@ Q5 is the place most prone to invention. Source it only from the papers' own lim
 from the debates found in Pass 2, quoted or closely paraphrased with citation keys. The gap analysis runs later, in stage B, and draws
 on these Planes — so Q5 records what the papers say is open, and must not pre-empt it with gaps of your own.
 
+<a id="pass-4"></a>
 ## Pass 4 — descriptive Body
 
 One card, `body/B_draft_{topic_slug}_descriptive.md`, `body_role: descriptive`. `{topic_slug}` is the topic file's

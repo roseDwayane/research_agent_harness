@@ -17,6 +17,10 @@ A recipe is a list of steps per phase. Most Units have one phase, `main`; B5 has
         "commands"  skill commands it may run itself (e.g. a lookup: "ideate_tools.py list-papers")
         "isolated"  true: an independent reader (A1.e): it sees only `reads` and the rules, not the research folder
         "tools"     extra Claude Code tools beyond Read/Write/Edit/Glob/Grep (B6's journal lookup: WebSearch, WebFetch)
+        "lookups"   the read-only lookups a worker without tools is given (default: every lookup in `commands`);
+                    [] when the step's brief already holds what it needs
+        "schema"    a JSON schema file (written by an earlier run step) for the step's one `writes` file: an Ollama
+                    worker's answer is decoded under it and written as that file (A1.q: frame strategy-brief)
   {"fanout": {...}}                     one worker per batch file, at most max_parallel at once
         "batches"   a glob under $RD: "_state/fanout/A3/batch_*.in.json"
         "task"      the instruction per batch; {batch} {out} {brief} are filled in
@@ -24,6 +28,7 @@ A recipe is a list of steps per phase. Most Units have one phase, `main`; B5 has
         "out"       where a batch's answer goes: field:<key> | rdfield:<key> | items:<list>.<key> | suffix:<a>><b>
                     (executors.RecipeExecutor._batch_outs)
         "rules", "forbid", "commands" as for write
+        "allow_empty" true: no batch file is nothing to do, not a missing artifact (A7.D's full-text batches at quick)
 
   {"freeze": ["$GEN/argument.json", ...]}   copy each file to <name>_r1<ext> unless that copy exists (cp -n)
   any step: "when_file": "<path>"   run the step only when that file exists (B5's second blind restatement)
@@ -52,7 +57,7 @@ SCRIPTS = ("ideate_tools.py", "mcp_bridge.py", "pdf2md.sh")
 _KIND_EXPECT = {                       # contract kind -> the step kinds its recipe must contain
     "script": set(), "model": {"write"}, "hybrid": {"write"}, "subagent": {"write"}, "fanout": {"fanout"}}
 _PH = re.compile(r"\$([A-Z][A-Z0-9_]*)\b")
-_KNOWN_PH = {"RD", "GEN", "K", "TOPIC", "PY", "SK", "IDEAS", "ROUND", "DEPTH"}
+_KNOWN_PH = {"RD", "GEN", "K", "TOPIC", "PY", "SK", "IDEAS", "ROUND", "DEPTH", "BUDGET", "DESC_BODY"}
 
 
 @dataclass
@@ -137,6 +142,7 @@ def _texts(r: Recipe) -> list[str]:
             if s.kind in ("write", "fanout"):
                 body = s.spec[s.kind] or {}
                 out += [str(body.get("task", ""))] + [str(x) for k in ("reads", "writes", "forbid") for x in body.get(k) or []]
+                out += [str(body["schema"])] if body.get("schema") else []
     return out
 
 
@@ -165,7 +171,8 @@ def validate(recipes: dict[str, Recipe], reg, root: Path | None = None) -> list[
         have = r.step_kinds - {"run"}
         if kind == "script" and have:
             f("ERROR", "R-KIND", u, f"a script Unit with {sorted(have)} steps")
-        elif want and not want <= have:
+        elif want and not want <= have and not (kind == "hybrid" and "fanout" in have):
+            # a hybrid Unit's model step may be a fan-out (B3.5: one question per gap, one section 9 per question)
             f("ERROR", "R-KIND", u, f"a {kind} Unit needs a {'/'.join(sorted(want))} step")
         scope = "generation" if (reg.get(reg.step_of(u)) or {}).get("block") == "BLK-planning" else "topic"
         if r.scope != scope:
@@ -191,6 +198,8 @@ def validate(recipes: dict[str, Recipe], reg, root: Path | None = None) -> list[
                         f("ERROR", "R-WRITE", u, "a write step without a task")
                     if not body.get("writes"):
                         f("WARN", "R-WRITE", u, "a write step that names no file it must write")
+                    if body.get("schema") and len(body.get("writes") or []) != 1:
+                        f("ERROR", "R-WRITE", u, "a write step with a schema writes exactly one file")
                 if s.kind == "fanout":
                     body = s.spec["fanout"] or {}
                     for k in ("batches", "task", "out"):

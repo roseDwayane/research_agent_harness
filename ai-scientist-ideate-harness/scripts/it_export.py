@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from collections import Counter
@@ -325,10 +326,23 @@ def _build_bibliography(cfg: dict, rd: Path, mailto: str, fetch=http_json, offli
               f"% Entries: {len(entries)} ({sum(1 for v in meta.values() if v['source'] == 'crossref')} from Crossref)\n\n")
     write_text(rd / "step4_references.bib", header + "\n\n".join(entries) + "\n")
     out = {"schema": "ideate-bib/1", "at": now_iso(), "basis": {"log": sha256_file(log_path(rd)),
-                                                                 "shortlist": sha256_file(rd / "step3_shortlist.json")},
+                                                                 "shortlist": shortlist_basis(rd)},
            "crossref_failed_batches": cr["failed_batches"], "offline": offline, "entries": meta}
     write_json_stable(rd / "step4_bib_metadata.json", out)
     return out
+
+
+def shortlist_basis(rd: Path) -> str | None:
+    """The shortlist the bibliography was built on, without A6.c's access_level (written back after A4.b). Hashed as
+    the file's own bytes would be without that field, so a basis recorded as the whole file's hash still matches."""
+    p = Path(rd) / "step3_shortlist.json"
+    if not p.is_file():
+        return None
+    sl = json.loads(p.read_text(encoding="utf-8"))
+    for q in sl.get("papers") or []:
+        if isinstance(q, dict):
+            q.pop("access_level", None)
+    return hashlib.sha256((json.dumps(sl, indent=2, ensure_ascii=False) + "\n").encode("utf-8")).hexdigest()
 
 
 BIB_KEY = re.compile(r"^@(\w+)\{([^,\s]+),", re.M)
@@ -351,7 +365,7 @@ def check_bibliography(cfg, rd) -> list[dict]:
     meta = read_json(mp)
     if set(meta.get("entries") or {}) != keys:
         fs.append(F("ERROR", "L02", U, "step4_bib_metadata.json does not describe exactly the active keys"))
-    if (meta.get("basis") or {}) != {"log": sha256_file(log_path(rd)), "shortlist": sha256_file(rd / "step3_shortlist.json")}:
+    if (meta.get("basis") or {}) != {"log": sha256_file(log_path(rd)), "shortlist": shortlist_basis(rd)}:
         fs.append(F("ERROR", "L03", U, "STALE: keys or shortlist changed after the bibliography: run it again"))
     if meta.get("offline"):
         fs.append(F("WARN", "L04", U, "built offline: no entry was completed from Crossref"))
