@@ -34,7 +34,7 @@ import requests
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # evaluation/: eval_common, run_batch
 
-from autosurvey_common import OllamaChat, step6_survey  # noqa: E402
+from autosurvey_common import OllamaChat, survey_text  # noqa: E402
 from autosurvey_eval import CachedCalls  # noqa: E402
 from eval_common import RUNS_ROOT, ollama_digest, read_json, write_json  # noqa: E402
 from metasyn_prompts import (  # noqa: E402
@@ -101,12 +101,12 @@ def damaged(text: str) -> dict[str, str]:
     }
 
 
-def offtopic_text(path: Path | None, own_session: Path) -> str | None:
+def offtopic_text(path: Path | None, own_session: Path, cite_render: str = "keys") -> str | None:
     if path is None:
         candidates = sorted(DEFAULT_OFFTOPIC.glob("*/step6_sota_review.md")) if DEFAULT_OFFTOPIC.exists() else []
         candidates = [p for p in candidates if p.parent != own_session]
         path = candidates[0] if candidates else None
-    return step6_survey(path.read_text(encoding="utf-8")) if path and path.exists() else None
+    return survey_text(path, cite_render) if path and path.exists() else None
 
 
 def baseline_report(review_dir: Path, config: str, review_id: int) -> str:
@@ -118,6 +118,31 @@ def baseline_report(review_dir: Path, config: str, review_id: int) -> str:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(r.text, encoding="utf-8")
     return path.read_text(encoding="utf-8")
+
+
+def load_digests(session: Path) -> dict[str, dict]:
+    """The per-paper notes the review was written from, in the archived `step6_paper_digests.json` shape.
+
+    Archived engine: that file. Fusion-block harness: the decon records (knowledge/decon/{key}.json), the same notes
+    in that architecture - problem, data, the headline and the claims read from the paper; what the paper assumes or
+    leaves undone stands in for the archived `limitations`."""
+    old = session / "step6_paper_digests.json"
+    if old.exists():
+        return read_json(old)
+    digests = {}
+    for path in sorted((session / "knowledge" / "decon").glob("*.json")):
+        rec = read_json(path)
+        s, units = rec.get("summary") or {}, rec.get("units") or []
+        digests[rec.get("citation_key") or path.stem] = {
+            "problem": s.get("problem", ""),
+            "sample_or_dataset": s.get("data", ""),
+            "key_results": [x for x in [s.get("headline", ""), *(u["text"] for u in units if u.get("kind") == "claim")]
+                            if x and x != "(TBD)"],
+            "limitations": [u["text"] for u in units if u.get("kind") in ("assumption", "not-done")],
+        }
+    if not digests:
+        raise FileNotFoundError(f"no per-paper notes in {session}: neither step6_paper_digests.json nor knowledge/decon/")
+    return digests
 
 
 def digest_text(digests: dict[str, dict]) -> str:
@@ -211,8 +236,8 @@ def evaluate_review(review_dir: Path, batch_dir: Path, judge: Judge, args: argpa
     report = read_json(review_dir / "input_report.json")
     session = batch_dir / report["session_dir"]
     review_md = (session / "step6_sota_review.md").read_text(encoding="utf-8")
-    survey = step6_survey(review_md)
-    digests = read_json(session / "step6_paper_digests.json")
+    survey = survey_text(session / "step6_sota_review.md", args.cite_render)
+    digests = load_digests(session)
     question = gt.get("Research_Question") or gt["Topic"]
 
     classes_path = review_dir / "insight_classes.json"
@@ -237,16 +262,19 @@ def evaluate_review(review_dir: Path, batch_dir: Path, judge: Judge, args: argpa
     texts = {"step6": survey}
     if args.controls:
         texts.update(damaged(survey))
-        off = offtopic_text(args.offtopic, session)
+        off = offtopic_text(args.offtopic, session, args.cite_render)
         if off:
             texts["offtopic"] = off
     naive = review_dir / "naive" / "review.md"
     if args.naive and naive.exists():
-        texts["naive"] = naive.read_text(encoding="utf-8")
+        texts["naive"] = naive.read_text(encoding="utf-8")                       # B0: one prompt over abstracts
+    naive_ft = review_dir / "naive_fulltext" / "review.md"
+    if args.naive_fulltext and naive_ft.exists():
+        texts["naive_fulltext"] = naive_ft.read_text(encoding="utf-8")           # B2: B0 + full-text excerpts
     baselines = {f"baseline:{c}": baseline_report(review_dir, c, gt["review_id"]) for c in args.baselines}
     texts.update(baselines)
     systems = {name: score_text(judge, question, claims, text) for name, text in texts.items()}
-    for name in ["step6", *(["naive"] if "naive" in texts else []), *baselines]:
+    for name in ["step6", *(n for n in ("naive", "naive_fulltext") if n in texts), *baselines]:
         systems[name]["official"] = judge.official(texts[name], gt["Key_Insights"], gt["Effect_Direction"])
     for name, text in texts.items():
         systems[name]["words"] = len(text.split())
@@ -286,7 +314,12 @@ def main() -> int:
     ap.add_argument("--num-ctx", type=int, default=32768)
     ap.add_argument("--controls", action="store_true", help="also score damaged forms of each review")
     ap.add_argument("--offtopic", type=Path, default=None, help="step6_sota_review.md used as the off-topic control")
-    ap.add_argument("--naive", action="store_true", help="also score eval/review_*/naive/review.md (naive_baseline.py)")
+    ap.add_argument("--naive", action="store_true", help="also score eval/review_*/naive/review.md (B0, naive_baseline.py)")
+    ap.add_argument("--naive-fulltext", action="store_true",
+                    help="also score eval/review_*/naive_fulltext/review.md (B2, naive_baseline.py --variant fulltext)")
+    ap.add_argument("--cite-render", choices=["keys", "ids"], default="keys",
+                    help="fusion-block reviews cite ids: 'keys' shows the judge the paper keys they rest on (default), "
+                         "'ids' shows them raw; MetaSyn's judge prompts are unchanged either way")
     ap.add_argument("--baselines", nargs="*", default=[],
                     help="MetaSyn generation_results configs to score with the same judge, e.g. gptresearcher__gpt-5.4__ma_retriever")
     args = ap.parse_args()

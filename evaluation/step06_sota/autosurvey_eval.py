@@ -16,7 +16,7 @@ Content quality — Coverage, Structure, Relevance, 1–5
 
 Citation quality — AutoSurvey's NLI-by-LLM
     claims = sentences (and Key Results table rows) that carry a citation, citations removed.
-    source (--citation-sources, default fulltext):
+    source (--citation-sources, default: both, reported side by side):
         fulltext  the cited paper's abstract + its 3 best-matching full-text windows
                   (fulltext_retrieval.py, frozen on the dev reviews) — the Step 6 citation measure
         abstract  the abstract only, as in AutoSurvey (for comparability; it underestimates
@@ -63,9 +63,11 @@ import fulltext_retrieval
 from autosurvey_common import OllamaChat, load_papers, step6_sections, step6_survey
 from autosurvey_prompts import CRITERIA, CRITERIA_BASED_JUDGING_PROMPT, NLI_PROMPT, fill
 from eval_common import METASYN_DEV, batch_paths, ollama_digest, read_json, read_runs, write_json
-from step6_common import extract_citations, is_table_row, is_table_separator
+from step6_cites import CiteFinder
+from step6_common import is_table_row, is_table_separator
 
-SYSTEMS = ("step6", "naive")
+SYSTEMS = ("step6", "naive", "naive_fulltext")   # the harness arm, B0 (one prompt over abstracts), B2 (the same + full-text excerpts)
+BASELINES = ("naive", "naive_fulltext")
 CITATION_SOURCES = ("fulltext", "abstract")
 N_CITATION_STRATA = ("1", "2", "3+")
 SCORE_RE = re.compile(r"^\W*(?:score\W*)?([1-5])(?:\s*/\s*5)?\W*$", re.IGNORECASE)
@@ -165,15 +167,11 @@ def split_sentences(text: str) -> list[str]:
     return [s.strip() for s in sentences if s.strip()]
 
 
-def strip_citations(text: str) -> str:
-    text = PAREN_RE.sub(lambda m: "" if extract_citations(m.group(0)) else m.group(0), text)
-    for citation in extract_citations(text):  # narrative keys ("SmithEtAl2024 showed …")
-        text = text.replace(citation.raw, "")
-    return re.sub(r"\s+([.,;:!?])", r"\1", re.sub(r"\s{2,}", " ", text)).strip()
+def extract_claims(survey: str, finder: CiteFinder) -> list[dict[str, Any]]:
+    """Statements in the judged text: prose sentences and table body rows, with the citations they carry.
 
-
-def extract_claims(survey: str, legal: set[str]) -> list[dict[str, Any]]:
-    """Statements in the judged text: prose sentences and table body rows, with the keys they cite."""
+    `keys` are the cited ids: collisions, exp_ids and Points in a fusion-block review, paper keys in an archived-engine
+    review or a baseline. `finder.papers_of(id)` says which papers a judge reads for each (step6_cites.py)."""
     lines = survey.splitlines()
     claims = []
     for i, line in enumerate(lines):
@@ -184,31 +182,37 @@ def extract_claims(survey: str, legal: set[str]) -> list[dict[str, Any]]:
             if i + 1 < len(lines) and is_table_separator(lines[i + 1]):
                 continue  # header row
             cells = [c.strip() for c in text.strip("|").split("|")]
-            units = ["; ".join(c for c in cells if c and not (extract_citations(c) and not strip_citations(c)))]
+            units = ["; ".join(c for c in cells if c and not (finder.ids(c) and not finder.strip(c)))]
             raw_units, kind = [text], "table_row"
         else:
             text = re.sub(r"^(?:[-*+]|\d+[.)])\s+", "", text)
             raw_units = split_sentences(text)
-            units, kind = [strip_citations(s) for s in raw_units], "sentence"
+            units, kind = [finder.strip(s) for s in raw_units], "sentence"
         for raw, claim in zip(raw_units, units):
             if len(claim.split()) < MIN_CLAIM_WORDS:
                 continue
-            keys = list(dict.fromkeys(c.key for c in extract_citations(raw)))
+            keys = finder.ids(raw)
             claims.append({"kind": kind, "claim": claim, "raw": raw, "keys": keys,
-                           "invalid_keys": [k for k in keys if k not in legal]})
+                           "invalid_keys": [k for k in keys if not finder.is_valid(k)]})
     return claims
 
 
 # --------------------------------------------------------------------------- #
 # citation quality (AutoSurvey Judge.citation_quality)
 # --------------------------------------------------------------------------- #
-def citation_source(kind: str, session: Path, papers: dict[str, dict]) -> Source:
+def citation_source(kind: str, session: Path, papers: dict[str, dict], finder: CiteFinder) -> Source:
+    """(claim, cited id) -> the evidence a judge reads. A paper key is that paper's evidence; a collision, experiment
+    or Point id (fusion-block reviews) is the evidence of every paper it rests on, so a claim is judged against the
+    sources behind the id and not against the id's own wording."""
     def abstract(key: str) -> str:
         return papers[key]["abstract"] or papers[key]["title"]
 
-    if kind == "abstract":
-        return lambda claim, key: abstract(key)
-    return lambda claim, key: fulltext_retrieval.retrieve(str(session / "step5_full_text" / f"{key}.md"), claim, abstract(key))
+    def one(claim: str, key: str) -> str:
+        if kind == "abstract":
+            return abstract(key)
+        return fulltext_retrieval.retrieve(str(session / "step5_full_text" / f"{key}.md"), claim, abstract(key))
+
+    return lambda claim, ident: "\n\n".join(one(claim, key) for key in finder.papers_of(ident))
 
 
 def nli(calls: CachedCalls, model: str, claim: str, sources: list[str]) -> tuple[int, str]:
@@ -221,7 +225,7 @@ def n_citation_stratum(claim: dict) -> str:
     return "1" if n == 1 else "2" if n == 2 else "3+"
 
 
-def citation_quality(calls: CachedCalls, model: str, claims: list[dict], papers: dict[str, dict], source: Source,
+def citation_quality(calls: CachedCalls, model: str, claims: list[dict], finder: CiteFinder, source: Source,
                      max_claims: int = 0) -> dict[str, Any]:
     """``claims`` are annotated in place (supported / relevant): pass copies to score them twice."""
     cited = [c for c in claims if c["keys"]]
@@ -229,7 +233,7 @@ def citation_quality(calls: CachedCalls, model: str, claims: list[dict], papers:
     unparsed = 0
     citation_num = relevant = supported = 0
     for claim in judged:
-        legal_keys = [k for k in claim["keys"] if k in papers]
+        legal_keys = [k for k in claim["keys"] if finder.is_valid(k)]
         citation_num += len(claim["keys"])
         claim["supported"], raw = (nli(calls, model, claim["claim"], [source(claim["claim"], k) for k in legal_keys])
                                    if legal_keys else (0, ""))
@@ -239,7 +243,7 @@ def citation_quality(calls: CachedCalls, model: str, claims: list[dict], papers:
         if not claim["supported"]:
             continue
         for key in claim["keys"]:
-            if key not in papers:
+            if not finder.is_valid(key):
                 claim["relevant"][key] = 0
                 continue
             alone, _ = nli(calls, model, claim["claim"], [source(claim["claim"], key)])
@@ -292,11 +296,13 @@ def perturb(claim: str) -> str:
     return out
 
 
-def citation_controls(calls: CachedCalls, model: str, judged: list[dict], papers: dict[str, dict], source: Source) -> dict:
-    """Validity controls on the judged cited claims (already scored by citation_quality)."""
+def citation_controls(calls: CachedCalls, model: str, judged: list[dict], papers: dict[str, dict], source: Source,
+                      finder: CiteFinder) -> dict:
+    """Validity controls on the judged cited claims (already scored by citation_quality). The swap replaces a claim's
+    citations (ids or keys) by random other papers of the same bibliography."""
     def recall(items: list[tuple[str, list[str]]]) -> float | None:
-        hits = [nli(calls, model, claim, [source(claim, k) for k in keys if k in papers])[0]
-                if any(k in papers for k in keys) else 0 for claim, keys in items]
+        hits = [nli(calls, model, claim, [source(claim, k) for k in keys if finder.is_valid(k)])[0]
+                if any(finder.is_valid(k) for k in keys) else 0 for claim, keys in items]
         return round(mean(hits), 4) if hits else None
 
     rng = random.Random(0)
@@ -323,6 +329,9 @@ def system_texts(record: dict, batch_dir: Path, systems: list[str]) -> dict[str,
     naive = batch_paths(batch_dir)["eval"] / record["id"] / "naive" / "review.md"
     if "naive" in systems and naive.exists():
         out["naive"] = naive.read_text(encoding="utf-8")
+    naive_ft = batch_paths(batch_dir)["eval"] / record["id"] / "naive_fulltext" / "review.md"
+    if "naive_fulltext" in systems and naive_ft.exists():
+        out["naive_fulltext"] = naive_ft.read_text(encoding="utf-8")
     return out
 
 
@@ -336,15 +345,22 @@ def evaluate_topic(record: dict, batch_dir: Path, args: argparse.Namespace, chat
         return {"status": "no_survey"}
     topic = read_json(session / "step0_session_config.json")["topic"]
     papers = load_papers(session)
+    finder = CiteFinder(session, set(papers))
     calls = CachedCalls(out_dir / "calls.jsonl", chats)
 
     summary = {}
-    for system, survey in texts.items():
+    for system, raw_survey in texts.items():
+        # Claims and citations are read from the review as written; the benchmark judges (Structure, Relevance,
+        # Coverage, MetaSyn) read it with ids written as the paper keys they rest on, unless --cite-render ids.
+        survey = finder.render(raw_survey) if args.cite_render == "keys" else raw_survey
         (out_dir / f"{system}_survey.md").parent.mkdir(parents=True, exist_ok=True)
         (out_dir / f"{system}_survey.md").write_text(survey, encoding="utf-8")
+        if survey != raw_survey:
+            (out_dir / f"{system}_survey_raw.md").write_text(raw_survey, encoding="utf-8")
         content = {model: judge_content(calls, model, topic, survey, args.criteria) for model in args.judges}
         result: dict[str, Any] = {
             "system": system, "topic": topic, "survey_words": len(survey.split()),
+            "cite_render": args.cite_render if survey != raw_survey else "unchanged",
             "survey_sha256": hashlib.sha256(survey.encode()).hexdigest(),
             "content": content, "mixture": mixture(content, args.criteria),
         }
@@ -354,14 +370,14 @@ def evaluate_topic(record: dict, batch_dir: Path, args: argparse.Namespace, chat
             result["sections"] = sections
             result["mixture"]["Structure_section"] = round(mean(scores), 4) if scores else None
         if not args.skip_citations:
-            claims = extract_claims(survey, set(papers))
+            claims = extract_claims(raw_survey, finder)
             result["citations"] = {}
             for kind in args.citation_sources:
-                source = citation_source(kind, session, papers)
-                quality = citation_quality(calls, args.nli_model, [dict(c) for c in claims], papers, source, args.max_claims)
+                source = citation_source(kind, session, papers, finder)
+                quality = citation_quality(calls, args.nli_model, [dict(c) for c in claims], finder, source, args.max_claims)
                 if args.citation_controls:
                     judged = [c for c in quality["claims"] if c["keys"]][:quality["n_judged_claims"]]
-                    quality["controls"] = citation_controls(calls, args.nli_model, judged, papers, source)
+                    quality["controls"] = citation_controls(calls, args.nli_model, judged, papers, source, finder)
                 result["citations"][kind] = {"source": kind, **({"retrieval": fulltext_retrieval.VERSION} if kind == "fulltext" else {}),
                                              **quality}
         write_json(out_dir / f"{system}.json", result)
@@ -408,7 +424,6 @@ def write_summary(batch_dir: Path, topics: dict[str, dict], meta: dict) -> None:
     content = [*meta["criteria"], *(["Structure_section"] if meta.get("sections") else [])]
     citation = [f"{kind}/{m}" for kind in sources for m in CITATION_METRICS]
     metrics = ["words", *content, *citation]
-    paired = {t for t, s in topics.items() if set(SYSTEMS) <= set(s.get("systems", {}))}
     has_dev = any(is_dev(t) for t in topics)
     scopes = [("all", lambda t: True)] + ([("held-out", lambda t: not is_dev(t))] if has_dev else [])
 
@@ -422,17 +437,19 @@ def write_summary(batch_dir: Path, topics: dict[str, dict], meta: dict) -> None:
         for system in SYSTEMS:
             sel = [r for r in rows if r["system"] == system and keep(r["topic"])]
             means[f"{system}/{scope}"] = {m: avg(sel, m) for m in columns} | {"n": len(sel)}
-        for m in metrics:
-            pairs = [(a[m], b[m]) for t in sorted(paired) if keep(t)
-                     for a in rows if a["topic"] == t and a["system"] == "step6"
-                     for b in rows if b["topic"] == t and b["system"] == "naive"
-                     if a.get(m) is not None and b.get(m) is not None]
-            if len(pairs) >= 3:
-                d = [a - b for a, b in pairs]
-                lo, hi = boot_ci(d)
-                diffs_out[f"{scope}/{m}"] = {"diff": round(mean(d), 4), "ci95": [round(lo, 4), round(hi, 4)], "n": len(d)}
+        for base in BASELINES:
+            for m in metrics:
+                pairs = [(a[m], b[m]) for t in sorted(topics) if keep(t)
+                         for a in rows if a["topic"] == t and a["system"] == "step6"
+                         for b in rows if b["topic"] == t and b["system"] == base
+                         if a.get(m) is not None and b.get(m) is not None]
+                if len(pairs) >= 3:
+                    d = [a - b for a, b in pairs]
+                    lo, hi = boot_ci(d)
+                    diffs_out[f"{scope}/{base}/{m}"] = {"diff": round(mean(d), 4), "ci95": [round(lo, 4), round(hi, 4)],
+                                                        "n": len(d)}
     write_json(batch_paths(batch_dir)["eval"] / "autosurvey_summary.json",
-               {"meta": meta, "topics": topics, "rows": rows, "means": means, "paired_step6_minus_naive": diffs_out})
+               {"meta": meta, "topics": topics, "rows": rows, "means": means, "paired_step6_minus_baseline": diffs_out})
 
     def fmt(v):
         return "–" if v is None else (f"{v:.2f}" if isinstance(v, float) else str(v))
@@ -443,13 +460,19 @@ def write_summary(batch_dir: Path, topics: dict[str, dict], meta: dict) -> None:
              + (" (fulltext = abstract + 3 retrieved windows, `fulltext_retrieval.py`)" if "fulltext" in sources else ""),
              "- Coverage is AutoSurvey's LLM coverage, for comparability only — see README; use contract `coverage_rate`.",
              "- Structure_section: Step 6 only, mean Structure over its sections.", ""]
+    present = [b for b in BASELINES if any(r["system"] == b for r in rows)]
     for scope, keep in scopes:
-        lines += [f"## Means and paired step6 − naive, {scope} (bootstrap 95% CI over topics)", "",
-                  "| metric | step6 | naive | step6 − naive [95% CI] | n pairs |", "|---|---|---|---|---|"]
+        lines += [f"## Means and paired step6 − baseline, {scope} (bootstrap 95% CI over topics)", "",
+                  "step6 = the system under test; naive = B0 (one prompt, abstracts); naive_fulltext = B2 (B0 + full-text excerpts).", "",
+                  "| metric | step6 | " + " | ".join(present) + " | " + " | ".join(f"step6 − {b} [95% CI] (n)" for b in present) + " |",
+                  "|---|---|" + "---|" * (2 * len(present))]
         for m in metrics:
-            d = diffs_out.get(f"{scope}/{m}")
-            lines.append(f"| {m} | {fmt(means.get(f'step6/{scope}', {}).get(m))} | {fmt(means.get(f'naive/{scope}', {}).get(m))} | "
-                         + (f"{d['diff']:+.3f} [{d['ci95'][0]:+.3f}, {d['ci95'][1]:+.3f}] | {d['n']}" if d else "– | –") + " |")
+            cells = []
+            for b in present:
+                d = diffs_out.get(f"{scope}/{b}/{m}")
+                cells.append(f"{d['diff']:+.3f} [{d['ci95'][0]:+.3f}, {d['ci95'][1]:+.3f}] ({d['n']})" if d else "–")
+            lines.append(f"| {m} | {fmt(means.get(f'step6/{scope}', {}).get(m))} | "
+                         + " | ".join(fmt(means.get(f'{b}/{scope}', {}).get(m)) for b in present) + " | " + " | ".join(cells) + " |")
         lines.append("")
     for kind in sources:
         lines += [f"## Citation ({kind}) by citations per claim, {scopes[-1][0]} (macro means)", "",
@@ -486,9 +509,14 @@ def main() -> int:
     parser.add_argument("--criteria", nargs="+", choices=list(CRITERIA), default=list(CRITERIA))
     parser.add_argument("--skip-sections", action="store_true", help="no per-section Structure for Step 6")
     parser.add_argument("--skip-citations", action="store_true")
-    parser.add_argument("--citation-sources", nargs="+", choices=CITATION_SOURCES, default=["fulltext"],
-                        help="evidence for the citation NLI (default fulltext; add abstract for AutoSurvey's original)")
+    parser.add_argument("--citation-sources", nargs="+", choices=CITATION_SOURCES, default=["abstract", "fulltext"],
+                        help="evidence for the citation NLI. Both are run by default: abstract = AutoSurvey's original "
+                             "(comparable with the paper, and the fair one for a system that read only abstracts); "
+                             "fulltext = abstract + 3 retrieved full-text windows (fair to systems that read full texts)")
     parser.add_argument("--citation-controls", action="store_true", help="also run the swap / perturb validity controls")
+    parser.add_argument("--cite-render", choices=["keys", "ids"], default="keys",
+                        help="fusion-block reviews cite ids (X0019, galt2019#E1): 'keys' shows the content judges those ids "
+                             "as the paper keys they rest on (default; the judge prompts are unchanged), 'ids' shows them raw")
     parser.add_argument("--max-claims", type=int, default=0, help="judge only the first N cited claims (0 = all; smoke runs)")
     parser.add_argument("--num_ctx", type=int, default=32768)
     parser.add_argument("--think", choices=["on", "off", "default"], default="off")
@@ -508,7 +536,8 @@ def main() -> int:
             "sections": not args.skip_sections, "systems": args.systems, "num_ctx": args.num_ctx, "think": args.think,
             "temperature": 0.0, "max_claims": args.max_claims,
             "citation_sources": [] if args.skip_citations else args.citation_sources,
-            "fulltext_retrieval": fulltext_retrieval.VERSION, "citation_controls": args.citation_controls}
+            "fulltext_retrieval": fulltext_retrieval.VERSION, "citation_controls": args.citation_controls,
+            "cite_render": args.cite_render}
     summary_path = batch_paths(batch_dir)["eval"] / "autosurvey_summary.json"
     topics = read_json(summary_path)["topics"] if summary_path.exists() else {}
     runs = [r for r in read_runs(batch_dir) if not args.only or r["id"] in args.only]

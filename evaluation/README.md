@@ -285,7 +285,7 @@ python evaluation/step06_sota/metasyn_prepare.py --batch-id metasyn_v2 --registe
 # AutoSurvey (either kind of batch); naive baseline first if it is to be compared
 python evaluation/step06_sota/naive_baseline.py   --batch evaluation/runs/<batch>
 python evaluation/step06_sota/autosurvey_eval.py  --batch evaluation/runs/<batch> [--judges <m1> <m2> <m3>] \
-    [--citation-sources fulltext abstract] [--citation-controls] [--max-claims 20]
+    [--citation-sources abstract fulltext (default: both)] [--citation-controls] [--max-claims 20]
 python evaluation/step06_sota/autosurvey_controls.py --batch evaluation/runs/<batch> [--level section] [--only <ids>]
 
 # MetaSyn scoring (+ damaged forms, + MetaSyn's own baseline reports judged by the same judge)
@@ -486,13 +486,14 @@ and for MetaSyn re-check the frozen prompts on the 6 dev reviews and redo `insig
 | `autosurvey_eval.py`, `autosurvey_prompts.py`, `autosurvey_common.py` | AutoSurvey Structure (whole + per section) / Relevance / Coverage + citation NLI |
 | `fulltext_retrieval.py` | full-text evidence windows for the citation NLI (frozen v2) |
 | `autosurvey_controls.py` | AutoSurvey discrimination controls (whole survey; `--level section`) |
-| `naive_baseline.py` | one-prompt survey from the same papers |
+| `naive_baseline.py` | one-prompt survey from the same papers: B0 (titles + abstracts, default) and, with `--variant fulltext`, B2 (the same prompt plus excerpts of the full texts, written to `eval/{id}/naive_fulltext/`); `autosurvey_eval.py` / `metasyn_eval.py --naive-fulltext` score it as a third system next to the harness arm |
 | `run_checks.py` | runs make_manifest → check_step6_contract → check_numeric_claims for a batch → `eval/{id}/step06/` |
 | `make_manifest.py` | provenance snapshot of what a review was checked against (papers, Planes, collisions, full-text count) |
 | `step6_world.py` | loads what B2 may cite from the research folder (collisions, decon units / exp_ids, Points, Lines, Planes, abstracts, full texts); both checks use it |
 | `check_step6_contract.py` | B2 contract for the fusion block: ids exist, one Theme per Plane, sections / Key results header, Consensus / Debates type fit (J08), coverage, legend + mapping vs `knowledge_cards.json`, abstract-level disclosure; `--harness-gate` also runs the harness's `recon-check --unit B2` |
 | `check_numeric_claims.py` | every cited number must be in the source text (full text, else abstract) of a paper its ids rest on; a number only in the decon extraction is *not* attested; spelled-out counts ("Fourteen") are read |
 | `step6_common.py` | markdown / table helpers; its `(AuthorYear)` citation parsing is only used by the AutoSurvey / MetaSyn scripts (archived-engine format) |
+| `step6_cites.py` | citations in a Step 6 text for the LLM-judged scripts: a fusion-block review cites ids (`X0019`, `galt2019#E1`, `P_/D_draft_...`), each resolving to the papers it rests on (`CiteFinder.papers_of`); archived-engine reviews and baselines cite paper keys. `render` writes ids as the paper keys behind them (`--cite-render keys`, the default of `autosurvey_eval.py`, `autosurvey_controls.py`, `metasyn_eval.py`; `ids` shows them raw). The benchmark prompts (`autosurvey_prompts.py`, `metasyn_prompts.py`) are verbatim and untouched |
 | `aggregate.py` | batch protocol checks (same config / prompts, auto checkpoints, Step 6 untouched) + deterministic averages → `eval/summary.{json,md}` |
 
 ## History

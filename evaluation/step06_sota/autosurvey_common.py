@@ -1,6 +1,7 @@
 """Shared pieces of the AutoSurvey-style evaluation (naive_baseline.py, autosurvey_eval.py).
 
-* ``load_papers``     the session's legal sources: bib keys with title / year / abstract from step5_full_text
+* ``load_papers``     the session's legal sources: bib keys with title / year / abstract (fusion-block sessions:
+                      the bibliography and the search records; archived-engine sessions: step5 frontmatter)
 * ``step6_survey``    the Step 6 review as a reader sees it, without code-generated parts
 * ``step6_sections``  its judged sections (Executive Summary, Themes, Cross-Theme Analysis)
 * ``OllamaChat``      one-message chat call (AutoSurvey sends a single user message, no system prompt)
@@ -13,7 +14,9 @@ from typing import Any
 
 import requests
 
+from step6_cites import CiteFinder
 from step6_common import is_papers_inventory, parse_bib_keys, split_frontmatter
+from step6_world import load_world
 
 OLLAMA_URL = "http://127.0.0.1:11434"
 # Generated from data by the engine, not written by the model: not part of the judged survey.
@@ -37,9 +40,35 @@ def _abstract(body: list[str]) -> str:
     return " ".join(" ".join(out).split())
 
 
+def _bib_fields(bib_text: str) -> dict[str, dict[str, str]]:
+    """{key: {title, year}} from step4_references.bib."""
+    out = {}
+    for entry in re.split(r"\n(?=@)", bib_text):
+        head = re.match(r"@[A-Za-z]+\s*\{\s*([^,\s]+)\s*,", entry)
+        if not head:
+            continue
+        title = re.search(r"\btitle\s*=\s*\{(.+?)\},?\s*\n", entry, re.S)
+        year = re.search(r"\byear\s*=\s*\{?(\d{4})", entry)
+        out[head.group(1)] = {"title": " ".join(title.group(1).split()) if title else "",
+                              "year": year.group(1) if year else ""}
+    return out
+
+
 def load_papers(session_dir: Path) -> dict[str, dict[str, Any]]:
-    """{key: {title, year, abstract, access_level}} for every key in step4_references.bib (bib order)."""
-    keys = sorted(parse_bib_keys((session_dir / "step4_references.bib").read_text(encoding="utf-8")))
+    """{key: {title, year, abstract, access_level}} for every key in step4_references.bib (sorted).
+
+    Fusion-block session (knowledge/decon/): the files of step5_full_text carry no frontmatter, so the title and year
+    come from the bibliography, the abstract from the search records (step2 raw / snowball) and access_level from the
+    decon record's `basis` ("full-text", else "abstract-only"). Archived-engine session: the step5 frontmatter."""
+    bib_text = (session_dir / "step4_references.bib").read_text(encoding="utf-8")
+    keys = sorted(parse_bib_keys(bib_text))
+    if (session_dir / "knowledge" / "decon").is_dir():
+        world = load_world(session_dir)
+        fields = _bib_fields(bib_text)
+        return {key: {"title": fields.get(key, {}).get("title", ""), "year": fields.get(key, {}).get("year", ""),
+                      "access_level": "full-text" if world.paper_basis(key) == "full-text" else "abstract-only",
+                      "abstract": " ".join(world.abstracts.get(key, "").split())}
+                for key in keys}
     papers = {}
     for key in keys:
         path = session_dir / "step5_full_text" / f"{key}.md"
@@ -80,6 +109,17 @@ def step6_sections(survey: str) -> list[tuple[str, str]]:
     Executive Summary, each Theme, Cross-Theme Analysis (Limitations and other level-2 parts are left out)."""
     blocks = re.split(r"(?m)^(?=##\s)", survey)
     return [(b.splitlines()[0][2:].strip(), b.strip() + "\n") for b in blocks if STEP6_SECTION_RE.match(b)]
+
+
+def survey_text(review_md: Path, cite_render: str) -> str:
+    """The review as the judge reads it. A fusion-block review cites ids (X0019, galt2019#E1); with `keys` they are
+    written as the paper keys they rest on (step6_cites.py), so the judge reads a survey, not identifiers. The judge
+    prompts are MetaSyn's and are not changed. An archived-engine review is returned as it is."""
+    survey = step6_survey(review_md.read_text(encoding="utf-8"))
+    if cite_render != "keys":
+        return survey
+    session = review_md.parent
+    return CiteFinder(session, set(load_papers(session))).render(survey)
 
 
 def strip_fence(text: str) -> str:

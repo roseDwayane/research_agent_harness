@@ -14,8 +14,17 @@ digests of the full text, then synthesis by theme) versus one prompt over abstra
   matched lengths); topics whose Step 6 failed get --default-words.
 
     python evaluation/step06_sota/naive_baseline.py --batch evaluation/runs/<batch_id> [--only <topic_id> ...]
+    python evaluation/step06_sota/naive_baseline.py --batch ... --variant fulltext     # B2, see below
 
-Writes eval/{topic}/naive/review.md and naive/meta.json.
+Writes eval/{topic}/naive/review.md and naive/meta.json   (variant abstract = B0, the default).
+
+Variant `fulltext` (B2 of the with/without-harness comparison): the same prompt, the same papers, the same model and the
+same abstracts as B0, and for every paper that was read from a full text, excerpts of that full text are added after its
+abstract - the 120-word windows that share most words with the topic, in document order, windows that repeat the abstract
+left out. The prompt template (NAIVE_SURVEY_PROMPT) is not changed; only the paper list under it is longer. The excerpts
+share what is left of the context after the abstracts (an equal share per paper with a full text, at most
+--max-fulltext-chars each), so B2's prompt is B0's prompt plus excerpts and nothing else. Papers without a full text are
+as in B0, so a topic with no full text gives B0 exactly (meta.json says so). Writes eval/{topic}/naive_fulltext/.
 """
 from __future__ import annotations
 
@@ -26,6 +35,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # evaluation/: eval_common, run_batch
 
+import fulltext_retrieval
 from autosurvey_common import OllamaChat, load_papers, step6_survey, strip_fence
 from autosurvey_prompts import NAIVE_SURVEY_PROMPT, fill
 from eval_common import batch_paths, ollama_digest, read_json, read_runs, write_json
@@ -44,17 +54,81 @@ def paper_block(papers: dict[str, dict], abstract_chars: int) -> str:
     return "\n\n".join(lines)
 
 
-def build_prompt(topic: str, papers: dict[str, dict], words: int, input_tokens: int, max_abstract_chars: int) -> tuple[str, int]:
+def build_prompt(topic: str, papers: dict[str, dict], words: int, input_tokens: int, max_abstract_chars: int,
+                 excerpts: dict[str, str] | None = None) -> tuple[str, int]:
+    """`excerpts` ({key: text}) are appended after a paper's abstract (variant fulltext); None gives B0 unchanged."""
     budget_chars = int((input_tokens - PROMPT_OVERHEAD) * CHARS_PER_TOKEN)
     header_chars = sum(len(k) + len(p["title"]) + 12 for k, p in papers.items())
     abstract_chars = max(200, min(max_abstract_chars, (budget_chars - header_chars) // max(len(papers), 1)))
-    prompt = fill(NAIVE_SURVEY_PROMPT, {"TOPIC": topic, "N": str(len(papers)), "WORDS": str(words),
-                                        "PAPERS": paper_block(papers, abstract_chars)})
+    block = paper_block(papers, abstract_chars)
+    if excerpts:
+        block = paper_block_with_excerpts(papers, abstract_chars, excerpts)
+    prompt = fill(NAIVE_SURVEY_PROMPT, {"TOPIC": topic, "N": str(len(papers)), "WORDS": str(words), "PAPERS": block})
     return prompt, abstract_chars
 
 
+# --------------------------------------------------------------------------- #
+# B2: full-text excerpts
+# --------------------------------------------------------------------------- #
+FULLTEXT_LEVELS = ("full-text-pdf", "full-text-html", "partial-text-html", "full-text")
+EXCERPT_OVERLAP_WITH_ABSTRACT = 0.6   # a window sharing more of its words with the abstract repeats it
+
+
+def paper_block_with_excerpts(papers: dict[str, dict], abstract_chars: int, excerpts: dict[str, str]) -> str:
+    """paper_block (B0's text, unchanged) with `Excerpts from the full text:` after the abstract of papers that have any."""
+    lines = []
+    for key, p in papers.items():
+        abstract = p["abstract"]
+        if len(abstract) > abstract_chars:
+            abstract = abstract[:abstract_chars].rsplit(" ", 1)[0] + " …"
+        text = f"[{key}] {p['title']} ({p['year']})\n{abstract or '(no abstract available)'}"
+        if excerpts.get(key):
+            text += f"\nExcerpts from the full text:\n{excerpts[key]}"
+        lines.append(text)
+    return "\n\n".join(lines)
+
+
+def fulltext_excerpt(session: Path, key: str, topic: str, abstract: str, chars: int) -> str:
+    """The non-overlapping 120-word windows of the paper's full text that share most words with the topic, in document
+    order, up to `chars` characters; windows that mostly repeat the abstract are skipped. '' if there is no full text."""
+    wins = fulltext_retrieval.windows(str(session / "step5_full_text" / f"{key}.md"))[::2]  # stride 60 -> 120: no overlap
+    if not wins or chars <= 0:
+        return ""
+    query = set(fulltext_retrieval.tokens(topic))
+    abs_tokens = set(fulltext_retrieval.tokens(abstract))
+    scored = []
+    for i, w in enumerate(wins):
+        toks = fulltext_retrieval.tokens(w)
+        uniq = set(toks)
+        if uniq and len(uniq & abs_tokens) / len(uniq) > EXCERPT_OVERLAP_WITH_ABSTRACT:
+            continue
+        scored.append((-sum(t in query for t in toks), i))
+    picked, used = [], 0
+    for _, i in sorted(scored):
+        cost = len(wins[i]) + 6
+        if used + cost > chars:
+            continue
+        picked.append(i)
+        used += cost
+    return "\n".join(f"… {wins[i]} …" for i in sorted(picked))
+
+
+def plan_excerpts(session: Path, topic: str, papers: dict[str, dict], input_tokens: int, max_abstract_chars: int,
+                  max_fulltext_chars: int) -> dict[str, str]:
+    """An equal share of the context left after B0's prompt, for every paper read from a full text."""
+    budget_chars = int((input_tokens - PROMPT_OVERHEAD) * CHARS_PER_TOKEN)
+    header_chars = sum(len(k) + len(p["title"]) + 12 for k, p in papers.items())
+    abstract_chars = max(200, min(max_abstract_chars, (budget_chars - header_chars) // max(len(papers), 1)))
+    used = header_chars + sum(min(len(p["abstract"]), abstract_chars) + 30 for p in papers.values())
+    have = [k for k, p in papers.items() if (p.get("access_level") or "") in FULLTEXT_LEVELS]
+    if not have:
+        return {}
+    share = min(max_fulltext_chars, max(0, (budget_chars - used) // len(have)) - 40)
+    return {k: fulltext_excerpt(session, k, topic, papers[k]["abstract"], share) for k in have}
+
+
 def run_topic(record: dict, batch_dir: Path, llm: dict, args: argparse.Namespace) -> dict:
-    out_dir = batch_paths(batch_dir)["eval"] / record["id"] / "naive"
+    out_dir = batch_paths(batch_dir)["eval"] / record["id"] / ("naive" if args.variant == "abstract" else "naive_fulltext")
     if "session_dir" not in record:
         return {"status": "no_session"}
     session = batch_dir / record["session_dir"]
@@ -70,8 +144,10 @@ def run_topic(record: dict, batch_dir: Path, llm: dict, args: argparse.Namespace
     step6 = session / "step6_sota_review.md"
     words = len(step6_survey(step6.read_text(encoding="utf-8")).split()) if step6.exists() else args.default_words
     max_tokens = int(llm.get("max_tokens", 8192))
-    prompt, abstract_chars = build_prompt(config["topic"], papers, words, int(llm["num_ctx"]) - max_tokens,
-                                          args.max_abstract_chars)
+    input_tokens = int(llm["num_ctx"]) - max_tokens
+    excerpts = (plan_excerpts(session, config["topic"], papers, input_tokens, args.max_abstract_chars, args.max_fulltext_chars)
+                if args.variant == "fulltext" else None)
+    prompt, abstract_chars = build_prompt(config["topic"], papers, words, input_tokens, args.max_abstract_chars, excerpts)
 
     chat = OllamaChat(llm["model"], int(llm["num_ctx"]), think=llm.get("think"), base_url=llm.get("base_url", "http://127.0.0.1:11434"),
                       timeout=float(llm.get("request_timeout", 1800)))
@@ -90,7 +166,15 @@ def run_topic(record: dict, batch_dir: Path, llm: dict, args: argparse.Namespace
         "output_words": len(review.split()), "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
         "prompt_tokens": result["prompt_tokens"], "output_tokens": result["output_tokens"],
         "done_reason": result["done_reason"], "truncated": result["done_reason"] == "length",
+        "variant": args.variant,
     }
+    if args.variant == "fulltext":
+        meta.update({
+            "n_papers_with_fulltext": sum(1 for p in papers.values() if (p.get("access_level") or "") in FULLTEXT_LEVELS),
+            "n_papers_with_excerpt": sum(1 for t in (excerpts or {}).values() if t),
+            "excerpt_chars_total": sum(len(t) for t in (excerpts or {}).values()),
+            "identical_to_abstract_variant": not any((excerpts or {}).values()),
+        })
     write_json(out_dir / "meta.json", meta)
     (out_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
     return {"status": "ok", "words": meta["output_words"], "target": words, "done_reason": meta["done_reason"]}
@@ -105,6 +189,9 @@ def main() -> int:
     parser.add_argument("--default-words", type=int, default=2500)
     parser.add_argument("--max-abstract-chars", type=int, default=1500)
     parser.add_argument("--force", action="store_true", help="regenerate existing baselines")
+    parser.add_argument("--variant", choices=["abstract", "fulltext"], default="abstract",
+                        help="abstract = B0 (default); fulltext = B2, the same prompt with excerpts of the full texts added")
+    parser.add_argument("--max-fulltext-chars", type=int, default=6000, help="variant fulltext: most excerpt characters per paper")
     args = parser.parse_args()
 
     batch_dir = Path(args.batch).resolve()
@@ -112,7 +199,7 @@ def main() -> int:
     if llm.get("provider") != "ollama":
         raise SystemExit(f"naive_baseline.py only drives Ollama; batch uses {llm.get('provider')!r}")
     runs = [r for r in read_runs(batch_dir) if not args.only or r["id"] in args.only]
-    status_path = batch_paths(batch_dir)["eval"] / "naive_status.json"
+    status_path = batch_paths(batch_dir)["eval"] / ("naive_status.json" if args.variant == "abstract" else "naive_fulltext_status.json")
     status = read_json(status_path) if status_path.exists() else {}
     for i, record in enumerate(runs, 1):
         print(f"[{i}/{len(runs)}] {record['id']} …", flush=True)

@@ -47,7 +47,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # evaluation/: eval_common, run_batch
 
-from autosurvey_common import OllamaChat, step6_sections, step6_survey
+from autosurvey_common import OllamaChat, step6_sections, survey_text
 from autosurvey_eval import CachedCalls, judge_content
 from autosurvey_prompts import CRITERIA
 from eval_common import batch_paths, ollama_digest, read_json, read_runs, write_json
@@ -245,6 +245,8 @@ def main() -> int:
                         help="default: all three (whole), Structure (section)")
     parser.add_argument("--num_ctx", type=int, default=32768)
     parser.add_argument("--think", choices=["on", "off", "default"], default="off")
+    parser.add_argument("--cite-render", choices=["keys", "ids"], default="keys",
+                        help="fusion-block reviews cite ids: 'keys' shows the judge the paper keys they rest on (default)")
     args = parser.parse_args()
     args.criteria = args.criteria or (list(CRITERIA) if args.level == "whole" else ["Structure"])
     if ollama_digest(args.judge) is None:
@@ -258,7 +260,7 @@ def main() -> int:
     records = [r for r in read_runs(batch_dir)
                if "session_dir" in r and (batch_dir / r["session_dir"] / "step6_sota_review.md").exists()]
     topics = {r["id"]: read_json(batch_dir / r["session_dir"] / "step0_session_config.json")["topic"] for r in records}
-    surveys = {r["id"]: step6_survey((batch_dir / r["session_dir"] / "step6_sota_review.md").read_text(encoding="utf-8"))
+    surveys = {r["id"]: survey_text(batch_dir / r["session_dir"] / "step6_sota_review.md", args.cite_render)
                for r in records}
     if args.level == "whole":
         units, variants, folder = whole_units(batch_dir, records, surveys), VARIANTS, "autosurvey"
