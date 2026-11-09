@@ -198,6 +198,45 @@ def extract_claims(survey: str, finder: CiteFinder) -> list[dict[str, Any]]:
 
 
 # --------------------------------------------------------------------------- #
+# paper coverage (deterministic, no judge; every system)
+# --------------------------------------------------------------------------- #
+def paper_coverage(survey: str, finder: CiteFinder, papers: dict[str, dict]) -> dict[str, Any]:
+    """How many of the papers the system was given does the review use? Counted from the citations in the text as
+    written (the paper-theme mapping and Papers lines are already removed by step6_survey, so a table that merely lists
+    every paper does not count).
+
+      any     a paper is reached by some citation: its key, one of its exp_ids / unit ids, or an id that rests on it
+              (a collision, a Point, a Line) - the form that is comparable between a fusion-block review and a baseline
+      named   only keys, exp_ids and unit ids (the paper itself is cited, not a finding it appears in)
+      full-text subset   the same, over the papers that were read from a full text (the archived `coverage_rate`)
+
+    The archived deterministic check, check_step6_contract.py, reports a coverage of its own for the harness arm only."""
+    reached: set[str] = set()
+    named: set[str] = set()
+    for cite in finder.find(survey):
+        if not finder.is_valid(cite.id):
+            continue
+        ps = set(finder.papers_of(cite.id)) & set(papers)
+        reached |= ps
+        kind = finder.world.kind(cite.id) if finder.world is not None else "paper"
+        if kind in ("paper", "exp", "unit"):
+            named |= ps
+    fulltext = {k for k, p in papers.items() if (p.get("access_level") or "") not in ("", "abstract-only")}
+
+    def rate(num: set[str], den: set[str]) -> float | None:
+        return round(len(num & den) / len(den), 4) if den else None
+
+    everything = set(papers)
+    return {
+        "n_papers": len(everything), "n_cited": len(reached & everything), "n_named": len(named & everything),
+        "any": rate(reached, everything), "named": rate(named, everything),
+        "n_fulltext_papers": len(fulltext), "any_fulltext_subset": rate(reached, fulltext),
+        "named_fulltext_subset": rate(named, fulltext),
+        "not_cited": sorted(everything - reached),
+    }
+
+
+# --------------------------------------------------------------------------- #
 # citation quality (AutoSurvey Judge.citation_quality)
 # --------------------------------------------------------------------------- #
 def citation_source(kind: str, session: Path, papers: dict[str, dict], finder: CiteFinder) -> Source:
@@ -363,6 +402,7 @@ def evaluate_topic(record: dict, batch_dir: Path, args: argparse.Namespace, chat
             "cite_render": args.cite_render if survey != raw_survey else "unchanged",
             "survey_sha256": hashlib.sha256(survey.encode()).hexdigest(),
             "content": content, "mixture": mixture(content, args.criteria),
+            "paper_coverage": paper_coverage(raw_survey, finder, papers),
         }
         if system == "step6" and not args.skip_sections:
             sections = {model: judge_sections(calls, model, topic, survey) for model in args.judges}
@@ -382,6 +422,7 @@ def evaluate_topic(record: dict, batch_dir: Path, args: argparse.Namespace, chat
                                              **quality}
         write_json(out_dir / f"{system}.json", result)
         summary[system] = {"mixture": result["mixture"], "words": result["survey_words"],
+                           "paper_coverage": {k: v for k, v in result["paper_coverage"].items() if k != "not_cited"},
                            "citations": {kind: {k: v for k, v in q.items() if k != "claims"}
                                          for kind, q in result.get("citations", {}).items()}}
     return {"status": "ok", "systems": summary}
@@ -410,6 +451,9 @@ def write_summary(batch_dir: Path, topics: dict[str, dict], meta: dict) -> None:
     for topic_id, status in topics.items():
         for system, s in status.get("systems", {}).items():
             row = {"topic": topic_id, "system": system, "words": s.get("words"), **s["mixture"]}
+            pc = s.get("paper_coverage") or {}
+            row.update({"paper_coverage": pc.get("any"), "paper_coverage_named": pc.get("named"),
+                        "paper_coverage_fulltext": pc.get("any_fulltext_subset")})
             for kind in sources:
                 q = s["citations"].get(kind, {})
                 row.update({f"{kind}/{m}": q.get(m) for m in CITATION_METRICS})
@@ -423,7 +467,7 @@ def write_summary(batch_dir: Path, topics: dict[str, dict], meta: dict) -> None:
             rows.append(row)
     content = [*meta["criteria"], *(["Structure_section"] if meta.get("sections") else [])]
     citation = [f"{kind}/{m}" for kind in sources for m in CITATION_METRICS]
-    metrics = ["words", *content, *citation]
+    metrics = ["words", *content, "paper_coverage", "paper_coverage_named", "paper_coverage_fulltext", *citation]
     has_dev = any(is_dev(t) for t in topics)
     scopes = [("all", lambda t: True)] + ([("held-out", lambda t: not is_dev(t))] if has_dev else [])
 
@@ -459,7 +503,9 @@ def write_summary(batch_dir: Path, topics: dict[str, dict], meta: dict) -> None:
              f"- prompts / rubrics: AutoSurvey verbatim (`autosurvey_prompts.py`); citation sources: {', '.join(sources) or '—'}"
              + (" (fulltext = abstract + 3 retrieved windows, `fulltext_retrieval.py`)" if "fulltext" in sources else ""),
              "- Coverage is AutoSurvey's LLM coverage, for comparability only — see README; use contract `coverage_rate`.",
-             "- Structure_section: Step 6 only, mean Structure over its sections.", ""]
+             "- Structure_section: Step 6 only, mean Structure over its sections.",
+             "- paper_coverage: share of the input papers the review cites (deterministic, every system); `_named` counts only "
+             "a paper's own key / exp_id, `_fulltext` only the papers read from a full text.", ""]
     present = [b for b in BASELINES if any(r["system"] == b for r in rows)]
     for scope, keep in scopes:
         lines += [f"## Means and paired step6 − baseline, {scope} (bootstrap 95% CI over topics)", "",

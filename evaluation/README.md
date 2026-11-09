@@ -483,7 +483,7 @@ and for MetaSyn re-check the frozen prompts on the 6 dev reviews and redo `insig
 | `metasyn_prepare.py`, `metasyn.toml` | MetaSyn fixed-input sessions; pipeline settings for them |
 | `metasyn_eval.py`, `metasyn_prompts.py` | MetaSyn scoring (classify / digest / coverage / official) |
 | `metasyn_judge_agreement.py` | agreement between judges + convergent validity of insight coverage (no human labels) |
-| `autosurvey_eval.py`, `autosurvey_prompts.py`, `autosurvey_common.py` | AutoSurvey Structure (whole + per section) / Relevance / Coverage + citation NLI |
+| `autosurvey_eval.py`, `autosurvey_prompts.py`, `autosurvey_common.py` | AutoSurvey Structure (whole + per section) / Relevance / Coverage + citation NLI (evidence: abstract only and abstract + 3 full-text windows); also `paper_coverage` (share of the input papers the review cites; deterministic, no judge, every system) |
 | `fulltext_retrieval.py` | full-text evidence windows for the citation NLI (frozen v2) |
 | `autosurvey_controls.py` | AutoSurvey discrimination controls (whole survey; `--level section`) |
 | `naive_baseline.py` | one-prompt survey from the same papers: B0 (titles + abstracts, default) and, with `--variant fulltext`, B2 (the same prompt plus excerpts of the full texts, written to `eval/{id}/naive_fulltext/`); `autosurvey_eval.py` / `metasyn_eval.py --naive-fulltext` score it as a third system next to the harness arm |
