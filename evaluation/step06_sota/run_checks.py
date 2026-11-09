@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Step 6 deterministic checks for every session of a batch: make_manifest → check_step6_contract → check_numeric_claims.
+"""Step 6 deterministic checks for every session of a batch: make_manifest → check_step6_contract → check_numeric_claims
+(fusion-block architecture: the review cites ids, one Theme per Plane; see step6_world.py).
 
     python evaluation/step06_sota/run_checks.py --batch evaluation/runs/<batch_id> [--only <ids>]
 
 Per session with a step6_sota_review.md, written to eval/{id}/step06/:
-    manifest.json   Step 6 manifest (from step5_full_text frontmatter and the .bib)
+    manifest.json   provenance snapshot (papers, Planes, collisions, how many papers were read from a full text)
     contract.json   check_step6_contract.py output (citation integrity, structure, coverage)
     numeric.json    check_numeric_claims.py output
     summary.json    the few fields aggregate.py averages; status "checker_error" if a checker crashed
@@ -38,7 +39,7 @@ def check_session(topic_id: str, session_dir: Path, batch_dir: Path) -> dict[str
     # Exit 1 means "checks ran and something failed" — that is a result, not an error.
     for name, script, output in (("contract", "step06_sota/check_step6_contract.py", out_dir / "contract.json"),
                                  ("numeric", "step06_sota/check_numeric_claims.py", out_dir / "numeric.json")):
-        proc = run_script(script, ["--manifest", str(manifest), "--output", str(output)], log)
+        proc = run_script(script, ["--session", str(session_dir), "--output", str(output)], log)
         if proc.returncode not in (0, 1) or not output.exists():
             result[name] = {"status": "checker_error", "stderr": tail(proc.stderr)}
             continue
@@ -49,20 +50,24 @@ def check_session(topic_id: str, session_dir: Path, batch_dir: Path) -> dict[str
 
 
 def summarize_contract(c: dict[str, Any]) -> dict[str, Any]:
-    s, cov = c["structure"], c["coverage"]["primary"]
+    """The fields aggregate.py averages (names kept from the archived checks) plus the new architecture's."""
+    s, cov = c["summary"], c["coverage"]["primary"]
     return {
-        "integrity_fail": c["citation_integrity"]["integrity_fail"],
-        "invalid_keys": c["citation_integrity"]["invalid_keys"],
-        "structure_pass": s["pass"],
-        "theme_count": s["found_themes"],
-        "theme_count_range": s["theme_count_range"],
-        "failing_themes": [t["theme"] for t in s["themes"] if not t["pass"]],
-        "cross_theme_pass": c["cross_theme_analysis"]["pass"],
-        "coverage_rate": cov["rate"],
+        "integrity_fail": s["integrity_fail"],
+        "invalid_keys": s["invalid_ids"],
+        "structure_pass": s["structure_pass"],
+        "theme_count": s["theme_count"],
+        "theme_count_range": [s["plane_count"], s["plane_count"]],  # one Theme per Plane
+        "failing_themes": s["failing_themes"],
+        "cross_theme_pass": c["structure"]["cross_theme_pass"],
+        "type_fit_pass": s["type_fit_pass"],
+        "mapping_pass": s["mapping_pass"],
+        "coverage_rate": s["coverage_rate"],
         "coverage": f"{cov['numerator']}/{cov['denominator']}",
-        "coverage_pass": c["coverage"]["pass"],
-        "source_integrity_pass": c["source_integrity"]["pass"],
-        "overall_pass": c["overall_pass"],
+        "coverage_pass": s["coverage_pass"],
+        "source_integrity_pass": s["source_integrity_pass"],
+        "abstract_marking_rate": s["abstract_marking_rate"],
+        "overall_pass": s["overall_pass"],
     }
 
 
@@ -70,8 +75,9 @@ def summarize_numeric(n: dict[str, Any]) -> dict[str, Any]:
     s6 = n["step6"]
     return {
         "numeric_attestation": s6["numeric_attestation"],
-        "claims": f"{s6['attested_claims']}/{s6['numeric_citable_claims']}",
+        "claims": f"{s6['attested_claims']}/{s6['numeric_claims']}",
         "pass": s6["pass"],
+        "numbers_by_tier": s6["numbers_by_tier"],
         "numeric_sentences_without_citation": s6["numeric_sentences_without_citation"],
     }
 

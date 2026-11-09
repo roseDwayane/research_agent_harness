@@ -2,16 +2,14 @@
 
 Step-level evaluation of the pipeline, one folder per step. Evaluators call the formal engine in
 `scholar_research/`. Steps 2–3 use LitSearch; Step 6 evaluates the state-of-the-art review
-(`step6_sota_review.md`); Steps 5 and 7 have deterministic contract checks so far.
+(`step6_sota_review.md`); Steps 5 and 7 are checked by the harness itself (`a6-check`, `collide-check`).
 
 ```text
 evaluation/
 ├── eval_common.py, run_batch.py, topics.toml   shared: batch layout, topic batches (Steps 1–N)
 ├── step02/            Step 2: LitSearch live retrieval and gold recall
 ├── step03/            Step 3: screening/ranking and official BM25 candidates
-├── step05_fulltext/   Step 5 contract check
 ├── step06_sota/       Step 6: contract / numeric checks, AutoSurvey, MetaSyn (+ metasyn.toml)
-├── step07_gaps/       Step 7 contract check
 ├── step08/            Step 8: independent rubric and IdeaBench P1/P2 evaluation
 ├── experiments/       local one-off scripts (Step 6 variants, Step 7 reruns) — gitignored, not shared
 └── runs/{batch}/      sessions/ + eval/ (not in git)
@@ -239,7 +237,7 @@ Two families of measures:
 |---|---|---|---|
 | **AutoSurvey** ([NeurIPS 2024](https://github.com/AutoSurveys/AutoSurvey)) | Structure, Relevance (1–5) | LLM judge, AutoSurvey rubric verbatim; Structure whole-survey **and** per section | none |
 | | Citation recall / precision | AutoSurvey NLI prompt verbatim, `Judge.citation_quality` algorithm; evidence = cited paper's abstract + 3 retrieved full-text windows (AutoSurvey: abstract only) | the cited paper itself |
-| **Citation coverage** | share of full-text papers cited in the themes | deterministic (`check_step6_contract.py`) | none |
+| **Citation coverage** | share of the Planes' papers named in a Theme (key, unit id or exp_id) | deterministic (`check_step6_contract.py`) | none |
 | **MetaSyn** ([THUIR/MetaSyn](https://github.com/THUIR/MetaSyn)) | direction accuracy, insights_consistency (official, primary); item-level insight coverage (ours, supplementary) | LLM judge against the source review | MetaSyn Key_Insights / Effect_Direction |
 
 **Judges.** Everything so far is a feasibility run with one local judge (`gemma4:31b` on Ollama).
@@ -294,9 +292,10 @@ python evaluation/step06_sota/autosurvey_controls.py --batch evaluation/runs/<ba
 python evaluation/step06_sota/metasyn_eval.py --batch evaluation/runs/<batch> [--judge <m>] --controls \
     --baselines gptresearcher__gpt-5.4__ma_retriever rag__gpt-5.4__ma_retriever
 
-# Step 5 / Step 7 deterministic contract checks (exit 1 on any failure) → eval/{id}/step{05,07}/contract.json
-python evaluation/step05_fulltext/check_step5_contract.py --batch evaluation/runs/<batch>
-python evaluation/step07_gaps/check_step7_contract.py   --batch evaluation/runs/<batch>
+# Step 5 / Step 7 contract checks live in the harness, not here (exit 1 on any ERROR):
+#   python ai-scientist-ideate-harness/scripts/ideate_tools.py a6-check      <research folder>   # Step 5 full text
+#   python ai-scientist-ideate-harness/scripts/ideate_tools.py collide-check <research folder>   # Step 7 gaps (W01-W10)
+# The numbers in step7_gap_analysis.md are attested by step06_sota/check_numeric_claims.py.
 
 ```
 
@@ -480,8 +479,6 @@ and for MetaSyn re-check the frozen prompts on the 6 dev reviews and redo `insig
 |---|---|
 | `eval_common.py` | shared paths and helpers (batch layout, runs.jsonl, run_script) |
 | `run_batch.py`, `topics.toml` | topic batch: runs Steps 1–N per topic and records the run; topics + pipeline model settings |
-| **`step05_fulltext/`** | |
-| `check_step5_contract.py` | Step 5 contract: files ↔ shortlist, frontmatter, access-level rules, truncation / duplicates, access log |
 | **`step06_sota/`** | |
 | `metasyn_prepare.py`, `metasyn.toml` | MetaSyn fixed-input sessions; pipeline settings for them |
 | `metasyn_eval.py`, `metasyn_prompts.py` | MetaSyn scoring (classify / digest / coverage / official) |
@@ -491,11 +488,12 @@ and for MetaSyn re-check the frozen prompts on the 6 dev reviews and redo `insig
 | `autosurvey_controls.py` | AutoSurvey discrimination controls (whole survey; `--level section`) |
 | `naive_baseline.py` | one-prompt survey from the same papers |
 | `run_checks.py` | runs make_manifest → check_step6_contract → check_numeric_claims for a batch → `eval/{id}/step06/` |
-| `make_manifest.py` | Step 6 manifest from `step5_full_text/*.md` frontmatter and the `.bib` |
-| `check_step6_contract.py`, `check_numeric_claims.py`, `step6_common.py` | deterministic checks (copied unchanged from the top-level `evaluation/`) |
+| `make_manifest.py` | provenance snapshot of what a review was checked against (papers, Planes, collisions, full-text count) |
+| `step6_world.py` | loads what B2 may cite from the research folder (collisions, decon units / exp_ids, Points, Lines, Planes, abstracts, full texts); both checks use it |
+| `check_step6_contract.py` | B2 contract for the fusion block: ids exist, one Theme per Plane, sections / Key results header, Consensus / Debates type fit (J08), coverage, legend + mapping vs `knowledge_cards.json`, abstract-level disclosure; `--harness-gate` also runs the harness's `recon-check --unit B2` |
+| `check_numeric_claims.py` | every cited number must be in the source text (full text, else abstract) of a paper its ids rest on; a number only in the decon extraction is *not* attested; spelled-out counts ("Fourteen") are read |
+| `step6_common.py` | markdown / table helpers; its `(AuthorYear)` citation parsing is only used by the AutoSurvey / MetaSyn scripts (archived-engine format) |
 | `aggregate.py` | batch protocol checks (same config / prompts, auto checkpoints, Step 6 untouched) + deterministic averages → `eval/summary.{json,md}` |
-| **`step07_gaps/`** | |
-| `check_step7_contract.py` | Step 7 contract: raw LLM output vs tool schema (omitted fields), ranking / composite, evidence keys, md ↔ json |
 
 ## History
 

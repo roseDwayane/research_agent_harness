@@ -8,7 +8,7 @@ Per topic, in order:
   3. record the outcome in runs.jsonl, failures included (failed step, error, timing, tokens).
 
 Each step's evaluation runs afterwards from that step's folder, e.g.
-step06_sota/run_checks.py (deterministic) or step05_fulltext/check_step5_contract.py;
+step06_sota/run_checks.py (deterministic);
 LLM-judge scoring stays separate so the judge and the pipeline model never compete for the GPU.
 
     python evaluation/run_batch.py --topics evaluation/topics.toml
