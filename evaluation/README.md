@@ -483,6 +483,7 @@ and for MetaSyn re-check the frozen prompts on the 6 dev reviews and redo `insig
 | `metasyn_prepare.py`, `metasyn.toml` | MetaSyn fixed-input sessions; pipeline settings for them |
 | `metasyn_eval.py`, `metasyn_prompts.py` | MetaSyn scoring (classify / digest / coverage / official) |
 | `metasyn_judge_agreement.py` | agreement between judges + convergent validity of insight coverage (no human labels) |
+| `metasyn_summary.py` | MetaSyn batch summary: each system's mean direction accuracy / `insights_consistency` / `coverage_all` / `coverage_answerable` / words, and `step6` minus every other system (B0 `naive`, B2 `naive_fulltext`, `baseline:*`) paired by review with bootstrap 95% CI and a direction win/loss count → `eval/metasyn_summary_{judge}.{json,md}` |
 | `autosurvey_eval.py`, `autosurvey_prompts.py`, `autosurvey_common.py` | AutoSurvey Structure (whole + per section) / Relevance / Coverage + citation NLI (evidence: abstract only and abstract + 3 full-text windows); also `paper_coverage` (share of the input papers the review cites; deterministic, no judge, every system) |
 | `fulltext_retrieval.py` | full-text evidence windows for the citation NLI (frozen v2) |
 | `autosurvey_controls.py` | AutoSurvey discrimination controls (whole survey; `--level section`) |
