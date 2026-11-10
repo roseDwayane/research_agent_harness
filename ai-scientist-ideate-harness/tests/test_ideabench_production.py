@@ -28,3 +28,14 @@ def test_offline_deconstruction_has_one_abstract_per_batch():
     commands = [s.spec['run'] for s in offline_recipes()['A7.D'].phases['main'] if s.kind == 'run']
     assert all('--abs-size 1' in command for command in commands if 'decon-plan' in command)
     assert ModelConfig('http://localhost:11434', 'qwen3.8').think is False
+
+
+def test_standard_depth_keeps_frozen_references_and_passes_entry(tmp_path):
+    refs = [{'paperId': str(i), 'title': f'Paper {i}', 'abstract': f'Abstract {i}', 'year': 2020}
+            for i in range(1, 6)]
+    prepare(tmp_path, refs, 3, depth='standard')
+    config = json.loads((tmp_path / 'step0_session_config.json').read_text(encoding='utf-8'))
+    frozen = json.loads((tmp_path / '_state' / 'ideabench' / 'references.json').read_text(encoding='utf-8'))
+    assert config['depth'] == frozen['depth'] == 'standard'
+    assert (tmp_path / 'step3_tier1_candidates.json').is_file()
+    assert evaluate_gate(Registry.load(), tmp_path, 'GATE-a4-check')['passed']

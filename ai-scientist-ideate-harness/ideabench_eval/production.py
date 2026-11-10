@@ -25,12 +25,14 @@ def offline_recipes():
     return recipes
 
 
-def prepare(rd: Path, refs: list[dict], max_questions: int) -> None:
+def prepare(rd: Path, refs: list[dict], max_questions: int, depth: str = 'quick') -> None:
+    if depth not in ('quick', 'standard'):
+        raise ValueError('offline depth must be quick or standard')
     if len(refs) != 5 or len({r['paperId'] for r in refs}) != 5:
         raise ValueError('exactly five distinct references required')
     rd.mkdir(parents=True, exist_ok=True)
     frozen = rd / '_state' / 'ideabench' / 'references.json'
-    payload = {'references': refs, 'max_questions': max_questions}
+    payload = {'references': refs, 'max_questions': max_questions, 'depth': depth}
     if frozen.exists():
         if json.loads(frozen.read_text(encoding='utf-8')) != payload:
             raise ValueError('frozen references changed; use a new output directory')
@@ -41,7 +43,7 @@ def prepare(rd: Path, refs: list[dict], max_questions: int) -> None:
     topic.write_text('# Biomedical research ideas from five fixed references\n', encoding='utf-8')
     write_json(rd / 'step0_session_config.json', {
         'topic': 'Biomedical research ideas from five fixed references', 'topic_file': topic.name,
-        'depth': 'quick', 'timestamp': now, 'max_num_generations': max_questions,
+        'depth': depth, 'timestamp': now, 'max_num_generations': max_questions,
         'protocol': {'review_type': 'scoping', 'framework': {'name': 'PCC'},
                      'axes': [{'id': 'C1', 'terms': ['biomedical research']}], 'timeframe': '1900-2026',
                      'languages': ['en']}, 'queries': [], 'anchor_terms': [], 'known_items': [],
@@ -91,14 +93,14 @@ def prepare(rd: Path, refs: list[dict], max_questions: int) -> None:
     ledger.write_text(''.join(json.dumps(e) + '\n' for e in events), encoding='utf-8')
 
 
-def run_p2(task_dir: Path, refs: list[dict], model, *, max_questions: int, say=print) -> list[dict]:
+def run_p2(task_dir: Path, refs: list[dict], model, *, max_questions: int, depth: str = 'quick', say=print) -> list[dict]:
     rd = task_dir / 'P2' / 'research'
-    prepare(rd, refs, max_questions)
+    prepare(rd, refs, max_questions, depth)
     cfg = HarnessConfig(worker='ollama', model=model.model, ollama_url=model.url,
                         num_ctx=model.num_ctx, num_predict=model.num_predict,
                         think=model.think,
                         temperature=model.temperature, worker_timeout_s=model.timeout_s,
-                        depth='quick', max_num_generations=max_questions)
+                        depth=depth, max_num_generations=max_questions)
     reg = Registry.load()
     ctx = RunContext(reg, cfg, Skill(cfg), rd, rd / 'topic.md', say=say)
     executor = RecipeExecutor()

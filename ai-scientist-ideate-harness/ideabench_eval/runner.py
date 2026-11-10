@@ -39,9 +39,11 @@ def _usage_by_target(path: Path, task_ids: list[str]) -> dict:
 
 def run(dataset: Path, out: Path, generator, judge, *, generator_config: ModelConfig,
         judge_config: ModelConfig, limit: int | None = None, max_questions: int = 3,
-        phase: str = "all", seed: int = 0, say=print) -> dict:
+        phase: str = "all", seed: int = 0, depth: str = "quick", say=print) -> dict:
     if phase not in ("all", "generate", "rank"):
         raise ValueError("phase must be all, generate, or rank")
+    if depth not in ("quick", "standard"):
+        raise ValueError("offline depth must be quick or standard")
     if (generator_config.url.rstrip("/"), generator_config.model.casefold()) == \
             (judge_config.url.rstrip("/"), judge_config.model.casefold()):
         raise ValueError("generator and independent judge must not be the same endpoint/model pair")
@@ -56,6 +58,7 @@ def run(dataset: Path, out: Path, generator, judge, *, generator_config: ModelCo
         "gold_source": "target_papers.csv abstract_summary",
         "generation_blinding": "target paper and abstract_summary are not loaded until ranking",
         "generator": generator_config.__dict__, "judge": judge_config.__dict__, "max_questions": max_questions,
+        "depth": depth,
         "seed": seed,
     }
     manifest_path = out / "experiment_manifest.json"
@@ -76,7 +79,7 @@ def run(dataset: Path, out: Path, generator, judge, *, generator_config: ModelCo
                     p2 = read_json(folder / "P2_ideas.json")["ideas"]
                     say(f"    P2 resumed: {len(p2)} valid idea.json files")
                 else:
-                    p2 = run_p2(folder, refs, generator_config, max_questions=max_questions, say=say)
+                    p2 = run_p2(folder, refs, generator_config, max_questions=max_questions, depth=depth, say=say)
                 n = len(p2)
                 if n < 1:
                     raise ValueError("P2 produced no P5-valid idea.json; n_i is zero")
@@ -158,6 +161,7 @@ def main(argv: list[str] | None = None) -> int:
     go.add_argument("--out", type=Path, required=True)
     go.add_argument("--limit", type=int)
     go.add_argument("--max-questions", type=int, default=3)
+    go.add_argument("--depth", choices=("quick", "standard"), default="quick")
     go.add_argument("--phase", choices=("all", "generate", "rank"), default="all")
     go.add_argument("--seed", type=int, default=0)
     for prefix in ("generator", "judge"):
@@ -176,7 +180,7 @@ def main(argv: list[str] | None = None) -> int:
         judge = OllamaJSONClient(judge_cfg, args.out / "judge_ledger.jsonl")
         result = run(args.dataset, args.out, generator, judge, generator_config=generator_cfg,
                      judge_config=judge_cfg, limit=args.limit, max_questions=args.max_questions,
-                     phase=args.phase, seed=args.seed)
+                     phase=args.phase, seed=args.seed, depth=args.depth)
     print(json.dumps(result, indent=2, ensure_ascii=False))
     return 0 if result.get("status") == "complete" else 1
 

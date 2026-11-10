@@ -17,3 +17,9 @@ The downloader resolves `kdm-daiict/Ideabench` to an immutable Hugging Face comm
 `target_papers.csv`, `filtered_references.csv`, and `ideabench_clustering.json`, and records each file's SHA-256 in
 `download_manifest.json`. A repeated command verifies and reuses the files. To reproduce an exact release explicitly,
 pass `--revision <commit-sha>`.
+
+For an offline Stage A comparison at production `standard` depth, pass `--depth standard` to `eval-step08 run`
+and use a new output directory. The five IdeaBench references remain frozen and abstract-only: the adapter marks
+search and full-text acquisition complete before Stage A, so this option does not fetch additional literature.
+`standard` raises the paper-collision candidate cap from 0 to 150, but cannot create candidates when the five
+references have no matching constructs, measures, or other qualifying evidence.
