@@ -38,7 +38,7 @@ def prepare(rd: Path, refs: list[dict], max_questions: int) -> None:
                      'languages': ['en']}, 'queries': [], 'anchor_terms': [], 'known_items': [],
         'sources': ['IdeaBench'], 'target_venues': [], 'expert_domain': 'biomedical research',
         'local_environment': {'artefacts': [], 'cached_data': [], 'packages_present': [], 'packages_missing': []}})
-    papers = [{**r, 'id': r['paperId'], 'citation_key': f'ideabench{i:02d}',
+    papers = [{**r, 'id': r['paperId'], 'citation_key': f'anon{r.get("year") or "nd"}{chr(96+i)}',
                'access_level': 'abstract-only', 'source': 'IdeaBench'} for i, r in enumerate(refs, 1)]
     write_json(rd / 'step2_raw_papers.json', {'papers': papers, 'search_summary': {'offline': True}})
     write_json(rd / 'step3_shortlist.json', {'papers': papers, 'summary': {'included': 5}})
@@ -47,7 +47,6 @@ def prepare(rd: Path, refs: list[dict], max_questions: int) -> None:
     write_json(rd / 'screening_scores.json', {'scores': {p['id']: {'relevance': 5, 'quality': 3, 'recency_impact': 3} for p in papers}})
     write_json(rd / 'step2b_snowball_papers.json', {'rounds': [], 'caveats': [], 'offline': True})
     write_json(rd / 'step3_tier1_candidates.json', {'candidates': [], 'top_ups': 0})
-    write_json(rd / 'step4_bib_metadata.json', {'count': 5, 'source': 'IdeaBench'})
     write_json(rd / 'step5_fetch_log.json', {'attempts': [], 'offline': True})
     (rd / 'step5_full_text').mkdir(exist_ok=True)
     (rd / 'step5_full_text' / '_access_log.md').write_text('Abstract-only offline inputs.\n', encoding='utf-8')
@@ -55,6 +54,16 @@ def prepare(rd: Path, refs: list[dict], max_questions: int) -> None:
     (rd / 'step4_citation_keys.jsonl').write_text(''.join(json.dumps({'id': p['id'], 'key': p['citation_key']}) + '\n' for p in papers), encoding='utf-8')
     (rd / 'step4_citation_keys.md').write_text('\n'.join(p['citation_key'] for p in papers) + '\n', encoding='utf-8')
     (rd / 'step4_references.bib').write_text(''.join(f"@article{{{p['citation_key']}, title={{{p['title']}}}}}\n" for p in papers), encoding='utf-8')
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+    from it_export import log_path, shortlist_basis
+    log = log_path(rd)
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text(''.join(json.dumps({'id': p['id'], 'key': p['citation_key']}) + '\n' for p in papers), encoding='utf-8')
+    from ideate_v2.jsonio import sha256_file
+    write_json(rd / 'step4_bib_metadata.json', {'schema': 'ideate-bib/1', 'offline': True,
+        'entries': {p['citation_key']: {'id': p['id'], 'source': 'IdeaBench'} for p in papers},
+        'basis': {'log': sha256_file(log), 'shortlist': shortlist_basis(rd)}})
     write_json(rd / 'search_caveats.json', {'schema': 'ideate-search-caveats/1', 'at': now, 'caveats': [], 'must_disclose': []})
     write_json(rd / 'fulltext_caveats.json', {'schema': 'ideate-fulltext-caveats/1', 'at': now, 'caveats': [], 'must_disclose': []})
     reg = Registry.load()
