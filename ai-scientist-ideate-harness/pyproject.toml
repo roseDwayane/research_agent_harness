@@ -23,9 +23,10 @@ yaml = ["pyyaml"]                      # front matter of older topic files
 
 [project.scripts]
 ideate-harness = "harness.cli:main"
+ideabench-offline = "ideabench_eval.runner:main"
 
 [tool.setuptools.packages.find]
-include = ["ideate_v2*", "harness*"]
+include = ["ideate_v2*", "harness*", "ideabench_eval*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
