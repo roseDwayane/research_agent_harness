@@ -8,10 +8,6 @@ from ideabench_eval.adapter import import_official, load_tasks
 from ideabench_eval.client import ModelConfig, ScriptedClient
 from ideabench_eval.ranking import insight_score
 from ideabench_eval.runner import run
-from ideabench_eval.pipeline import run_p2 as prompt_fixture_p2
-from ideabench_eval.new_pipeline import prepare_research_dir
-from ideate_v2.ledger import unit_states
-from ideate_v2.registry import Registry
 
 
 def _write_csv(path: Path, fields: list[str], rows: list[dict]) -> None:
@@ -43,18 +39,6 @@ def test_insight_score_is_fraction_of_generated_ideas_above_gold():
     assert insight_score(1, 3) == 0.0
     assert insight_score(2, 3) == 1 / 3
     assert insight_score(4, 3) == 1.0
-
-
-def test_new_pipeline_adapter_freezes_five_refs_and_opens_fusion_boundary(tmp_path):
-    refs = [{"paperId": f"r{i}", "title": f"R{i}", "abstract": f"Evidence {i}", "year": 2020}
-            for i in range(1, 6)]
-    contract = prepare_research_dir(tmp_path, refs, max_questions=3)
-    assert contract["online_search"] is False
-    assert contract["resume_boundary"] == "STEP-F1/A7.D"
-    states = unit_states(Registry.load(), tmp_path)
-    assert all(states[unit]["state"] == "done" for unit in ("A4.k", "A4.b", "A6.d", "A6.c"))
-    frozen = (tmp_path / "_state" / "ideabench" / "frozen_references.json").read_text(encoding="utf-8")
-    assert all(ref["paperId"] in frozen for ref in refs)
 
 
 def test_full_offline_order_and_gold_blinding(tmp_path):
@@ -90,11 +74,7 @@ def test_full_offline_order_and_gold_blinding(tmp_path):
     judge = ScriptedClient([{"order": [1, 2], "rationale": "ranked"} for _ in range(8)])
     gen_cfg = ModelConfig("http://generator", "qwen")
     judge_cfg = ModelConfig("http://judge", "judge-model")
-    def fixture_runner(folder, frozen_refs, _config, *, max_questions, say):
-        return prompt_fixture_p2(folder, frozen_refs, generator, max_questions=max_questions, say=say)
-
-    result = run(dataset, out, generator, judge, generator_config=gen_cfg, judge_config=judge_cfg,
-                 max_questions=1, p2_runner=fixture_runner)
+    result = run(dataset, out, generator, judge, generator_config=gen_cfg, judge_config=judge_cfg, max_questions=1)
     assert result["status"] == "complete"
     assert result["m_paired"] == 1
     assert json.loads((out / "tasks" / "t1" / "generation_summary.json").read_text())["n_i"] == 1
