@@ -474,11 +474,20 @@ def run_worker(cfg: HarnessConfig, *, task: str, system: str, cwd: Path, scope: 
         total.duration_ms += res.duration_ms
         total.turns += 1
         if log_dir is not None:
-            log_dir.mkdir(parents=True, exist_ok=True)
-            (log_dir / f"{label}.ollama.{turn}.json").write_text(json.dumps(
-                {"model": cfg.model, "request_head": history[-1]["content"][:6000],
-                 "request_tail": history[-1]["content"][-4000:], "answer": content, "error": res.error},
-                ensure_ascii=False, indent=1), encoding="utf-8")
+            try:
+                # Keep the descriptive label in the record; Windows may reject it in a deep filename.
+                short_label = hashlib.sha256(label.encode("utf-8")).hexdigest()[:16]
+                record_path = log_dir / f"ollama.{short_label}.{turn}.json"
+                if os.name == "nt":
+                    record_path = Path("\\\\?\\" + str(record_path.resolve()))
+                record_path.parent.mkdir(parents=True, exist_ok=True)
+                record_path.write_text(json.dumps(
+                    {"label": label, "model": cfg.model, "request_head": history[-1]["content"][:6000],
+                     "request_tail": history[-1]["content"][-4000:], "answer": content, "error": res.error},
+                    ensure_ascii=False, indent=1), encoding="utf-8")
+            except OSError:
+                # A diagnostic log must never turn a successful model response into a failed Unit.
+                pass
         if not res.ok:
             total.ok, total.error, total.error_category = False, res.error, res.error_category
             break
