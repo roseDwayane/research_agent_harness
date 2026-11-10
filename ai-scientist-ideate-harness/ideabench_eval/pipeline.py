@@ -59,14 +59,18 @@ def validate_questions(value: dict, max_questions: int) -> list[dict]:
 def validate_idea(value: dict) -> dict:
     require_fields(value, list(IDEA_KEYS), "P5 idea")
     short = value["Short Hypothesis"].strip()
+    if not short:
+        raise ValueError("Short Hypothesis must not be empty")
     if not (short.startswith("Hypothesis:") or short.startswith("Given that")):
-        raise ValueError('Short Hypothesis must begin with "Hypothesis:" or "Given that"')
+        short = "Hypothesis: " + short
     abstract = value["Abstract"].strip()
     if len(abstract.split()) > 250:
         raise ValueError("Abstract exceeds the P5 250-word limit")
     if re.search(r"\b(we found|our results show|we demonstrate that)\b", abstract, re.I):
         raise ValueError("Abstract presents proposed work as completed results")
-    return {key: value[key].strip() for key in IDEA_KEYS}
+    cleaned = {key: value[key].strip() for key in IDEA_KEYS}
+    cleaned["Short Hypothesis"] = short
+    return cleaned
 
 
 def run_p2(task_dir: Path, refs: list[dict], client, *, max_questions: int = 3, say=print) -> list[dict]:

@@ -8,6 +8,7 @@ from ideabench_eval.adapter import import_official, load_tasks
 from ideabench_eval.client import ModelConfig, ScriptedClient
 from ideabench_eval.ranking import insight_score
 from ideabench_eval.runner import run
+from ideabench_eval.pipeline import validate_idea
 
 
 def _write_csv(path: Path, fields: list[str], rows: list[dict]) -> None:
@@ -39,6 +40,29 @@ def test_insight_score_is_fraction_of_generated_ideas_above_gold():
     assert insight_score(1, 3) == 0.0
     assert insight_score(2, 3) == 1 / 3
     assert insight_score(4, 3) == 1.0
+
+
+def test_p5_short_hypothesis_prefix_is_preserved_or_normalized():
+    base = {
+        "Name": "test", "Title": "Test", "Related Work": "Prior work", "Abstract": "We propose a study.",
+        "Experiments": "Run the study.", "Risk Factors and Limitations": "Limited sample size.",
+    }
+    for original in ("Hypothesis: X changes Y.", "Given that X changes, Y will respond."):
+        assert validate_idea({**base, "Short Hypothesis": original})["Short Hypothesis"] == original
+    assert validate_idea({**base, "Short Hypothesis": "X changes Y."})["Short Hypothesis"] == \
+        "Hypothesis: X changes Y."
+
+
+def test_p5_short_hypothesis_empty_still_fails():
+    idea = {"Name": "test", "Title": "Test", "Short Hypothesis": "   ", "Related Work": "Prior work",
+            "Abstract": "We propose a study.", "Experiments": "Run it.",
+            "Risk Factors and Limitations": "Limited sample size."}
+    try:
+        validate_idea(idea)
+    except ValueError as exc:
+        assert "Short Hypothesis" in str(exc)
+    else:
+        raise AssertionError("empty Short Hypothesis was accepted")
 
 
 def test_full_offline_order_and_gold_blinding(tmp_path):
