@@ -182,7 +182,7 @@ def extract_claims(survey: str, finder: CiteFinder) -> list[dict[str, Any]]:
             if i + 1 < len(lines) and is_table_separator(lines[i + 1]):
                 continue  # header row
             cells = [c.strip() for c in text.strip("|").split("|")]
-            units = ["; ".join(c for c in cells if c and not (finder.ids(c) and not finder.strip(c)))]
+            units = ["; ".join(c for c in cells if c and not (finder.ids(c) and not finder.strip(c, keep_subjects=False)))]
             raw_units, kind = [text], "table_row"
         else:
             text = re.sub(r"^(?:[-*+]|\d+[.)])\s+", "", text)
@@ -234,6 +234,20 @@ def paper_coverage(survey: str, finder: CiteFinder, papers: dict[str, dict]) -> 
         "named_fulltext_subset": rate(named, fulltext),
         "not_cited": sorted(everything - reached),
     }
+
+
+def expand_claims(claims: list[dict], finder: CiteFinder) -> list[dict]:
+    """The same claims with every cited id replaced by the papers it rests on, so that each paper is one citation, as in a
+    baseline that cites papers. A claim's evidence is unchanged (the same papers); what changes is the unit precision counts
+    (a collision of three papers is three citations, each judged alone) and the citation-count strata."""
+    out = []
+    for c in claims:
+        keys = []
+        for ident in c["keys"]:
+            papers = finder.papers_of(ident) if finder.is_valid(ident) else [ident]
+            keys += [k for k in (papers or [ident]) if k not in keys]
+        out.append({**c, "keys": keys, "invalid_keys": [k for k in keys if not finder.is_valid(k)]})
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -420,11 +434,20 @@ def evaluate_topic(record: dict, batch_dir: Path, args: argparse.Namespace, chat
                     quality["controls"] = citation_controls(calls, args.nli_model, judged, papers, source, finder)
                 result["citations"][kind] = {"source": kind, **({"retrieval": fulltext_retrieval.VERSION} if kind == "fulltext" else {}),
                                              **quality}
+            expanded = expand_claims(claims, finder)
+            if args.expand_ids and any(e["keys"] != c["keys"] for e, c in zip(expanded, claims)):
+                result["citations_expanded"] = {}      # sensitivity analysis: one citation per paper behind an id
+                for kind in args.citation_sources:
+                    source = citation_source(kind, session, papers, finder)
+                    quality = citation_quality(calls, args.nli_model, [dict(c) for c in expanded], finder, source, args.max_claims)
+                    result["citations_expanded"][kind] = {"source": kind, "expanded_ids": True, **quality}
         write_json(out_dir / f"{system}.json", result)
         summary[system] = {"mixture": result["mixture"], "words": result["survey_words"],
                            "paper_coverage": {k: v for k, v in result["paper_coverage"].items() if k != "not_cited"},
                            "citations": {kind: {k: v for k, v in q.items() if k != "claims"}
-                                         for kind, q in result.get("citations", {}).items()}}
+                                         for kind, q in result.get("citations", {}).items()},
+                           "citations_expanded": {kind: {k: v for k, v in q.items() if k != "claims"}
+                                                  for kind, q in result.get("citations_expanded", {}).items()}}
     return {"status": "ok", "systems": summary}
 
 
@@ -457,6 +480,8 @@ def write_summary(batch_dir: Path, topics: dict[str, dict], meta: dict) -> None:
             for kind in sources:
                 q = s["citations"].get(kind, {})
                 row.update({f"{kind}/{m}": q.get(m) for m in CITATION_METRICS})
+                qe = (s.get("citations_expanded") or {}).get(kind) or q       # a system that cites papers is already expanded
+                row.update({f"{kind}/{m}_paper": qe.get(m) for m in ("recall", "precision")})
                 for stratum in N_CITATION_STRATA:
                     cell = q.get("by_n_citations", {}).get(stratum, {})
                     row.update({f"{kind}/recall@{stratum}": cell.get("recall"), f"{kind}/precision@{stratum}": cell.get("precision"),
@@ -467,6 +492,7 @@ def write_summary(batch_dir: Path, topics: dict[str, dict], meta: dict) -> None:
             rows.append(row)
     content = [*meta["criteria"], *(["Structure_section"] if meta.get("sections") else [])]
     citation = [f"{kind}/{m}" for kind in sources for m in CITATION_METRICS]
+    citation += [f"{kind}/{m}_paper" for kind in sources for m in ("recall", "precision")]   # one citation per paper (sensitivity)
     metrics = ["words", *content, "paper_coverage", "paper_coverage_named", "paper_coverage_fulltext", *citation]
     has_dev = any(is_dev(t) for t in topics)
     scopes = [("all", lambda t: True)] + ([("held-out", lambda t: not is_dev(t))] if has_dev else [])
@@ -560,6 +586,9 @@ def main() -> int:
                              "(comparable with the paper, and the fair one for a system that read only abstracts); "
                              "fulltext = abstract + 3 retrieved full-text windows (fair to systems that read full texts)")
     parser.add_argument("--citation-controls", action="store_true", help="also run the swap / perturb validity controls")
+    parser.add_argument("--expand-ids", action="store_true",
+                        help="also score the citations with every id replaced by the papers behind it (one citation per paper): "
+                             "a sensitivity analysis for the unit precision counts; extra NLI calls, cached")
     parser.add_argument("--cite-render", choices=["keys", "ids"], default="keys",
                         help="fusion-block reviews cite ids (X0019, galt2019#E1): 'keys' shows the content judges those ids "
                              "as the paper keys they rest on (default; the judge prompts are unchanged), 'ids' shows them raw")
@@ -583,7 +612,7 @@ def main() -> int:
             "temperature": 0.0, "max_claims": args.max_claims,
             "citation_sources": [] if args.skip_citations else args.citation_sources,
             "fulltext_retrieval": fulltext_retrieval.VERSION, "citation_controls": args.citation_controls,
-            "cite_render": args.cite_render}
+            "expand_ids": args.expand_ids, "cite_render": args.cite_render}
     summary_path = batch_paths(batch_dir)["eval"] / "autosurvey_summary.json"
     topics = read_json(summary_path)["topics"] if summary_path.exists() else {}
     runs = [r for r in read_runs(batch_dir) if not args.only or r["id"] in args.only]

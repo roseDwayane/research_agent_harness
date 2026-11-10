@@ -108,7 +108,10 @@ class CiteFinder:
         return list(dict.fromkeys(c.id for c in self.find(text)))
 
     # ---- text without citations / with ids as paper keys -----------------------------------------------------
-    def strip(self, text: str) -> str:
+    def strip(self, text: str, keep_subjects: bool = True) -> str:
+        """The text without its citations. A citation inside a parenthesis or bracket is removed with the group; a paper
+        cited in the running text ("greeneetal2023 reports ...") is the sentence's subject, so with `keep_subjects` it
+        stays as the paper's key - removing it leaves "reports ..." and a judge cannot tell what the claim is about."""
         if self.world is None:  # archived format: parenthetical groups that cite, and narrative keys
             text = LEGACY_PAREN_RE.sub(lambda m: "" if extract_citations(m.group(0)) else m.group(0), text)
             for c in extract_citations(text):
@@ -128,10 +131,29 @@ class CiteFinder:
             if len(words) <= GROUP_LEFTOVER_WORDS:
                 for i in range(g.start(), g.end()):
                     drop[i] = True
+        groups = [(g.start(1), g.end(1)) for g in GROUP_RE.finditer(text)]
+        subject: dict[int, tuple[int, str]] = {}
         for c in cites:
+            in_group = any(a <= c.start and c.end <= b for a, b in groups)
+            papers = self.papers_of(c.id)
+            if (keep_subjects and not in_group and not drop[c.start] and self.world.kind(c.id) in ("paper", "exp", "unit")
+                    and papers):
+                subject[c.start] = (c.end, papers[0])
+                continue
             for i in range(c.start, c.end):
                 drop[i] = True
-        kept = "".join(ch for ch, d in zip(text, drop) if not d)
+        pieces, i = [], 0
+        while i < len(text):
+            if i in subject:
+                end, key = subject[i]
+                pieces.append(key)
+                i = end
+            elif drop[i]:
+                i += 1
+            else:
+                pieces.append(text[i])
+                i += 1
+        kept = "".join(pieces)
         kept = re.sub(r"[ \t]{2,}", " ", kept)
         return re.sub(r"\s+([.,;:!?])", r"\1", kept).strip()
 

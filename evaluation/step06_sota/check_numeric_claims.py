@@ -38,6 +38,7 @@ from step6_common import (
     split_frontmatter,
     table_cells,
 )
+from step6_cites import CiteFinder
 from step6_world import TBD, World, ids_in, load_world, strip_ids
 
 THRESHOLD = 0.9
@@ -140,7 +141,8 @@ def make_claim(text: str, line: int, ids: list[str], kind: str, w: World) -> dic
     return {"line": line, "kind": kind, "ids": ids, "papers": papers, "text": text.strip()[:400], "numbers": numbers}
 
 
-def review_claims(body: list[str], offset: int, w: World, skip_computed: bool = False) -> tuple[list[dict], list[dict]]:
+def review_claims(body: list[str], offset: int, w: World, skip_computed: bool = False,
+                  finder: CiteFinder | None = None) -> tuple[list[dict], list[dict]]:
     """Cited numeric claims (sentences in prose, rows in tables) and numeric sentences that cite nothing."""
     excluded: set[int] = set()
     for section in sections(body, 2):
@@ -161,7 +163,7 @@ def review_claims(body: list[str], offset: int, w: World, skip_computed: bool = 
         else:
             units = [(s, "sentence") for s in split_sentences(stripped)]
         for text, kind in units:
-            ids = sorted({i for i, _ in ids_in(text, w) if w.kind(i)})
+            ids = sorted({i for i in finder.ids(text) if w.kind(i)} if finder else {i for i, _ in ids_in(text, w) if w.kind(i)})
             claim = make_claim(text, number, ids, kind, w)
             if claim is None:
                 continue
@@ -238,15 +240,18 @@ def attest_claims(claims: list[dict], uncited: list[dict], w: World) -> dict:
     }
 
 
-def run_checks(rd: Path) -> dict:
+def run_checks(rd: Path, review_file: Path | None = None) -> dict:
+    """`review_file`: attest another text against the same papers (a baseline's review) instead of step6_sota_review.md;
+    its keys are read in any case (a baseline may write DuffyEtAl2022 for duffyetal2022). Step 7 is skipped then."""
     rd = Path(rd).resolve()
     w = load_world(rd)
-    _, body, offset = split_frontmatter((rd / "step6_sota_review.md").read_text(encoding="utf-8"))
-    claims6, uncited6 = review_claims(body, offset, w)
-    step6 = {"path": str(rd / "step6_sota_review.md"), **attest_claims(claims6, uncited6, w)}
+    review = Path(review_file) if review_file else rd / "step6_sota_review.md"
+    _, body, offset = split_frontmatter(review.read_text(encoding="utf-8"))
+    claims6, uncited6 = review_claims(body, offset, w, finder=CiteFinder(rd, w.bib_keys))
+    step6 = {"path": str(review), **attest_claims(claims6, uncited6, w)}
 
     step7_path = rd / "step7_gap_analysis.md"
-    if step7_path.exists():
+    if step7_path.exists() and review_file is None:
         _, body7, offset7 = split_frontmatter(step7_path.read_text(encoding="utf-8"))
         claims7, uncited7 = review_claims(body7, offset7, w, skip_computed=True)
         step7 = {"path": str(step7_path), **attest_claims(claims7, uncited7, w)}
@@ -280,10 +285,11 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--session", type=Path, required=True, help="research folder")
     ap.add_argument("--output", type=Path)
+    ap.add_argument("--review-file", type=Path, help="attest this text (e.g. a baseline's review.md) instead of step6_sota_review.md")
     args = ap.parse_args()
     for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(encoding="utf-8", errors="replace")
-    result = run_checks(args.session)
+    result = run_checks(args.session, args.review_file)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

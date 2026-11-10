@@ -173,3 +173,14 @@ def test_keys_are_matched_without_regard_to_case(tmp_path: Path):
     assert finder.ids("Gains (Alpha2020; BETA2021) and (SmithEtAl2024).") == ["alpha2020", "beta2021", "SmithEtAl2024"]
     assert finder.is_valid("alpha2020") and not finder.is_valid("SmithEtAl2024")
     assert finder.strip("Gains were reported (Alpha2020).") == "Gains were reported."
+
+
+def test_a_paper_cited_as_the_subject_keeps_its_key(tmp_path: Path):
+    """A fusion-block review writes "greeneetal2023 reports ..."; removing the id leaves "reports ..." and the judge cannot
+    tell what the claim is about. Citations in parentheses are still removed."""
+    rd = fusion_session(tmp_path)
+    finder = CiteFinder(rd, {"alpha2020", "beta2021", "gamma2022"})
+    text = "Both alpha2020 and beta2021 report gains in recall (X0001, abstract level)."
+    assert finder.strip(text) == "Both alpha2020 and beta2021 report gains in recall."
+    assert finder.strip(text, keep_subjects=False) == "Both and report gains in recall."
+    assert finder.strip("gamma2022#E1 reports a drop in recall (X0001).") == "gamma2022 reports a drop in recall."
