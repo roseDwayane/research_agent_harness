@@ -10,6 +10,10 @@ from evaluation.litsearch.cli import evaluate, read_jsonl, run_pipeline
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     sub = ap.add_subparsers(dest="command", required=True)
+    fetch = sub.add_parser("download", help="download official LitSearch corpus and build BM25 top-100")
+    fetch.add_argument("--out", type=Path, required=True)
+    fetch.add_argument("--revision", default=None)
+    fetch.add_argument("--limit", type=int)
     prep = sub.add_parser("prepare")
     prep.add_argument("--tasks", type=Path, required=True); prep.add_argument("--corpus", type=Path, required=True)
     prep.add_argument("--sessions", type=Path, required=True); prep.add_argument("--top-k", type=int, default=100)
@@ -21,7 +25,10 @@ def main(argv=None):
     score.add_argument("--tasks", type=Path, required=True); score.add_argument("--sessions", type=Path, required=True)
     score.add_argument("--out", type=Path, required=True); score.add_argument("--mapping", type=Path)
     a = ap.parse_args(argv)
-    if a.command == "prepare":
+    if a.command == "download":
+        from evaluation.litsearch.download import DEFAULT_REVISION, download
+        result = download(a.out, kind="step03", revision=a.revision or DEFAULT_REVISION, limit=a.limit)
+    elif a.command == "prepare":
         corpus = {str(p["corpusid"]): p for p in read_jsonl(a.corpus)}
         tasks = read_jsonl(a.tasks)
         for task in tasks:

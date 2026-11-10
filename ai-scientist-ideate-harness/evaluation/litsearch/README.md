@@ -11,6 +11,27 @@ This ports the old `evaluation/step02` and `evaluation/step03` experiment bounda
 `tasks.jsonl` uses one object per question. Step 2 requires `qid`, `query`, and `corpusids`. Step 3 preparation
 also requires `bm25_top100` and the official corpus file uses `corpusid`, `title`, and `abstract`.
 
+Download and prepare these inputs from the official `princeton-nlp/LitSearch` dataset:
+
+```powershell
+python -m pip install -e ".[litsearch]"
+
+# Step 2 + Step 3: official queries and gold IDs (no corpus download)
+python -m evaluation.step0203.cli download --out eval_runs/litsearch/step0203_data
+
+# Step 3 frozen BM25 pool: also downloads corpus_clean and computes top 100
+python -m evaluation.step03.cli download --out eval_runs/litsearch/step03_data
+```
+
+Both commands pin the project's previously used official revision by default. `--revision <sha>` selects another
+revision and `--limit N` limits the number of query tasks (Step 3 still indexes the complete corpus). Each output has
+`tasks.jsonl`, `queries.jsonl`, and `data_manifest.json`; Step 3 also has `corpus_title_abstract.jsonl`.
+The Step 3 BM25 computation follows the official title/abstract format, NLTK tokenization, English stopword removal,
+Porter stemming, BM25Okapi parameters, and NumPy ranking. Hugging Face may transfer the full-text Parquet corpus
+before the script extracts just title and abstract. A repeat download verifies the saved files against SHA-256 hashes.
+For live Step 2 provider results, an external-ID-to-corpus-ID `--mapping` is still needed for reliable gold matching;
+the official query/corpus download cannot infer that mapping.
+
 ```powershell
 # Run current Step 2 (S1 is run first to establish its required protocol)
 python -m evaluation.litsearch.cli run-step2 `

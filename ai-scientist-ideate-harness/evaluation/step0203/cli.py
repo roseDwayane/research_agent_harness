@@ -70,6 +70,10 @@ def evaluate(tasks_path: Path, sessions: Path, out: Path, mapping_path: Path | N
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     sub = ap.add_subparsers(dest="command", required=True)
+    fetch = sub.add_parser("download", help="download official LitSearch queries and gold IDs")
+    fetch.add_argument("--out", type=Path, required=True)
+    fetch.add_argument("--revision", default=None)
+    fetch.add_argument("--limit", type=int)
     for name in ("run", "evaluate"):
         p = sub.add_parser(name)
         p.add_argument("--tasks", type=Path, required=True)
@@ -82,6 +86,11 @@ def main(argv=None):
             p.add_argument("--num-ctx", type=int, default=32768)
             p.add_argument("--max-tokens", type=int, default=8192)
     a = ap.parse_args(argv)
+    if a.command == "download":
+        from evaluation.litsearch.download import DEFAULT_REVISION, download
+        result = download(a.out, kind="step0203", revision=a.revision or DEFAULT_REVISION, limit=a.limit)
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
     if a.command == "run":
         run_pipeline(a.tasks, a.sessions, step=2, model=a.model, url=a.url,
                      num_ctx=a.num_ctx, max_tokens=a.max_tokens)
