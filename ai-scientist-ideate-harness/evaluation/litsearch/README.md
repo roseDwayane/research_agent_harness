@@ -29,8 +29,16 @@ revision and `--limit N` limits the number of query tasks (Step 3 still indexes 
 The Step 3 BM25 computation follows the official title/abstract format, NLTK tokenization, English stopword removal,
 Porter stemming, BM25Okapi parameters, and NumPy ranking. Hugging Face may transfer the full-text Parquet corpus
 before the script extracts just title and abstract. A repeat download verifies the saved files against SHA-256 hashes.
+To create a reproducible sample shaped like the paper's Table 7, add `--sample table7-80 --seed 20261110` to either
+download command. This selects 40 specific inline-citation and 40 specific author-written questions, alternating the
+two groups in `tasks.jsonl` so an even `--limit N` remains balanced. It is a **new random sample**, not the paper's
+unpublished exact 80 questions; the manifest records its seed, split counts, and actual number of gold papers.
+Add `--limit N` to `step02 run`, `step03 prepare/run/evaluate`, or `step0203 run/evaluate` to execute and score only
+the first N tasks of a frozen task file. Use the same limit for separate prepare/run/evaluate commands.
+
 For live Step 2 provider results, an external-ID-to-corpus-ID `--mapping` is still needed for reliable gold matching;
-the official query/corpus download cannot infer that mapping. Build it before the combined run:
+the official query/corpus download cannot infer that mapping. Build it before the combined run. `map-ids --limit N`
+can resolve just the first N tasks for a smoke run, and later runs extend the same mapping file.
 
 ```powershell
 python -m evaluation.step0203.cli map-ids `

@@ -53,10 +53,14 @@ def make_entry(cid: str, paper: dict) -> dict:
 
 def build_mapping(tasks_path: Path, out: Path, *, delay: float | None = None,
                   api_key_env: str = "SEMANTIC_SCHOLAR_API_KEY", lookup=lookup_corpus_id,
-                  say=print) -> dict:
+                  limit: int | None = None, say=print) -> dict:
     if delay is not None and delay < 0:
         raise ValueError("delay must be nonnegative")
+    if limit is not None and limit < 1:
+        raise ValueError("limit must be positive")
     tasks = [json.loads(line) for line in Path(tasks_path).read_text(encoding="utf-8").splitlines() if line.strip()]
+    if limit is not None:
+        tasks = tasks[:limit]
     ids = gold_ids(tasks)
     if not ids:
         raise ValueError("tasks contain no gold corpusids")
@@ -77,5 +81,5 @@ def build_mapping(tasks_path: Path, out: Path, *, delay: float | None = None,
         if number < len(pending):
             time.sleep(pause)
     matched = sum(bool((data.get(cid) or {}).get("ok")) for cid in ids)
-    return {"status": "complete" if matched == len(ids) else "incomplete", "gold_ids": len(ids),
+    return {"status": "complete" if matched == len(ids) else "incomplete", "questions": len(tasks), "gold_ids": len(ids),
             "mapped": matched, "unmapped": len(ids) - matched, "path": str(out)}

@@ -13,13 +13,15 @@ def main(argv=None):
     run.add_argument("--tasks", type=Path, required=True); run.add_argument("--sessions", type=Path, required=True)
     run.add_argument("--model", required=True); run.add_argument("--url", default="http://127.0.0.1:11434")
     run.add_argument("--num-ctx", type=int, default=32768); run.add_argument("--max-tokens", type=int, default=8192)
+    run.add_argument("--limit", type=int)
     score = sub.add_parser("evaluate")
     score.add_argument("--tasks", type=Path, required=True); score.add_argument("--sessions", type=Path, required=True)
     score.add_argument("--out", type=Path, required=True); score.add_argument("--mapping", type=Path)
+    score.add_argument("--limit", type=int)
     a = ap.parse_args(argv)
     result = run_pipeline(a.tasks, a.sessions, step=2, model=a.model, url=a.url, num_ctx=a.num_ctx,
-                          max_tokens=a.max_tokens) if a.command == "run" else \
-        evaluate(a.tasks, a.sessions, a.out, 2, a.mapping)
+                          max_tokens=a.max_tokens, limit=a.limit) if a.command == "run" else \
+        evaluate(a.tasks, a.sessions, a.out, 2, a.mapping, limit=a.limit)
     print(json.dumps(result, indent=2, ensure_ascii=False))
     return 0
 

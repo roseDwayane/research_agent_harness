@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from evaluation.litsearch.adapter import prepare_step3, scored_papers, verify_frozen, write_json
+from evaluation.litsearch.cli import selected_tasks
 from evaluation.litsearch.metrics import ranking_metrics
 from evaluation.litsearch.cli import _canonical_ids
 from evaluation.step03.scoring import composite_score, rank_papers
@@ -17,6 +18,15 @@ def test_prepare_step3_opens_current_s3_boundary_without_gold(tmp_path):
     states = unit_states(Registry.load(), tmp_path)
     assert all(states[u]["state"] == "done" for u in ("A2.s", "A2.m", "A2.c"))
     verify_frozen(tmp_path)
+
+
+def test_limit_selects_first_n_frozen_tasks(tmp_path):
+    tasks = tmp_path / 'tasks.jsonl'
+    tasks.write_text(''.join(f'{{"qid":"q{i}"}}\n' for i in range(5)), encoding='utf-8')
+    assert [task['qid'] for task in selected_tasks(tasks, 2)] == ['q0', 'q1']
+    import pytest
+    with pytest.raises(ValueError, match='positive'):
+        selected_tasks(tasks, 0)
 
 
 def test_current_step3_artifacts_are_normalized_and_ranked(tmp_path):

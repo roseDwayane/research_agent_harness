@@ -18,13 +18,20 @@ def write_jsonl(path, rows):
     Path(path).write_text("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in rows), encoding="utf-8")
 
 
+def selected_tasks(path: Path, limit: int | None = None) -> list[dict]:
+    if limit is not None and limit < 1:
+        raise ValueError("--limit must be a positive integer")
+    tasks = read_jsonl(path)
+    return tasks[:limit] if limit is not None else tasks
+
+
 def _pack(rows, key):
     names = ("R@5", "R@20", "R@100", "MRR", "nDCG@10")
     return {name: sum(r[key][name] for r in rows) / len(rows) if rows else None for name in names}
 
 
 def run_pipeline(tasks_path: Path, sessions: Path, *, step: int, model: str, url: str,
-                 num_ctx: int, max_tokens: int) -> dict:
+                 num_ctx: int, max_tokens: int, limit: int | None = None) -> dict:
     """Run the production conductor; benchmark gold is never written into its research directory."""
     from harness.config import HarnessConfig
     from harness.context import RunContext
@@ -34,7 +41,7 @@ def run_pipeline(tasks_path: Path, sessions: Path, *, step: int, model: str, url
     from harness.skill import Skill
     from ideate_v2.registry import Registry
 
-    tasks, completed, failures = read_jsonl(tasks_path), [], []
+    tasks, completed, failures = selected_tasks(tasks_path, limit), [], []
     for task in tasks:
         rd = sessions / task.get("session", task["qid"])
         try:
@@ -83,10 +90,11 @@ def _canonical_ids(papers: list[dict], mapping: dict) -> list[str]:
     return result
 
 
-def evaluate(tasks_path: Path, sessions: Path, out: Path, step: int, mapping_path: Path | None = None) -> dict:
+def evaluate(tasks_path: Path, sessions: Path, out: Path, step: int, mapping_path: Path | None = None,
+             limit: int | None = None) -> dict:
     mapping = read_json(mapping_path) if mapping_path else {}
     rows = []
-    for task in read_jsonl(tasks_path):
+    for task in selected_tasks(tasks_path, limit):
         rd = sessions / task.get("session", task["qid"])
         raw = read_json(rd / "step2_raw_papers.json").get("papers") or []
         ids = _canonical_ids(raw, mapping)

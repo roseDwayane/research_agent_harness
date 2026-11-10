@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import random
 from pathlib import Path
 
 from .adapter import read_json, write_json
@@ -13,6 +14,7 @@ from .adapter import read_json, write_json
 DATASET = "princeton-nlp/LitSearch"
 # The revision already used by the project's earlier official-corpus evaluation.
 DEFAULT_REVISION = "9573fb284a1026c998df47024b888a163f0f0e25"
+DEFAULT_SAMPLE_SEED = 20261110
 
 
 def _sha(path: Path) -> str:
@@ -42,13 +44,27 @@ def normalize_queries(rows, limit: int | None = None) -> list[dict]:
         gold = [str(value) for value in row.get("corpusids") or []]
         if not query or not gold:
             raise ValueError(f"official query {index} lacks query or corpusids")
+        source = str(row.get("query_set") or "").lower()
+        mode = "inline" if source.startswith("inline") else "author" if source.startswith(("manual", "author")) else "other"
         tasks.append({"qid": f"ls_{index:03d}", "session": f"ls_{index:03d}",
                       "query": query, "corpusids": gold,
                       "query_set": row.get("query_set"), "specificity": row.get("specificity"),
-                      "quality": row.get("quality")})
+                      "quality": row.get("quality"), "mode": mode})
     if not tasks:
         raise ValueError("official query dataset is empty")
     return tasks
+
+
+def sample_table7(rows, seed: int = DEFAULT_SAMPLE_SEED) -> list[dict]:
+    """A reproducible Table-7-shaped sample, not the paper's unreleased exact 80 queries."""
+    specific = [dict(row) for row in rows if int(row.get("specificity") or 0) == 1]
+    inline = [row for row in specific if str(row.get("query_set") or "").lower().startswith("inline")]
+    author = [row for row in specific if str(row.get("query_set") or "").lower().startswith(("manual", "author"))]
+    if len(inline) < 40 or len(author) < 40:
+        raise ValueError(f"need 40 specific inline and 40 specific author questions; got {len(inline)} and {len(author)}")
+    rng = random.Random(seed)
+    chosen_inline, chosen_author = rng.sample(inline, 40), rng.sample(author, 40)
+    return [row for pair in zip(chosen_inline, chosen_author) for row in pair]
 
 
 def _revision(revision: str) -> str:
@@ -61,12 +77,14 @@ def _load(config: str, revision: str, cache: Path):
     return load_dataset(DATASET, config, split="full", revision=revision, cache_dir=str(cache))
 
 
-def _verify_existing(out: Path, kind: str, revision: str, limit: int | None, top_k: int) -> dict | None:
+def _verify_existing(out: Path, kind: str, revision: str, limit: int | None, top_k: int,
+                     sample: str, seed: int) -> dict | None:
     manifest = out / "data_manifest.json"
     if not manifest.is_file():
         return None
     doc = read_json(manifest)
-    expected = {"kind": kind, "dataset": DATASET, "revision": revision, "limit": limit, "top_k": top_k}
+    expected = {"kind": kind, "dataset": DATASET, "revision": revision, "limit": limit, "top_k": top_k,
+                "sample": sample, "seed": seed}
     if any(doc.get(key) != value for key, value in expected.items()):
         raise ValueError("existing LitSearch download has different settings; use a new --out directory")
     for name, digest in doc["sha256"].items():
@@ -118,21 +136,25 @@ def bm25_top_k(tasks: list[dict], corpus: list[dict], out: Path, top_k: int = 10
 
 
 def download(out: Path, *, kind: str, revision: str = DEFAULT_REVISION,
-             limit: int | None = None, top_k: int = 100) -> dict:
+             limit: int | None = None, top_k: int = 100, sample: str = "all",
+             seed: int = DEFAULT_SAMPLE_SEED) -> dict:
     """kind=step0203 downloads queries; kind=step03 also downloads corpus and builds BM25."""
     if kind not in ("step0203", "step03"):
         raise ValueError("kind must be step0203 or step03")
     if top_k != 100:
         raise ValueError("current Step 3 contract requires exactly 100 BM25 candidates")
+    if sample not in ("all", "table7-80"):
+        raise ValueError("sample must be all or table7-80")
     out = Path(out)
-    existing = _verify_existing(out, kind, revision, limit, top_k)
+    existing = _verify_existing(out, kind, revision, limit, top_k, sample, seed)
     if existing:
         return existing
     out.mkdir(parents=True, exist_ok=True)
     pinned = _revision(revision)
     print(f"Downloading {DATASET} query at {pinned}...", flush=True)
     queries = [dict(row) for row in _load("query", pinned, out / ".cache" / "hf")]
-    tasks = normalize_queries(queries, limit)
+    selected = sample_table7(queries, seed) if sample == "table7-80" else queries
+    tasks = normalize_queries(selected, limit)
     _write_jsonl(out / "queries.jsonl", queries)
     files = ["queries.jsonl"]
     corpus_count = None
@@ -150,7 +172,11 @@ def download(out: Path, *, kind: str, revision: str = DEFAULT_REVISION,
     files.append("tasks.jsonl")
     manifest = {"schema": "litsearch-download/1", "kind": kind, "dataset": DATASET,
                 "revision": revision, "resolved_revision": pinned, "limit": limit, "top_k": top_k,
+                "sample": sample, "seed": seed,
                 "query_count": len(queries), "task_count": len(tasks), "corpus_count": corpus_count,
+                "inline_count": sum(str(t.get("query_set") or "").lower().startswith("inline") for t in tasks),
+                "author_count": sum(str(t.get("query_set") or "").lower().startswith(("manual", "author")) for t in tasks),
+                "gold_count": sum(len(t["corpusids"]) for t in tasks),
                 "bm25": {"text": "Title: {title}\\nAbstract: {abstract}", "tokenizer": "NLTK word_tokenize, English stopwords, PorterStemmer",
                          "method": "rank_bm25.BM25Okapi", "k1": 1.5, "b": 0.75, "epsilon": 0.25,
                          "sort": "numpy.argsort(scores)[::-1]"} if kind == "step03" else None,

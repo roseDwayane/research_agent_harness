@@ -12,6 +12,7 @@ def test_normalize_official_queries_keeps_gold_only_in_tasks():
     assert tasks[0]['qid'] == 'ls_001'
     assert tasks[0]['corpusids'] == ['17', '23']
     assert tasks[0]['query_set'] == 'inline_acl'
+    assert tasks[0]['mode'] == 'inline'
     with pytest.raises(ValueError):
         dl.normalize_queries([{'query': 'No gold', 'corpusids': []}])
 
@@ -44,3 +45,18 @@ def test_step03_download_outputs_corpus_and_bm25_tasks(tmp_path, monkeypatch):
     assert result['corpus_count'] == 101
     assert len(task['bm25_top100']) == 100
     assert (tmp_path / 'corpus_title_abstract.jsonl').is_file()
+
+
+def test_table7_shaped_sample_is_balanced_specific_and_reproducible():
+    rows = ([{'query': f'Inline {i}', 'corpusids': [i], 'query_set': 'inline_acl',
+              'specificity': 1} for i in range(50)] +
+            [{'query': f'Author {i}', 'corpusids': [i + 100], 'query_set': 'manual_iclr',
+              'specificity': 1} for i in range(50)] +
+            [{'query': 'Broad', 'corpusids': [999], 'query_set': 'inline_acl', 'specificity': 0}])
+    chosen = dl.sample_table7(rows, seed=7)
+    assert chosen == dl.sample_table7(rows, seed=7)
+    assert len(chosen) == 80
+    assert all(row['specificity'] == 1 for row in chosen)
+    assert sum(row['query_set'].startswith('inline') for row in chosen) == 40
+    assert all(chosen[i]['query_set'].startswith('inline') and chosen[i + 1]['query_set'].startswith('manual')
+               for i in range(0, 80, 2))

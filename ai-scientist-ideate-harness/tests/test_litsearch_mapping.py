@@ -25,3 +25,11 @@ def test_mapping_is_built_before_retrieval_and_resumes(tmp_path):
 
 def test_gold_ids_are_unique_and_keep_first_order():
     assert gold_ids([{'corpusids': [1, 2]}, {'corpusids': [2, 3]}]) == ['1', '2', '3']
+
+
+def test_mapping_limit_selects_first_n_questions(tmp_path):
+    tasks = tmp_path / 'tasks.jsonl'
+    tasks.write_text('{"corpusids":[1]}\n{"corpusids":[2]}\n', encoding='utf-8')
+    result = build_mapping(tasks, tmp_path / 'map.json', limit=1, delay=0,
+                           lookup=lambda cid, api_key: {'paperId': f'paper-{cid}'}, say=lambda _: None)
+    assert result['questions'] == result['gold_ids'] == result['mapped'] == 1
