@@ -119,7 +119,8 @@ class Skill:
         """`ideate_tools.py a2-check /rd` -> [python, scripts/ideate_tools.py, a2-check, /rd]."""
         words = []
         for w in shlex.split(cmd):                 # no shell runs the command: expand a file glob here
-            hits = sorted(glob.glob(w)) if any(ch in w for ch in "*?[") and Path(w).is_absolute() else []
+            pattern = Path(w) if Path(w).is_absolute() else self.root / w
+            hits = sorted(glob.glob(str(pattern))) if any(ch in w for ch in "*?[") else []
             words += hits or [w]
         if not words:
             raise ValueError("empty command")

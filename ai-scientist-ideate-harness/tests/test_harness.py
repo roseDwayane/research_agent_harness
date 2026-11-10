@@ -71,6 +71,19 @@ def test_expand_quotes_paths_with_spaces_and_apostrophes(tmp_path):
         skill.argv("rm -rf /")
 
 
+def test_argv_expands_relative_glob_from_skill_root(tmp_path):
+    import os
+    decon = tmp_path / 'knowledge' / 'decon'
+    decon.mkdir(parents=True)
+    for name in ('a.json', 'b.json'):
+        (decon / name).write_text('{}', encoding='utf-8')
+    skill = Skill(HarnessConfig())
+    research = Path(os.path.relpath(tmp_path, skill.root))
+    line = skill.expand('ideate_tools.py build-methods $RD input.json $RD/knowledge/decon/*.json', Subs(research))
+    argv = skill.argv(line)
+    assert argv[-2:] == [str(decon / 'a.json'), str(decon / 'b.json')]
+
+
 def test_failures_are_classified():
     assert classify_failure("HTTP 429 Too Many Requests") == "external_service"
     assert classify_failure("ModuleNotFoundError: No module named 'mcp'") == "environment"
