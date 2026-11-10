@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
+
 from evaluation.litsearch.adapter import prepare_step3, scored_papers, verify_frozen, write_json
-from evaluation.litsearch.cli import selected_tasks
+from evaluation.litsearch.cli import (_completed, _completion_key, _completion_path, selected_tasks)
 from evaluation.litsearch.metrics import ranking_metrics
 from evaluation.litsearch.cli import _canonical_ids
 from evaluation.step03.scoring import composite_score, rank_papers
@@ -27,6 +29,39 @@ def test_limit_selects_first_n_frozen_tasks(tmp_path):
     import pytest
     with pytest.raises(ValueError, match='positive'):
         selected_tasks(tasks, 0)
+
+
+def test_completed_step_is_skipped_only_for_matching_successful_run(tmp_path):
+    task = {"qid": "q1", "query": "biomedical mechanism"}
+    key = _completion_key(task, 2, "qwen3.8", "http://localhost", 32768, 8192, tmp_path)
+    write_json(tmp_path / "step2_raw_papers.json", {"papers": []})
+    summary = tmp_path / "_state" / "harness" / "run1" / "summary.json"
+    write_json(summary, {"failed": False, "steps": [{"step": "STEP-S2", "status": "done"}]})
+    write_json(_completion_path(tmp_path, 2), {"key": key,
+               "summary": str(summary.relative_to(tmp_path)),
+               "outputs": {"step2_raw_papers.json": hashlib.sha256(
+                   (tmp_path / "step2_raw_papers.json").read_bytes()).hexdigest()}})
+    assert _completed(tmp_path, 2, key)
+    assert not _completed(tmp_path, 2, {**key, "query": "changed"})
+    summary.unlink()
+    assert not _completed(tmp_path, 2, key)
+
+
+def test_step3_completion_requires_screening_outputs(tmp_path):
+    task = {"qid": "q1", "query": "biomedical mechanism"}
+    key = _completion_key(task, 3, "qwen3.8", "http://localhost", 32768, 8192, tmp_path)
+    summary = tmp_path / "_state" / "harness" / "run1" / "summary.json"
+    write_json(summary, {"failed": False, "steps": [{"step": "STEP-S3", "status": "degraded"}]})
+    write_json(_completion_path(tmp_path, 3), {"key": key,
+               "summary": str(summary.relative_to(tmp_path))})
+    assert not _completed(tmp_path, 3, key)
+    write_json(tmp_path / "screening_scores.json", {"scores": []})
+    write_json(tmp_path / "step3_shortlist.json", {"papers": []})
+    write_json(_completion_path(tmp_path, 3), {"key": key,
+               "summary": str(summary.relative_to(tmp_path)),
+               "outputs": {name: hashlib.sha256((tmp_path / name).read_bytes()).hexdigest()
+                           for name in ("screening_scores.json", "step3_shortlist.json")}})
+    assert _completed(tmp_path, 3, key)
 
 
 def test_current_step3_artifacts_are_normalized_and_ranked(tmp_path):

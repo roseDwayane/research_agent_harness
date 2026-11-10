@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -30,6 +31,45 @@ def _pack(rows, key):
     return {name: sum(r[key][name] for r in rows) / len(rows) if rows else None for name in names}
 
 
+def _completion_path(rd: Path, step: int) -> Path:
+    return rd / "_state" / "evaluation" / f"step{step}_complete.json"
+
+
+def _completion_key(task: dict, step: int, model: str, url: str, num_ctx: int,
+                    max_tokens: int, rd: Path) -> dict:
+    key = {"qid": task["qid"], "query": task["query"], "step": step,
+           "model": model, "url": url, "num_ctx": num_ctx, "max_tokens": max_tokens}
+    if step == 3:
+        contract = rd / "_state" / "evaluation" / "input_contract.json"
+        if contract.is_file():
+            key["input_sha256"] = hashlib.sha256(contract.read_bytes()).hexdigest()
+    return key
+
+
+def _completed(rd: Path, step: int, key: dict) -> bool:
+    marker = _completion_path(rd, step)
+    if not marker.is_file():
+        return False
+    try:
+        record = read_json(marker)
+        if record.get("key") != key or not record.get("summary"):
+            return False
+        summary = rd / record["summary"]
+        if not summary.is_file():
+            return False
+        report = read_json(summary)
+        if report.get("failed") or not any(s.get("step") == f"STEP-S{step}" and
+                                           s.get("status") in ("done", "degraded") for s in report.get("steps", [])):
+            return False
+        required = ("step2_raw_papers.json",) if step == 2 else \
+                   ("screening_scores.json", "step3_shortlist.json")
+        return all((rd / name).is_file() and
+                   hashlib.sha256((rd / name).read_bytes()).hexdigest() == record.get("outputs", {}).get(name)
+                   for name in required)
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+
 def run_pipeline(tasks_path: Path, sessions: Path, *, step: int, model: str, url: str,
                  num_ctx: int, max_tokens: int, limit: int | None = None) -> dict:
     """Run the production conductor; benchmark gold is never written into its research directory."""
@@ -41,10 +81,21 @@ def run_pipeline(tasks_path: Path, sessions: Path, *, step: int, model: str, url
     from harness.skill import Skill
     from ideate_v2.registry import Registry
 
-    tasks, completed, failures = selected_tasks(tasks_path, limit), [], []
+    tasks, completed, skipped, failures = selected_tasks(tasks_path, limit), [], [], []
     for task in tasks:
         rd = sessions / task.get("session", task["qid"])
         try:
+            key = _completion_key(task, step, model, url, num_ctx, max_tokens, rd)
+            if _completed(rd, step, key):
+                if step == 3 and (rd / "_state" / "evaluation" / "input_hashes.json").is_file():
+                    verify_frozen(rd)
+                print(f"{task['qid']}: STEP-S{step} already complete; skipped", flush=True)
+                completed.append(task["qid"])
+                skipped.append(task["qid"])
+                write_json(sessions / f"step{step}_progress.json", {
+                    "status": "running", "completed": completed, "skipped": skipped,
+                    "failures": failures, "total": len(tasks)})
+                continue
             if step == 2:
                 topic = sessions / "_topics" / f"{task['qid']}.md"
                 topic.parent.mkdir(parents=True, exist_ok=True)
@@ -62,13 +113,25 @@ def run_pipeline(tasks_path: Path, sessions: Path, *, step: int, model: str, url
             summary = PipelineAgent(reg, recipes, lambda _unit: default).run(ctx, frm, to)
             if summary["failed"]:
                 raise RuntimeError(f"pipeline stopped: {summary['status']}")
+            if not any(s.get("step") == f"STEP-S{step}" and s.get("status") in ("done", "degraded")
+                       for s in summary.get("steps", [])):
+                raise RuntimeError(f"STEP-S{step} did not complete")
+            required = ("step2_raw_papers.json",) if step == 2 else \
+                       ("screening_scores.json", "step3_shortlist.json")
+            if not all((rd / name).is_file() for name in required):
+                raise RuntimeError(f"STEP-S{step} missing output artifacts")
+            write_json(_completion_path(rd, step), {"key": key,
+                       "summary": str((ctx.state_dir / "summary.json").relative_to(rd)),
+                       "outputs": {name: hashlib.sha256((rd / name).read_bytes()).hexdigest()
+                                   for name in required}})
             completed.append(task["qid"])
         except Exception as exc:  # one question must not erase the rest of a long benchmark run
             failures.append({"qid": task["qid"], "error": f"{type(exc).__name__}: {exc}"})
         write_json(sessions / f"step{step}_progress.json", {
-            "status": "running", "completed": completed, "failures": failures, "total": len(tasks)})
+            "status": "running", "completed": completed, "skipped": skipped,
+            "failures": failures, "total": len(tasks)})
     result = {"status": "complete" if len(completed) == len(tasks) else "incomplete",
-              "completed": len(completed), "total": len(tasks), "failures": failures}
+              "completed": len(completed), "skipped": len(skipped), "total": len(tasks), "failures": failures}
     write_json(sessions / f"step{step}_progress.json", result)
     return result
 
