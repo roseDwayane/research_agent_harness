@@ -16,6 +16,15 @@ from harness.skill import Skill
 from ideate_v2.registry import Registry
 
 
+def offline_recipes():
+    """Keep production Units and checks, but deconstruct one frozen abstract per call."""
+    recipes = load_recipes()
+    for step in recipes['A7.D'].phases['main']:
+        if step.kind == 'run' and 'decon-plan' in step.spec['run']:
+            step.spec['run'] += ' --abs-size 1'
+    return recipes
+
+
 def prepare(rd: Path, refs: list[dict], max_questions: int) -> None:
     if len(refs) != 5 or len({r['paperId'] for r in refs}) != 5:
         raise ValueError('exactly five distinct references required')
@@ -44,7 +53,9 @@ def prepare(rd: Path, refs: list[dict], max_questions: int) -> None:
     write_json(rd / 'step3_shortlist.json', {'papers': papers, 'summary': {'included': 5}})
     write_json(rd / 'step3_bibliometrics.json', {'papers': {}})
     write_json(rd / 'step3_gate.json', {'excluded': {}})
-    write_json(rd / 'screening_scores.json', {'scores': {p['id']: {'relevance': 5, 'quality': 3, 'recency_impact': 3} for p in papers}})
+    write_json(rd / 'screening_scores.json', {'scores': [
+        {'id': p['id'], 'rel': 5, 'qual': 3, 'rationale': 'Frozen IdeaBench reference; offline screening.'}
+        for p in papers]})
     write_json(rd / 'step2b_snowball_papers.json', {'rounds': [], 'caveats': [], 'offline': True})
     write_json(rd / 'step3_tier1_candidates.json', {'candidates': [], 'top_ups': 0})
     write_json(rd / 'step5_fetch_log.json', {'attempts': [], 'offline': True})
@@ -85,6 +96,7 @@ def run_p2(task_dir: Path, refs: list[dict], model, *, max_questions: int, say=p
     prepare(rd, refs, max_questions)
     cfg = HarnessConfig(worker='ollama', model=model.model, ollama_url=model.url,
                         num_ctx=model.num_ctx, num_predict=model.num_predict,
+                        think=model.think,
                         temperature=model.temperature, worker_timeout_s=model.timeout_s,
                         depth='quick', max_num_generations=max_questions)
     reg = Registry.load()
@@ -100,7 +112,7 @@ def run_p2(task_dir: Path, refs: list[dict], model, *, max_questions: int, say=p
             gd = ctx.rd / f'gen_{gen}'
             (gd / 'step8_journal_recommendations.md').write_text('Offline benchmark: journal lookup omitted.\n', encoding='utf-8')
             return ExecResult(True)
-    pipe = PipelineAgent(reg, load_recipes(), lambda unit: OfflineFinalize() if unit == 'B6' else executor)
+    pipe = PipelineAgent(reg, offline_recipes(), lambda unit: OfflineFinalize() if unit == 'B6' else executor)
     fusion = pipe.run(ctx, 'F1', 'F4')
     if fusion['failed']:
         raise RuntimeError(f"production pipeline failed; inspect {ctx.state_dir / 'summary.json'}")

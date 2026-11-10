@@ -21,6 +21,7 @@ class ModelConfig:
     temperature: float = 0.0
     timeout_s: float = 3600.0
     api_key_env: str = "OLLAMA_API_KEY"
+    think: bool = False
 
 
 class OllamaJSONClient:
@@ -34,6 +35,7 @@ class OllamaJSONClient:
         cfg = self.config
         body = {
             "model": cfg.model,
+            "think": cfg.think,
             "stream": False,
             "format": schema,
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
