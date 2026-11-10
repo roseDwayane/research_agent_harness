@@ -25,6 +25,11 @@ left out. The prompt template (NAIVE_SURVEY_PROMPT) is not changed; only the pap
 share what is left of the context after the abstracts (an equal share per paper with a full text, at most
 --max-fulltext-chars each), so B2's prompt is B0's prompt plus excerpts and nothing else. Papers without a full text are
 as in B0, so a topic with no full text gives B0 exactly (meta.json says so). Writes eval/{topic}/naive_fulltext/.
+
+Variant `compare` (B2c): B2's prompt, papers, excerpts and model, plus one paragraph before the last line of the prompt that
+asks the model to compare the papers: where they agree, where they disagree and what the difference rests on, the conditions a
+finding holds under, and assumptions the papers share but none tests (COMPARE_INSTRUCTION). It is the baseline given the
+same task as the fusion block's collisions. NAIVE_SURVEY_PROMPT is not edited. Writes eval/{topic}/naive_fulltext_compare/.
 """
 from __future__ import annotations
 
@@ -44,6 +49,19 @@ CHARS_PER_TOKEN = 3.5     # conservative for English abstracts; the real count i
 PROMPT_OVERHEAD = 1500    # tokens for the instructions around the paper list
 
 
+# B2c: B2's prompt with one paragraph added before the last line. AutoSurvey's NAIVE_SURVEY_PROMPT itself is not edited.
+COMPARE_INSTRUCTION = '''Before you write, compare the papers with one another. In the survey, say explicitly, and cite the papers involved:
+- where two or more papers agree, and on what;
+- where papers reach different or opposing results on the same question, and what the difference rests on (population, method, dose, data, definition, time);
+- the conditions under which a finding holds or does not hold, as far as the papers show them;
+- assumptions that several papers share but none of them tests.
+State a disagreement only when the papers themselves support it; if the papers cannot be compared, say so.
+
+'''
+LAST_LINE = "Return only the survey."
+VARIANT_DIRS = {"abstract": "naive", "fulltext": "naive_fulltext", "compare": "naive_fulltext_compare"}
+
+
 def paper_block(papers: dict[str, dict], abstract_chars: int) -> str:
     lines = []
     for key, p in papers.items():
@@ -55,8 +73,9 @@ def paper_block(papers: dict[str, dict], abstract_chars: int) -> str:
 
 
 def build_prompt(topic: str, papers: dict[str, dict], words: int, input_tokens: int, max_abstract_chars: int,
-                 excerpts: dict[str, str] | None = None) -> tuple[str, int]:
-    """`excerpts` ({key: text}) are appended after a paper's abstract (variant fulltext); None gives B0 unchanged."""
+                 excerpts: dict[str, str] | None = None, compare: bool = False) -> tuple[str, int]:
+    """`excerpts` ({key: text}) are appended after a paper's abstract (variant fulltext); None gives B0 unchanged.
+    `compare` adds COMPARE_INSTRUCTION before the last line (variant compare = B2c)."""
     budget_chars = int((input_tokens - PROMPT_OVERHEAD) * CHARS_PER_TOKEN)
     header_chars = sum(len(k) + len(p["title"]) + 12 for k, p in papers.items())
     abstract_chars = max(200, min(max_abstract_chars, (budget_chars - header_chars) // max(len(papers), 1)))
@@ -64,6 +83,9 @@ def build_prompt(topic: str, papers: dict[str, dict], words: int, input_tokens: 
     if excerpts:
         block = paper_block_with_excerpts(papers, abstract_chars, excerpts)
     prompt = fill(NAIVE_SURVEY_PROMPT, {"TOPIC": topic, "N": str(len(papers)), "WORDS": str(words), "PAPERS": block})
+    if compare:
+        assert prompt.count(LAST_LINE) == 1
+        prompt = prompt.replace(LAST_LINE, COMPARE_INSTRUCTION + LAST_LINE)
     return prompt, abstract_chars
 
 
@@ -128,7 +150,7 @@ def plan_excerpts(session: Path, topic: str, papers: dict[str, dict], input_toke
 
 
 def run_topic(record: dict, batch_dir: Path, llm: dict, args: argparse.Namespace) -> dict:
-    out_dir = batch_paths(batch_dir)["eval"] / record["id"] / ("naive" if args.variant == "abstract" else "naive_fulltext")
+    out_dir = batch_paths(batch_dir)["eval"] / record["id"] / VARIANT_DIRS[args.variant]
     if "session_dir" not in record:
         return {"status": "no_session"}
     session = batch_dir / record["session_dir"]
@@ -146,8 +168,9 @@ def run_topic(record: dict, batch_dir: Path, llm: dict, args: argparse.Namespace
     max_tokens = int(llm.get("max_tokens", 8192))
     input_tokens = int(llm["num_ctx"]) - max_tokens
     excerpts = (plan_excerpts(session, config["topic"], papers, input_tokens, args.max_abstract_chars, args.max_fulltext_chars)
-                if args.variant == "fulltext" else None)
-    prompt, abstract_chars = build_prompt(config["topic"], papers, words, input_tokens, args.max_abstract_chars, excerpts)
+                if args.variant in ("fulltext", "compare") else None)
+    prompt, abstract_chars = build_prompt(config["topic"], papers, words, input_tokens, args.max_abstract_chars, excerpts,
+                                          compare=args.variant == "compare")
 
     chat = OllamaChat(llm["model"], int(llm["num_ctx"]), think=llm.get("think"), base_url=llm.get("base_url", "http://127.0.0.1:11434"),
                       timeout=float(llm.get("request_timeout", 1800)))
@@ -168,7 +191,7 @@ def run_topic(record: dict, batch_dir: Path, llm: dict, args: argparse.Namespace
         "done_reason": result["done_reason"], "truncated": result["done_reason"] == "length",
         "variant": args.variant,
     }
-    if args.variant == "fulltext":
+    if args.variant in ("fulltext", "compare"):
         meta.update({
             "n_papers_with_fulltext": sum(1 for p in papers.values() if (p.get("access_level") or "") in FULLTEXT_LEVELS),
             "n_papers_with_excerpt": sum(1 for t in (excerpts or {}).values() if t),
@@ -189,8 +212,10 @@ def main() -> int:
     parser.add_argument("--default-words", type=int, default=2500)
     parser.add_argument("--max-abstract-chars", type=int, default=1500)
     parser.add_argument("--force", action="store_true", help="regenerate existing baselines")
-    parser.add_argument("--variant", choices=["abstract", "fulltext"], default="abstract",
-                        help="abstract = B0 (default); fulltext = B2, the same prompt with excerpts of the full texts added")
+    parser.add_argument("--variant", choices=list(VARIANT_DIRS), default="abstract",
+                        help="abstract = B0 (default); fulltext = B2, the same prompt with excerpts of the full texts added; "
+                             "compare = B2c, B2 plus a paragraph asking to compare the papers (agreement, disagreement, conditions, "
+                             "untested shared assumptions)")
     parser.add_argument("--max-fulltext-chars", type=int, default=6000, help="variant fulltext: most excerpt characters per paper")
     args = parser.parse_args()
 
@@ -199,7 +224,7 @@ def main() -> int:
     if llm.get("provider") != "ollama":
         raise SystemExit(f"naive_baseline.py only drives Ollama; batch uses {llm.get('provider')!r}")
     runs = [r for r in read_runs(batch_dir) if not args.only or r["id"] in args.only]
-    status_path = batch_paths(batch_dir)["eval"] / ("naive_status.json" if args.variant == "abstract" else "naive_fulltext_status.json")
+    status_path = batch_paths(batch_dir)["eval"] / f"{VARIANT_DIRS[args.variant]}_status.json"
     status = read_json(status_path) if status_path.exists() else {}
     for i, record in enumerate(runs, 1):
         print(f"[{i}/{len(runs)}] {record['id']} …", flush=True)

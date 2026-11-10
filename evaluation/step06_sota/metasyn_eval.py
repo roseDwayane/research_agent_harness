@@ -34,7 +34,7 @@ import requests
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # evaluation/: eval_common, run_batch
 
-from autosurvey_common import OllamaChat, survey_text  # noqa: E402
+from autosurvey_common import OllamaChat, is_api_model, make_chat, survey_text  # noqa: E402
 from autosurvey_eval import CachedCalls  # noqa: E402
 from eval_common import RUNS_ROOT, ollama_digest, read_json, write_json  # noqa: E402
 from metasyn_prompts import (  # noqa: E402
@@ -271,10 +271,13 @@ def evaluate_review(review_dir: Path, batch_dir: Path, judge: Judge, args: argpa
     naive_ft = review_dir / "naive_fulltext" / "review.md"
     if args.naive_fulltext and naive_ft.exists():
         texts["naive_fulltext"] = naive_ft.read_text(encoding="utf-8")           # B2: B0 + full-text excerpts
+    compare = review_dir / "naive_fulltext_compare" / "review.md"
+    if args.naive_compare and compare.exists():
+        texts["naive_fulltext_compare"] = compare.read_text(encoding="utf-8")    # B2c: B2 + asked to compare the papers
     baselines = {f"baseline:{c}": baseline_report(review_dir, c, gt["review_id"]) for c in args.baselines}
     texts.update(baselines)
     systems = {name: score_text(judge, question, claims, text) for name, text in texts.items()}
-    for name in ["step6", *(n for n in ("naive", "naive_fulltext") if n in texts), *baselines]:
+    for name in ["step6", *(n for n in ("naive", "naive_fulltext", "naive_fulltext_compare") if n in texts), *baselines]:
         systems[name]["official"] = judge.official(texts[name], gt["Key_Insights"], gt["Effect_Direction"])
     for name, text in texts.items():
         systems[name]["words"] = len(text.split())
@@ -312,11 +315,14 @@ def main() -> int:
     ap.add_argument("--reviews", nargs="*", type=int, help="review ids (default: every eval/review_*)")
     ap.add_argument("--judge", default="gemma4:31b")
     ap.add_argument("--num-ctx", type=int, default=32768)
+    ap.add_argument("--max-api-calls", type=int, default=600, help="budget when the judge is an API model (gemini-*)")
     ap.add_argument("--controls", action="store_true", help="also score damaged forms of each review")
     ap.add_argument("--offtopic", type=Path, default=None, help="step6_sota_review.md used as the off-topic control")
     ap.add_argument("--naive", action="store_true", help="also score eval/review_*/naive/review.md (B0, naive_baseline.py)")
     ap.add_argument("--naive-fulltext", action="store_true",
                     help="also score eval/review_*/naive_fulltext/review.md (B2, naive_baseline.py --variant fulltext)")
+    ap.add_argument("--naive-compare", action="store_true",
+                    help="also score eval/review_*/naive_fulltext_compare/review.md (B2c, naive_baseline.py --variant compare)")
     ap.add_argument("--cite-render", choices=["keys", "ids"], default="keys",
                     help="fusion-block reviews cite ids: 'keys' shows the judge the paper keys they rest on (default), "
                          "'ids' shows them raw; MetaSyn's judge prompts are unchanged either way")
@@ -331,9 +337,10 @@ def main() -> int:
     results = {}
     for review_dir in review_dirs:
         out_dir = review_dir / "metasyn"
-        judge = Judge(CachedCalls(out_dir / "calls.jsonl", {args.judge: OllamaChat(args.judge, num_ctx=args.num_ctx, think=False)}), args.judge)
+        judge = Judge(CachedCalls(out_dir / "calls.jsonl", {args.judge: make_chat(args.judge, args.num_ctx, think=False, max_calls=args.max_api_calls)}), args.judge)
         r = evaluate_review(review_dir, batch_dir, judge, args)
-        r["judge"] = {"model": args.judge, "ollama_digest": ollama_digest(args.judge), "num_ctx": args.num_ctx, "think": False}
+        r["judge"] = {"model": args.judge, "ollama_digest": None if is_api_model(args.judge) else ollama_digest(args.judge),
+                      "num_ctx": args.num_ctx, "think": False}
         write_json(out_dir / f"{args.judge.replace(':', '_')}.json", r)
         results[r["review_id"]] = r
         print_review(r)

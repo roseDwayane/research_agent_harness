@@ -153,3 +153,82 @@ class OllamaChat:
             raise RuntimeError(f"{prompt_tokens} prompt tokens + {num_predict} new tokens exceed num_ctx={self.num_ctx}")
         return {"text": payload["message"]["content"], "prompt_tokens": prompt_tokens,
                 "output_tokens": payload.get("eval_count"), "done_reason": payload.get("done_reason")}
+
+
+# --------------------------------------------------------------------------- #
+# Gemini (API judge)
+# --------------------------------------------------------------------------- #
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+
+
+def load_api_key(name: str) -> str | None:
+    """`name` from the environment, else from the nearest `.env` above this file. The value is never printed."""
+    import os
+    if os.environ.get(name):
+        return os.environ[name]
+    for folder in Path(__file__).resolve().parents:
+        env = folder / ".env"
+        if env.is_file():
+            for line in env.read_text(encoding="utf-8").splitlines():
+                m = re.match(rf"\s*(?:export\s+)?{re.escape(name)}\s*=\s*(.*)", line)
+                if m and m.group(1).strip().strip("\"'"):
+                    return m.group(1).strip().strip("\"'")
+    return None
+
+
+class GeminiChat:
+    """Same call shape as OllamaChat, for a Gemini model. Thinking is `low` (see __call__); the local judges run with think=False.
+    `max_calls` bounds the spend of one process: the call that would exceed it raises instead of being sent."""
+
+    THINK_ROOM = 1024
+
+    def __init__(self, model: str, max_calls: int = 600, timeout: float = 300.0):
+        self.model, self.max_calls, self.timeout = model, max_calls, timeout
+        self.calls = self.prompt_tokens = self.output_tokens = 0
+        self.key = load_api_key("GEMINI_API_KEY")
+        if not self.key:
+            raise SystemExit("GEMINI_API_KEY is not set (environment or a .env above evaluation/)")
+
+    def __call__(self, prompt: str, *, num_predict: int, temperature: float = 0.0) -> dict[str, Any]:
+        import time
+        if self.calls >= self.max_calls:
+            raise RuntimeError(f"{self.model}: call budget of {self.max_calls} reached")
+        # Gemini 3.x cannot switch thinking off (thinkingBudget 0 is ignored) and counts the thinking tokens against
+        # maxOutputTokens, so a short answer budget alone returns an empty reply. Thinking is set to `low` and the limit
+        # leaves room for it; the answer itself is still cut at what the prompt asks for.
+        body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                "generationConfig": {"temperature": temperature, "maxOutputTokens": num_predict + self.THINK_ROOM, "seed": 0,
+                                     "thinkingConfig": {"thinkingLevel": "low"}}}
+        for attempt in range(6):
+            response = requests.post(f"{GEMINI_URL}/{self.model}:generateContent", json=body, timeout=self.timeout,
+                                     headers={"x-goog-api-key": self.key})
+            if response.status_code in (429, 500, 502, 503, 504):
+                time.sleep(min(60, 2 ** attempt * 3))
+                continue
+            break
+        if response.status_code != 200:   # the body can echo the request; report the status and the API's message only
+            try:
+                message = response.json().get("error", {}).get("message", "")[:200]
+            except ValueError:
+                message = ""
+            raise RuntimeError(f"{self.model}: HTTP {response.status_code} {message}")
+        payload = response.json()
+        self.calls += 1
+        usage = payload.get("usageMetadata", {})
+        self.prompt_tokens += usage.get("promptTokenCount", 0)
+        self.output_tokens += usage.get("candidatesTokenCount", 0)
+        cand = (payload.get("candidates") or [{}])[0]
+        text = "".join(p.get("text", "") for p in (cand.get("content") or {}).get("parts", []))
+        if not text.strip():   # never cache an empty judgement as if it were an answer
+            raise RuntimeError(f"{self.model}: empty reply (finishReason {cand.get('finishReason')})")
+        return {"text": text, "thought_tokens": usage.get("thoughtsTokenCount"), "prompt_tokens": usage.get("promptTokenCount"),
+                "output_tokens": usage.get("candidatesTokenCount"), "done_reason": cand.get("finishReason")}
+
+
+def is_api_model(model: str) -> bool:
+    return model.startswith("gemini")
+
+
+def make_chat(model: str, num_ctx: int = 32768, think: bool | None = False, max_calls: int = 600):
+    """The client for a judge name: `gemini-*` goes to the Gemini API, anything else to the local Ollama server."""
+    return GeminiChat(model, max_calls=max_calls) if is_api_model(model) else OllamaChat(model, num_ctx, think=think)

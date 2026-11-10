@@ -60,14 +60,15 @@ from typing import Any, Callable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # evaluation/: eval_common, run_batch
 
 import fulltext_retrieval
-from autosurvey_common import OllamaChat, load_papers, step6_sections, step6_survey
+from autosurvey_common import OllamaChat, is_api_model, load_papers, make_chat, step6_sections, step6_survey
 from autosurvey_prompts import CRITERIA, CRITERIA_BASED_JUDGING_PROMPT, NLI_PROMPT, fill
 from eval_common import METASYN_DEV, batch_paths, ollama_digest, read_json, read_runs, write_json
 from step6_cites import CiteFinder
 from step6_common import is_table_row, is_table_separator
 
-SYSTEMS = ("step6", "naive", "naive_fulltext")   # the harness arm, B0 (one prompt over abstracts), B2 (the same + full-text excerpts)
-BASELINES = ("naive", "naive_fulltext")
+# the harness arm, B0 (one prompt over abstracts), B2 (the same + full-text excerpts), B2c (B2 + asked to compare the papers)
+SYSTEMS = ("step6", "naive", "naive_fulltext", "naive_fulltext_compare")
+BASELINES = ("naive", "naive_fulltext", "naive_fulltext_compare")
 CITATION_SOURCES = ("fulltext", "abstract")
 N_CITATION_STRATA = ("1", "2", "3+")
 SCORE_RE = re.compile(r"^\W*(?:score\W*)?([1-5])(?:\s*/\s*5)?\W*$", re.IGNORECASE)
@@ -379,12 +380,10 @@ def system_texts(record: dict, batch_dir: Path, systems: list[str]) -> dict[str,
     out = {}
     if "step6" in systems and (session / "step6_sota_review.md").exists():
         out["step6"] = step6_survey((session / "step6_sota_review.md").read_text(encoding="utf-8"))
-    naive = batch_paths(batch_dir)["eval"] / record["id"] / "naive" / "review.md"
-    if "naive" in systems and naive.exists():
-        out["naive"] = naive.read_text(encoding="utf-8")
-    naive_ft = batch_paths(batch_dir)["eval"] / record["id"] / "naive_fulltext" / "review.md"
-    if "naive_fulltext" in systems and naive_ft.exists():
-        out["naive_fulltext"] = naive_ft.read_text(encoding="utf-8")
+    for name in BASELINES:       # eval/<id>/<name>/review.md, written by naive_baseline.py
+        path = batch_paths(batch_dir)["eval"] / record["id"] / name / "review.md"
+        if name in systems and path.exists():
+            out[name] = path.read_text(encoding="utf-8")
     return out
 
 
@@ -392,7 +391,7 @@ def evaluate_topic(record: dict, batch_dir: Path, args: argparse.Namespace, chat
     if "session_dir" not in record:
         return {"status": "no_session"}
     session = batch_dir / record["session_dir"]
-    out_dir = batch_paths(batch_dir)["eval"] / record["id"] / "autosurvey"
+    out_dir = batch_paths(batch_dir)["eval"] / record["id"] / (f"autosurvey_{args.tag}" if args.tag else "autosurvey")
     texts = system_texts(record, batch_dir, args.systems)
     if not texts:
         return {"status": "no_survey"}
@@ -486,6 +485,8 @@ def write_summary(batch_dir: Path, topics: dict[str, dict], meta: dict) -> None:
                     cell = q.get("by_n_citations", {}).get(stratum, {})
                     row.update({f"{kind}/recall@{stratum}": cell.get("recall"), f"{kind}/precision@{stratum}": cell.get("precision"),
                                 f"{kind}/n@{stratum}": cell.get("n_claims")})
+                single = q.get("by_n_citations", {}).get("1", {})   # claims that cite exactly one paper: the like-for-like set
+                row.update({f"{kind}/recall_single": single.get("recall"), f"{kind}/precision_single": single.get("precision")})
                 for ctrl in ("swap", "perturb"):
                     row[f"{kind}/{ctrl}_recall"] = q.get("controls", {}).get(ctrl, {}).get("recall")
                 row[f"{kind}/perturb_original"] = q.get("controls", {}).get("perturb", {}).get("recall_original_same_claims")
@@ -493,6 +494,10 @@ def write_summary(batch_dir: Path, topics: dict[str, dict], meta: dict) -> None:
     content = [*meta["criteria"], *(["Structure_section"] if meta.get("sections") else [])]
     citation = [f"{kind}/{m}" for kind in sources for m in CITATION_METRICS]
     citation += [f"{kind}/{m}_paper" for kind in sources for m in ("recall", "precision")]   # one citation per paper (sensitivity)
+    # single-citation claims only: a baseline mostly writes "one claim, one paper" sentences and a synthesis also writes claims that
+    # rest on several papers (a relation between them, which one paper's text cannot entail), so the full-set numbers compare
+    # different kinds of sentences; this pair compares the sentences both systems write
+    citation += [f"{kind}/{m}_single" for kind in sources for m in ("recall", "precision")]
     metrics = ["words", *content, "paper_coverage", "paper_coverage_named", "paper_coverage_fulltext", *citation]
     has_dev = any(is_dev(t) for t in topics)
     scopes = [("all", lambda t: True)] + ([("held-out", lambda t: not is_dev(t))] if has_dev else [])
@@ -518,7 +523,8 @@ def write_summary(batch_dir: Path, topics: dict[str, dict], meta: dict) -> None:
                     lo, hi = boot_ci(d)
                     diffs_out[f"{scope}/{base}/{m}"] = {"diff": round(mean(d), 4), "ci95": [round(lo, 4), round(hi, 4)],
                                                         "n": len(d)}
-    write_json(batch_paths(batch_dir)["eval"] / "autosurvey_summary.json",
+    suffix = f"_{meta['tag']}" if meta.get("tag") else ""
+    write_json(batch_paths(batch_dir)["eval"] / f"autosurvey_summary{suffix}.json",
                {"meta": meta, "topics": topics, "rows": rows, "means": means, "paired_step6_minus_baseline": diffs_out})
 
     def fmt(v):
@@ -530,12 +536,15 @@ def write_summary(batch_dir: Path, topics: dict[str, dict], meta: dict) -> None:
              + (" (fulltext = abstract + 3 retrieved windows, `fulltext_retrieval.py`)" if "fulltext" in sources else ""),
              "- Coverage is AutoSurvey's LLM coverage, for comparability only — see README; use contract `coverage_rate`.",
              "- Structure_section: Step 6 only, mean Structure over its sections.",
+             "- `*_single`: citation recall / precision over the claims that cite exactly one paper (the claims every system writes); "
+             "the plain numbers also include claims resting on several papers, which a synthesis writes and one-prompt baselines mostly do not. "
+             "Read `*_single` for the like-for-like comparison and the by-number-of-citations tables below for the rest.",
              "- paper_coverage: share of the input papers the review cites (deterministic, every system); `_named` counts only "
              "a paper's own key / exp_id, `_fulltext` only the papers read from a full text.", ""]
     present = [b for b in BASELINES if any(r["system"] == b for r in rows)]
     for scope, keep in scopes:
         lines += [f"## Means and paired step6 − baseline, {scope} (bootstrap 95% CI over topics)", "",
-                  "step6 = the system under test; naive = B0 (one prompt, abstracts); naive_fulltext = B2 (B0 + full-text excerpts).", "",
+                  "step6 = the system under test; naive = B0 (one prompt, abstracts); naive_fulltext = B2 (B0 + full-text excerpts); naive_fulltext_compare = B2c (B2 + asked to compare the papers).", "",
                   "| metric | step6 | " + " | ".join(present) + " | " + " | ".join(f"step6 − {b} [95% CI] (n)" for b in present) + " |",
                   "|---|---|" + "---|" * (2 * len(present))]
         for m in metrics:
@@ -566,7 +575,7 @@ def write_summary(batch_dir: Path, topics: dict[str, dict], meta: dict) -> None:
     failed = {t: s["status"] for t, s in topics.items() if s.get("status") != "ok"}
     if failed:
         lines += ["", "## Not evaluated", "", *[f"- {t}: {s}" for t, s in failed.items()]]
-    (batch_paths(batch_dir)["eval"] / "autosurvey_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (batch_paths(batch_dir)["eval"] / f"autosurvey_summary{suffix}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def main() -> int:
@@ -595,16 +604,19 @@ def main() -> int:
     parser.add_argument("--max-claims", type=int, default=0, help="judge only the first N cited claims (0 = all; smoke runs)")
     parser.add_argument("--num_ctx", type=int, default=32768)
     parser.add_argument("--think", choices=["on", "off", "default"], default="off")
+    parser.add_argument("--tag", default="", help="write to eval/<id>/autosurvey_<tag>/ and autosurvey_summary_<tag>.* instead, "
+                                                  "so a run with another judge does not overwrite or merge into the default one")
+    parser.add_argument("--max-api-calls", type=int, default=600, help="budget per API judge (gemini-*) in this process")
     args = parser.parse_args()
     args.nli_model = args.nli_model or args.judges[0]
 
     think = {"on": True, "off": False}.get(args.think)
     models = list(dict.fromkeys([*args.judges, args.nli_model]))
-    digests = {m: ollama_digest(m) for m in models}
-    missing = [m for m, d in digests.items() if d is None]
+    digests = {m: (None if is_api_model(m) else ollama_digest(m)) for m in models}
+    missing = [m for m, d in digests.items() if d is None and not is_api_model(m)]
     if missing:
         raise SystemExit(f"not on the Ollama server: {', '.join(missing)} (is `ollama serve` running?)")
-    chats = {m: OllamaChat(m, args.num_ctx, think=think) for m in models}
+    chats = {m: make_chat(m, args.num_ctx, think=think, max_calls=args.max_api_calls) for m in models}
 
     batch_dir = Path(args.batch).resolve()
     meta = {"judges": args.judges, "nli_model": args.nli_model, "ollama_digests": digests, "criteria": args.criteria,
@@ -613,7 +625,8 @@ def main() -> int:
             "citation_sources": [] if args.skip_citations else args.citation_sources,
             "fulltext_retrieval": fulltext_retrieval.VERSION, "citation_controls": args.citation_controls,
             "expand_ids": args.expand_ids, "cite_render": args.cite_render}
-    summary_path = batch_paths(batch_dir)["eval"] / "autosurvey_summary.json"
+    meta["tag"] = args.tag
+    summary_path = batch_paths(batch_dir)["eval"] / (f"autosurvey_summary_{args.tag}.json" if args.tag else "autosurvey_summary.json")
     topics = read_json(summary_path)["topics"] if summary_path.exists() else {}
     runs = [r for r in read_runs(batch_dir) if not args.only or r["id"] in args.only]
     for i, record in enumerate(runs, 1):

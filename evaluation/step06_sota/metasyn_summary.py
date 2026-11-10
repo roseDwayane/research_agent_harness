@@ -34,7 +34,7 @@ from eval_common import read_json, write_json  # noqa: E402
 CONTROL_FORMS = {"half_themes_removed", "summary_only", "offtopic"}
 TEST_SYSTEM = "step6"
 METRICS = ("direction_accuracy", "insights_consistency", "coverage_all", "coverage_answerable", "words")
-ORDER = ("naive", "naive_fulltext")
+ORDER = ("naive", "naive_fulltext", "naive_fulltext_compare")
 
 
 def scores_of(system: dict) -> dict[str, float | None]:
