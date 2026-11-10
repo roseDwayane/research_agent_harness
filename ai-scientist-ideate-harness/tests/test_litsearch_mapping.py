@@ -1,0 +1,27 @@
+import json
+
+from evaluation.litsearch.mapping import build_mapping, gold_ids
+
+
+def test_mapping_is_built_before_retrieval_and_resumes(tmp_path):
+    tasks = tmp_path / 'tasks.jsonl'
+    tasks.write_text(json.dumps({'qid': 'q1', 'query': 'Find X', 'corpusids': ['7', '8']}) + '\n', encoding='utf-8')
+    out = tmp_path / 'gold_id_map.json'
+    calls = []
+    def lookup(cid, *, api_key):
+        calls.append(cid)
+        if cid == '8' and calls.count('8') == 1:
+            raise TimeoutError('try again')
+        return {'paperId': f'paper-{cid}', 'title': f'Title {cid}',
+                'externalIds': {'DOI': f'10.123/{cid}'}}
+    first = build_mapping(tasks, out, delay=0, lookup=lookup, say=lambda _: None)
+    assert first['status'] == 'incomplete' and first['mapped'] == 1
+    second = build_mapping(tasks, out, delay=0, lookup=lookup, say=lambda _: None)
+    assert second['status'] == 'complete' and calls == ['7', '8', '8']
+    records = json.loads(out.read_text(encoding='utf-8'))
+    assert records['7']['paperId'] == 'paper-7'
+    assert records['8']['doi'] == '10.123/8'
+
+
+def test_gold_ids_are_unique_and_keep_first_order():
+    assert gold_ids([{'corpusids': [1, 2]}, {'corpusids': [2, 3]}]) == ['1', '2', '3']

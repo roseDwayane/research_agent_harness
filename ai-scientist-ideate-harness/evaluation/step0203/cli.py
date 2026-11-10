@@ -74,6 +74,10 @@ def main(argv=None):
     fetch.add_argument("--out", type=Path, required=True)
     fetch.add_argument("--revision", default=None)
     fetch.add_argument("--limit", type=int)
+    mapping = sub.add_parser("map-ids", help="resolve gold CorpusIds before a live Step 2 run")
+    mapping.add_argument("--tasks", type=Path, required=True)
+    mapping.add_argument("--out", type=Path, required=True)
+    mapping.add_argument("--delay", type=float)
     for name in ("run", "evaluate"):
         p = sub.add_parser(name)
         p.add_argument("--tasks", type=Path, required=True)
@@ -91,6 +95,11 @@ def main(argv=None):
         result = download(a.out, kind="step0203", revision=a.revision or DEFAULT_REVISION, limit=a.limit)
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
+    if a.command == "map-ids":
+        from evaluation.litsearch.mapping import build_mapping
+        result = build_mapping(a.tasks, a.out, delay=a.delay)
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0 if result["status"] == "complete" else 1
     if a.command == "run":
         run_pipeline(a.tasks, a.sessions, step=2, model=a.model, url=a.url,
                      num_ctx=a.num_ctx, max_tokens=a.max_tokens)

@@ -30,7 +30,18 @@ The Step 3 BM25 computation follows the official title/abstract format, NLTK tok
 Porter stemming, BM25Okapi parameters, and NumPy ranking. Hugging Face may transfer the full-text Parquet corpus
 before the script extracts just title and abstract. A repeat download verifies the saved files against SHA-256 hashes.
 For live Step 2 provider results, an external-ID-to-corpus-ID `--mapping` is still needed for reliable gold matching;
-the official query/corpus download cannot infer that mapping.
+the official query/corpus download cannot infer that mapping. Build it before the combined run:
+
+```powershell
+python -m evaluation.step0203.cli map-ids `
+  --tasks eval_runs/litsearch/step0203_data/tasks.jsonl `
+  --out eval_runs/litsearch/step0203_data/gold_id_map.json
+```
+
+This looks up each gold `CorpusId` through the Semantic Scholar Graph API, saves successes after every ID, and
+retries unresolved IDs on a later invocation. It uses `SEMANTIC_SCHOLAR_API_KEY` when present. Without a key, it
+spaces requests by four seconds by default. The output reports mapping coverage; do not treat unmapped gold as a
+confirmed miss. The mapping is evaluation-side data and is never put into a production research directory.
 
 ```powershell
 # Run current Step 2 (S1 is run first to establish its required protocol)
