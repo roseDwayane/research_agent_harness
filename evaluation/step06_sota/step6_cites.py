@@ -42,7 +42,11 @@ class Cite:
 
 
 def is_fusion_session(session: Path | None) -> bool:
-    return bool(session) and (Path(session) / "knowledge" / "decon").is_dir()
+    """A folder written by the fusion-block harness: it has knowledge/decon/ once A7.D has run, and the .jsonl key log
+    (step4_citation_keys.jsonl) from A4.k on - the latter is what a folder has before the fusion block, e.g. the one
+    the baselines are generated from. The archived engine wrote step4_citation_keys.json."""
+    return bool(session) and ((Path(session) / "knowledge" / "decon").is_dir()
+                              or (Path(session) / "step4_citation_keys.jsonl").exists())
 
 
 class CiteFinder:

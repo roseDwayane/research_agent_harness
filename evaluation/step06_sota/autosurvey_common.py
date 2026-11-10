@@ -14,7 +14,7 @@ from typing import Any
 
 import requests
 
-from step6_cites import CiteFinder
+from step6_cites import CiteFinder, is_fusion_session
 from step6_common import is_papers_inventory, parse_bib_keys, split_frontmatter
 from step6_world import load_world
 
@@ -62,7 +62,7 @@ def load_papers(session_dir: Path) -> dict[str, dict[str, Any]]:
     decon record's `basis` ("full-text", else "abstract-only"). Archived-engine session: the step5 frontmatter."""
     bib_text = (session_dir / "step4_references.bib").read_text(encoding="utf-8")
     keys = sorted(parse_bib_keys(bib_text))
-    if (session_dir / "knowledge" / "decon").is_dir():
+    if is_fusion_session(session_dir):
         world = load_world(session_dir)
         fields = _bib_fields(bib_text)
         return {key: {"title": fields.get(key, {}).get("title", ""), "year": fields.get(key, {}).get("year", ""),

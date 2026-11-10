@@ -48,62 +48,9 @@ from scholar_research.steps.base import Context  # noqa: E402
 from scholar_research.utils import dump_json, frontmatter, load_json, write_text  # noqa: E402
 
 from eval_common import RUNS_ROOT, append_run, batch_paths, read_runs, write_json  # noqa: E402
+from metasyn_data import (  # noqa: E402,F401
+    EFETCH, GROUND_TRUTH_FIELDS, _str, _year, article_text, load_articles, load_review, pubmed_authors)
 from run_batch import build_config, protocol  # noqa: E402
-
-GROUND_TRUTH_FIELDS = (
-    "Title", "Topic", "Research_Question", "Population", "Intervention", "Exposure", "Comparison", "Outcome",
-    "Effect_Direction", "Statistical_Significance", "Effect_Size_Category", "Conclusion_Summary", "Key_Insights",
-    "inclusion_criteria", "exclusion_criteria", "search_start_date", "search_end_date", "study_count",
-    "matched_ref_count", "source",
-)
-EFETCH = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
-
-
-def _str(v: Any) -> str:
-    return "" if v is None or (isinstance(v, float) and pd.isna(v)) else str(v).strip()
-
-
-def _year(v: Any) -> int | None:
-    s = _str(v)[:4]
-    return int(s) if s.isdigit() else None
-
-
-def load_review(data_dir: Path, review_id: int, split: str = "test") -> dict[str, Any]:
-    df = pd.read_parquet(data_dir / f"{split}.parquet")
-    rows = df[df["ID"] == review_id]
-    if rows.empty:
-        raise SystemExit(f"review {review_id} is not in the {split} split")
-    return rows.iloc[0].to_dict()
-
-
-def load_articles(data_dir: Path, ids: list[int]) -> list[dict[str, Any]]:
-    table = ds.dataset(data_dir / "corpus", format="parquet").to_table(filter=ds.field("ID").isin(ids))
-    by_id = {int(r["ID"]): r for r in table.to_pylist()}
-    return [by_id[i] for i in ids if i in by_id]
-
-
-def pubmed_authors(pmid: str) -> list[str]:
-    r = requests.get(EFETCH, params={"db": "pubmed", "id": pmid, "retmode": "xml"}, timeout=30)
-    r.raise_for_status()
-    out = []
-    for a in ET.fromstring(r.content).iter("Author"):
-        fn, ln = a.findtext("ForeName") or "", a.findtext("LastName") or ""
-        if ln:
-            out.append(f"{fn} {ln}".strip())
-        elif a.findtext("CollectiveName"):
-            out.append(a.findtext("CollectiveName"))
-    return out
-
-
-def article_text(a: dict[str, Any]) -> tuple[str, str]:
-    """→ (access_level, markdown body) in the step5_full_text layout."""
-    abstract = _str(a.get("abstract"))
-    sections = [s for s in (a.get("sections") or []) if _str(s.get("text"))]
-    parts = ["## Abstract", "", abstract or "(no abstract available)", ""]
-    for s in sections:
-        parts += [f"## {_str(s.get('heading')).title() or 'Section'}", "", _str(s["text"]), ""]
-    return ("full-text-html" if sections else "abstract-only"), "\n".join(parts).rstrip() + "\n"
-
 
 def build_papers(articles: list[dict[str, Any]]) -> tuple[list[ScreenedPaper], dict[str, dict[str, Any]], list[dict[str, Any]]]:
     papers, texts, dropped = [], {}, []

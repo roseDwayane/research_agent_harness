@@ -363,6 +363,55 @@ compared. Citation (full-text source, step6 − naive, paired 95% CI, 26 reviews
 3+ keys (held-out: 0.34 vs 0.47). Full-text controls: swap recall 0.05 / 0.07, perturb 0.89 → 0.08 / 0.94 → 0.04
 (step6 / naive, held-out).
 
+## MetaSyn fixed input for the fusion-block harness (`metasyn_adopt.py`)
+
+The harness runs from F1 only on a folder that looks searched: A7.D requires A4.b and A6.c, and those require the search
+units, all on the ledger (`IDEATE.UPSTREAM.NOT_DONE` otherwise). `ideate_tools.py adopt` exists for the fusion block only.
+`metasyn_adopt.py` builds the folder a search would have left from a MetaSyn review (the Reference-only setting: the
+papers the source review included, no retrieval) and puts it on the ledger. It calls the harness's own functions
+(`it_ledger.begin` / `done`, `mint_keys`, `build_bibliography`, `fulltext-status`) and changes nothing under `ai-scientist-ideate-harness/`.
+
+```bash
+# the data is in <repo>/../data/metasyn (train.parquet, test.parquet, corpus/); override with --data-dir / METASYN_DATA_DIR
+python evaluation/step06_sota/metasyn_adopt.py --list --split test --min-refs 10 --max-refs 30     # candidates, with their full-text counts
+python evaluation/step06_sota/metasyn_adopt.py 173 evaluation/runs/ab_dev --split train [--offline] # one review -> a batch folder
+# the harness arm (A), from the adopted folder (PYTHONUTF8=1: the harness reads its files with the platform's encoding)
+PYTHONUTF8=1 python -m harness run evaluation/runs/ab_dev/topics/review_173.md --research-dir evaluation/runs/ab_dev/sessions/review_173     --from F1 --to F4 --worker ollama          # run from ai-scientist-ideate-harness/
+# the baselines (B0, B2) from the SAME folder, so every arm reads the same papers
+python evaluation/step06_sota/naive_baseline.py --batch evaluation/runs/ab_dev                       # B0
+python evaluation/step06_sota/naive_baseline.py --batch evaluation/runs/ab_dev --variant fulltext    # B2
+```
+
+| written | what |
+|---|---|
+| `topics/review_N.md` | Topic and Research_Question |
+| `sessions/review_N/` | the research folder: step0 (protocol from PI/ECO, criteria, search period; passes `check_protocol`), `step3_shortlist.json`, `step4_*`, `step5_full_text/<key>.md` for papers with PMC sections only, `_state/ledger.jsonl` |
+| `eval/review_N/ground_truth.json` | the answers (Key_Insights, Effect_Direction, ...): **never** in `sessions/` |
+| `eval/review_N/input_report.json` | dropped papers and why, which criteria fields were used |
+| `batch.json`, `runs.jsonl` | so `naive_baseline.py` and `metasyn_eval.py` find the review (the baselines' model comes from `metasyn.toml`) |
+
+Ledger: A1.p-A5 and A6.d are recorded as adopted (`why: metasyn-import`); A4.k, A4.b and A6.c are the real units, run on
+these files. The adopted units are recorded twice, the second time after the files settled, because the harness's commands
+add default fields to the shortlist and that changes the hash an earlier record holds (without it A3, A5, A4.k, A4.b show as `stale`).
+
+What is kept out of the folder: the source review's Title, Abstract and Introduction and every findings field
+(`metasyn_data.ANSWER_FIELDS`). After building, the script refuses to finish if a run of 8 words of an answer text appears in a file the
+harness reads. **MetaSyn's free-text criteria fields are not always criteria**: in review 173 `exclusion_criteria` is a
+sentence of findings. `clean_criteria` drops a field that is empty, over 120 words, reads as a finding, or shares text with an answer;
+the protocol then gets a derived criterion instead (`input_report.json` says which). Same paper rule as `metasyn_prepare.py`: a paper
+with no abstract and no sections, or no authors (PubMed lookup unless `--offline`), is dropped and listed.
+
+Known limits
+- MetaSyn is medical. F1 to F3 and B2 run; the lens (B1 in the harness) and B3.5 (feasibility) are not meaningful, and the
+  search axes' terms are cut from the PI/ECO text only to make the protocol well formed (nothing is searched).
+- The folder's step0-step4 were not searched: it is only good for evaluating F1 to F4. The run reports `exported-before-snowball`
+  and `few-included` as caveats.
+- `a6-check` without `--unit A6.c` reports F01 for A6.d (no fetch candidates file): the unit was adopted, not run.
+- **Input asymmetry**: the harness arm reads the protocol (PI/ECO, the source review's criteria) while `naive_baseline.py` gives its
+  prompt only the Topic. Decide whether to give the baselines the Research_Question as well before reporting a difference.
+- The bibliography is built offline (no Crossref): entries come from the MetaSyn records.
+- Tests: `tests/test_metasyn_adopt.py` (fake dataset, no network).
+
 ## Coverage
 
 Two different questions, kept apart:
@@ -481,6 +530,8 @@ and for MetaSyn re-check the frozen prompts on the 6 dev reviews and redo `insig
 | `run_batch.py`, `topics.toml` | topic batch: runs Steps 1–N per topic and records the run; topics + pipeline model settings |
 | **`step06_sota/`** | |
 | `metasyn_prepare.py`, `metasyn.toml` | MetaSyn fixed-input sessions; pipeline settings for them |
+| `metasyn_adopt.py` | MetaSyn review -> research folder for the fusion-block harness, on the ledger (see the section above); `--list` shows candidates |
+| `metasyn_data.py` | reading the MetaSyn dataset (shared by `metasyn_prepare.py` and `metasyn_adopt.py`); `clean_criteria`, `ANSWER_FIELDS` |
 | `metasyn_eval.py`, `metasyn_prompts.py` | MetaSyn scoring (classify / digest / coverage / official) |
 | `metasyn_judge_agreement.py` | agreement between judges + convergent validity of insight coverage (no human labels) |
 | `metasyn_summary.py` | MetaSyn batch summary: each system's mean direction accuracy / `insights_consistency` / `coverage_all` / `coverage_answerable` / words, and `step6` minus every other system (B0 `naive`, B2 `naive_fulltext`, `baseline:*`) paired by review with bootstrap 95% CI and a direction win/loss count → `eval/metasyn_summary_{judge}.{json,md}` |

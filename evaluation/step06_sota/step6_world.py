@@ -84,8 +84,12 @@ class World:
         return set()
 
     def paper_basis(self, key: str) -> str:
-        """'full-text' when the decon record was read from a full text, else 'abstract'."""
-        return "full-text" if (self.decon.get(key) or {}).get("basis") == "full-text" else "abstract"
+        """'full-text' when the decon record was read from a full text, else 'abstract'. Before A7.D has run (a folder
+        the baselines are given) there is no decon record: a full text on disk is then what A7.D would read."""
+        rec = self.decon.get(key)
+        if rec is None:
+            return "full-text" if key in self.fulltext else "abstract"
+        return "full-text" if rec.get("basis") == "full-text" else "abstract"
 
     def evidence_papers(self) -> set[str]:
         return {p for pl in self.planes for p in pl.get("member_papers") or []}
@@ -161,10 +165,9 @@ def load_world(rd: Path) -> World:
             w.exps[e["exp_id"]] = e
 
     ft = rd / "step5_full_text"
-    for key in w.decon:
-        p = ft / f"{key}.md"
-        if p.exists():
-            w.fulltext[key] = p.read_text(encoding="utf-8")
+    for p in sorted(ft.glob("*.md")) if ft.is_dir() else []:
+        if not p.name.startswith("_"):
+            w.fulltext[p.stem] = p.read_text(encoding="utf-8")
 
     # abstracts: step2 raw / snowball records, keyed through step4_citation_keys.jsonl (paper id -> key)
     id2key = {}
@@ -177,6 +180,11 @@ def load_world(rd: Path) -> World:
                     id2key[r.get("id")] = r["key"]
     records = list((_read_json(rd / "step2_raw_papers.json", {}).get("papers") or []))
     records += _read_json(rd / "step2b_snowball_papers.json", {}).get("papers") or []
+    # the shortlist is the harness's own source of abstracts (A7.D reads them from it); a folder that was not searched
+    # (metasyn_adopt.py) has no step2 records, only the shortlist
+    for p in (_read_json(rd / "step3_shortlist.json", {}).get("papers") or []):
+        if p.get("citation_key") and p.get("abstract") and p["citation_key"] not in w.abstracts:
+            w.abstracts[p["citation_key"]] = p["abstract"]
     for r in records:
         key = id2key.get(r.get("id"))
         if key and r.get("abstract") and key not in w.abstracts:
