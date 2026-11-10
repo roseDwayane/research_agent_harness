@@ -46,9 +46,9 @@ python -m evaluation.step0203.cli map-ids `
   --out eval_runs/litsearch/step0203_data/gold_id_map.json
 ```
 
-This looks up each gold `CorpusId` through the Semantic Scholar Graph API, saves successes after every ID, and
-retries unresolved IDs on a later invocation. It uses `SEMANTIC_SCHOLAR_API_KEY` when present. Without a key, it
-spaces requests by four seconds by default. The output reports mapping coverage; do not treat unmapped gold as a
+This looks up gold `CorpusId`s through the Semantic Scholar paper batch API (up to 500 per request), saves each
+completed batch, and retries unresolved IDs on a later invocation. It uses `SEMANTIC_SCHOLAR_API_KEY` when present
+and backs off after HTTP 429 responses. The output reports mapping coverage; do not treat unmapped gold as a
 confirmed miss. The mapping is evaluation-side data and is never put into a production research directory.
 
 ```powershell
