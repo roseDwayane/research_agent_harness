@@ -73,6 +73,20 @@ COVERAGE_THRESHOLD = 0.8
 SENTENCE_RE = re.compile(r"(?<=[.!?;])\s+(?=[A-Z(\[])")
 
 
+KEY_AT = re.compile(r"(?<![A-Za-z0-9_])([A-Za-z_][A-Za-z0-9_]*):(?=\s|$)")
+
+
+def parse_frontmatter(lines: list[str]) -> dict[str, str]:
+    """Key: value pairs, one or several per line (`total_papers: 16   themes: 4`: the harness's template allows both)."""
+    out: dict[str, str] = {}
+    for line in lines:
+        marks = list(KEY_AT.finditer(line))
+        for i, m in enumerate(marks):
+            end = marks[i + 1].start() if i + 1 < len(marks) else len(line)
+            out.setdefault(m.group(1), line[m.end():end].strip().strip('"').strip("'"))
+    return out
+
+
 def _norm(text: str) -> str:
     return re.sub(r"\s+", " ", text.strip().rstrip(".")).casefold()
 
@@ -116,7 +130,7 @@ def check_theme(body, offset, theme, plane: dict | None, w: World) -> dict:
         dims[name] = {"present": sec is not None, "non_empty": bool(content_lines(lines)), "_lines": lines}
 
     members = set((plane or {}).get("member_papers") or [])
-    header_checks, row_problems, rows_n, tbd_cells, cells_n = [], [], 0, 0, 0
+    header_checks, row_problems, rows_outside, rows_n, tbd_cells, cells_n = [], [], [], 0, 0, 0
     exp_ids_in_table: set[str] = set()
     for table in tables(dims["key_results"]["_lines"]):
         header_checks.append({"header": table["header"],
@@ -128,7 +142,7 @@ def check_theme(body, offset, theme, plane: dict | None, w: World) -> dict:
             if study not in w.exps:
                 row_problems.append({"study": study, "problem": "Study is not a legal exp_id"})
             elif members and w.units[study] not in members:
-                row_problems.append({"study": study, "problem": f"paper {w.units[study]} is not a member of this Plane"})
+                rows_outside.append({"study": study, "paper": w.units[study]})
             tbd_cells += sum(1 for c in row[1:] if TBD in c)
             cells_n += max(len(row) - 1, 0)
     expected_exps = {e for e, rec in w.exps.items() if w.units[e] in members}
@@ -147,6 +161,7 @@ def check_theme(body, offset, theme, plane: dict | None, w: World) -> dict:
         "key_results_header_checks": header_checks,
         "key_results_rows": rows_n,
         "key_results_row_problems": row_problems,
+        "key_results_rows_of_other_planes": rows_outside,      # reported, not gated: the harness contract does not ask for it
         "key_results_pass": kr_ok,
         "experiments_missing_from_table": sorted(expected_exps - exp_ids_in_table),
         "tbd_cells": f"{tbd_cells}/{cells_n}",
@@ -297,7 +312,7 @@ def check_mapping(body, level2, w: World) -> dict:
         if key not in w.bib_keys:
             problems.append(f"{key}: not a bibliography key")
             continue
-        if key in plane_of and row[1].strip() != str(plane_of[key]):
+        if key in plane_of and row[1].strip().lstrip("Tt") != str(plane_of[key]):
             problems.append(f"{key}: Theme {row[1].strip()} but the Plane holding it is T{plane_of[key]}")
         want = w.methodology.get(key)
         if want and len(row) > 2 and row[2].strip().casefold() != want:
@@ -305,9 +320,21 @@ def check_mapping(body, level2, w: World) -> dict:
     dup = sorted({k for k in seen if seen.count(k) > 1})
     if dup:
         problems.append(f"papers listed twice: {dup}")
-    missing = sorted(w.evidence_papers() - set(seen))
+    # the template: "one row per paper the review cites" - cites by key, exp_id or unit id (not through a collision)
+    skip: set[int] = set()
+    for sec in level2:
+        if H2["mapping"].match(sec.title) or H2["legend"].match(sec.title):
+            skip.update(range(sec.start, sec.end))
+    cited_text = "\n".join(line for i, line in enumerate(body) if i not in skip)
+    cited = set()
+    for ident, _ in ids_in(cited_text, w):
+        if w.kind(ident) in ("paper", "exp", "unit"):
+            cited |= w.papers_of(ident)
+    missing, extra = sorted(cited - set(seen)), sorted(set(seen) - cited)
     if missing:
-        problems.append(f"{len(missing)} papers of the Planes missing from the mapping, e.g. {missing[:8]}")
+        problems.append(f"{len(missing)} papers the review cites are missing from the mapping, e.g. {missing[:8]}")
+    if extra:
+        problems.append(f"{len(extra)} papers in the mapping are not cited by the review, e.g. {extra[:8]}")
     counted = {c: sum(1 for r in mapping if len(r) > 2 and r[2].strip().casefold() == c) for c in METHODOLOGY_CLASSES}
     legend_ok = bool(legend) and all(legend.get(c, 0) == n for c, n in counted.items())
     if not legend_ok:
@@ -356,7 +383,9 @@ def run_checks(rd: Path, with_harness_gate: bool = False) -> dict:
     rd = Path(rd).resolve()
     w = load_world(rd)
     review = rd / "step6_sota_review.md"
-    fm, body, offset = split_frontmatter(review.read_text(encoding="utf-8"))
+    raw_lines = review.read_text(encoding="utf-8").splitlines()
+    _, body, offset = split_frontmatter(review.read_text(encoding="utf-8"))
+    fm = parse_frontmatter(raw_lines[1:offset - 1] if offset else [])
     level2 = sections(body, 2)
     themes = [s for s in level2 if THEME_TITLE_RE.match(s.title)]
 
