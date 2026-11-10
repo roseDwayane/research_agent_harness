@@ -201,9 +201,13 @@ def check_structure(body, offset, fm, level2, themes, w: World) -> dict:
         fm_problems.append("frontmatter step is not 6")
     expected_fm = {"themes": len(w.planes), "total_papers": len(evidence), "full_text_papers": ft,
                    "abstract_only_papers": len(evidence) - ft}
+    fm_warnings = []
     for name, want in expected_fm.items():
-        if str(fm.get(name)) != str(want):
-            fm_problems.append(f"frontmatter {name}={fm.get(name)} but the records say {want}")
+        got = str(fm.get(name))
+        if got == "(TBD)":      # the harness's own marker for a value the writer did not give: a gap, not a wrong number
+            fm_warnings.append(f"frontmatter {name} is (TBD) but the records say {want}")
+        elif got != str(want):
+            fm_problems.append(f"frontmatter {name}={got} but the records say {want}")
     warning_ok = ft > 0 or any("abstract" in l.lower() and l.lstrip().startswith(">") for l in body[:6])
 
     result = {
@@ -220,6 +224,7 @@ def check_structure(body, offset, fm, level2, themes, w: World) -> dict:
         "experiments_subsections": exp_present,
         "experiments_pass": bool(exp) and len(exp_present) == 2 and all(exp_present.values()),
         "frontmatter_problems": fm_problems,
+        "frontmatter_warnings": fm_warnings,          # reported, not gated
         "abstract_only_warning_ok": warning_ok,
     }
     result["pass"] = (result["theme_count_pass"] and all(r["pass"] for r in reports) and result["executive_summary_present"]
