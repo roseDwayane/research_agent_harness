@@ -4,11 +4,31 @@ evals/results/
 *.lock
 # local environment and secrets
 .venv/
+.env
+.env.*
+!.env.example
 mcp/scholar_mcp/.env
 __pycache__/
+*.py[cod]
 .pytest_cache/
 .ruff_cache/
+.coverage
+htmlcov/
 *.egg-info/
 harness.toml
 topic.md
 topic_research*/
+
+# local evaluation runs, model outputs, and scratch directories
+eval_runs/
+results/
+evaluation/**/results/
+.test*/
+*.log
+*.pid
+
+# editor / operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

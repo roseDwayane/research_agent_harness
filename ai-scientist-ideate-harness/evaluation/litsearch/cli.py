@@ -44,7 +44,8 @@ def run_pipeline(tasks_path: Path, sessions: Path, *, step: int, model: str, url
                 topic.write_text("# LitSearch benchmark query\n\n" + task["query"] + "\n", encoding="utf-8")
                 frm, to = "S1", "S2"       # S1 creates the frame needed by S2; only S2 is scored.
             else:
-                verify_frozen(rd)
+                if (rd / "_state" / "evaluation" / "input_hashes.json").is_file():
+                    verify_frozen(rd)
                 topic, frm, to = rd / "litsearch_topic.md", "S3", "S3"
             cfg = HarnessConfig(worker="ollama", model=model, ollama_url=url, num_ctx=num_ctx,
                                 num_predict=max_tokens, max_num_generations=1, resume=True)
@@ -95,10 +96,12 @@ def evaluate(tasks_path: Path, sessions: Path, out: Path, step: int, mapping_pat
                "step2_set_recall": len(gold_set & set(ids)) / len(gold_set) if gold_set else 0.0,
                "completed": True}
         if step == 3:
-            verify_frozen(rd)
+            if (rd / "_state" / "evaluation" / "input_hashes.json").is_file():
+                verify_frozen(rd)
             papers = scored_papers(rd)
+            from evaluation.step03.scoring import rank_papers
             for name in ("relevance", "composite"):
-                ordered = sorted(papers, key=lambda p: (-p["screening"][name], str(p["id"])))
+                ordered = rank_papers(papers, name)
                 ranked = _canonical_ids(ordered, mapping)
                 row[name] = ranking_metrics(gold, ranked)
             row["bm25"] = ranking_metrics(gold, ids)

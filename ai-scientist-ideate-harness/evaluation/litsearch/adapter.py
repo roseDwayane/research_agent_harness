@@ -128,19 +128,16 @@ def scored_papers(rd: Path) -> list[dict]:
     scores_doc = read_json(rd / "screening_scores.json")
     scores = scores_doc.get("scores") or scores_doc.get("papers") or {}
     shortlist = read_json(rd / "step3_shortlist.json").get("papers") or []
-    kept = {str(p.get("id")) for p in shortlist}
+    categories = {str(p.get("id")): (p.get("screening") or {}).get("category") or p.get("category")
+                  for p in shortlist}
     rows = []
+    from evaluation.step03.scoring import normalize_screening
     for paper in raw:
         pid = str(paper["id"])
         score = scores.get(pid, {}) if isinstance(scores, dict) else next(
             (x.get("screening", x) for x in scores if str(x.get("id")) == pid), {})
-        rel = float(score.get("relevance", score.get("relevance_score", 0)) or 0)
-        quality = float(score.get("quality", score.get("quality_score", 0)) or 0)
-        impact = float(score.get("recency_impact", score.get("impact", 0)) or 0)
-        composite = float(score.get("composite", .5 * rel + .3 * quality + .2 * impact) or 0)
-        rows.append({**paper, "screening": {**score, "relevance": rel, "quality": quality,
-                                             "recency_impact": impact, "composite": composite,
-                                             "included": pid in kept}})
+        rows.append(normalize_screening(paper, score, categories.get(pid)))
     if len(rows) != len(scores):
         raise ValueError("STEP-S3 did not score every frozen candidate exactly once")
+    write_json(rd / "step3_screening_all.json", {"schema": "litsearch-step3-screening/1", "papers": rows})
     return rows
