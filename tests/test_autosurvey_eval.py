@@ -163,3 +163,13 @@ def test_paper_coverage_counts_papers_behind_ids(tmp_path: Path):
     assert cov["any"] == 1.0 and cov["named"] == round(1 / 3, 4)           # alpha, beta only through a collision
     base = ae.paper_coverage("Gains are reported (alpha2020; beta2021).", finder, papers)
     assert base["any"] == round(2 / 3, 4) and base["named"] == round(2 / 3, 4) and base["not_cited"] == ["gamma2022"]
+
+
+def test_keys_are_matched_without_regard_to_case(tmp_path: Path):
+    """A baseline's prompt lists keys in lower case but its example writes (SmithEtAl2024): citing the right paper in
+    another case is a valid citation; a key that is in no bibliography stays invalid."""
+    rd = fusion_session(tmp_path)
+    finder = CiteFinder(rd, {"alpha2020", "beta2021", "gamma2022"})
+    assert finder.ids("Gains (Alpha2020; BETA2021) and (SmithEtAl2024).") == ["alpha2020", "beta2021", "SmithEtAl2024"]
+    assert finder.is_valid("alpha2020") and not finder.is_valid("SmithEtAl2024")
+    assert finder.strip("Gains were reported (Alpha2020).") == "Gains were reported."

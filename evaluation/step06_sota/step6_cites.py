@@ -52,6 +52,9 @@ def is_fusion_session(session: Path | None) -> bool:
 class CiteFinder:
     def __init__(self, session: Path | None, legal_keys: set[str]):
         self.legal = set(legal_keys)
+        # a baseline's prompt shows the keys in lower case but its example writes `(SmithEtAl2024)`: a model that follows
+        # the example cites the right paper in another case, so keys are matched without regard to case
+        self.canon = {k.lower(): k for k in self.legal}
         self.world: World | None = load_world(Path(session)) if is_fusion_session(session) else None
 
     # ---- what an id stands for ------------------------------------------------------------------------------
@@ -87,14 +90,19 @@ class CiteFinder:
         taken = [(c.start, c.end) for c in spans]
         for c in extract_citations(text):
             at = text.find(c.raw)
-            if at >= 0 and c.key not in self.legal and not any(a <= at < b for a, b in taken):
+            if at >= 0 and c.key.lower() not in self.canon and not any(a <= at < b for a, b in taken):
                 spans.append(Cite(c.key, c.raw, at, at + len(c.raw)))
         return sorted(spans, key=lambda c: c.start)
 
     def _bare_keys(self, text: str, known: set[str]) -> list[Cite]:
-        """A bare bibliography key (`[galt2019]`, `(Galt2019; ...)`): any token that is exactly a key of the session."""
-        return [Cite(m.group(1), m.group(1), m.start(1), m.end(1)) for m in TOKEN_RE.finditer(text)
-                if m.group(1) in self.legal and m.group(1) not in known]
+        """A bare bibliography key (`[galt2019]`, `(Galt2019; ...)`): a token that is a key of the session, in any case.
+        The cite's id is the key as the bibliography spells it."""
+        out = []
+        for m in TOKEN_RE.finditer(text):
+            key = self.canon.get(m.group(1).lower())
+            if key is not None and key not in known:
+                out.append(Cite(key, m.group(1), m.start(1), m.end(1)))
+        return out
 
     def ids(self, text: str) -> list[str]:
         return list(dict.fromkeys(c.id for c in self.find(text)))
