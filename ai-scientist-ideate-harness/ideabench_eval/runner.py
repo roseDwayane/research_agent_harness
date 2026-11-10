@@ -9,7 +9,8 @@ from pathlib import Path
 from .adapter import import_official, load_tasks
 from .client import ModelConfig, OllamaJSONClient
 from .jsonio import append_jsonl, read_json, write_json
-from .pipeline import run_p1, run_p2
+from .pipeline import run_p1
+from .production import run_p2
 from .ranking import p2_ranking_text, rank_protocol, summarize
 
 
@@ -48,7 +49,7 @@ def run(dataset: Path, out: Path, generator, judge, *, generator_config: ModelCo
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     manifest = {
-        "schema": "ideabench-offline-experiment/1", "dataset": str(Path(dataset).resolve()),
+        "schema": "ideabench-production-experiment/2", "dataset": str(Path(dataset).resolve()),
         "requested": len(tasks), "fixed_references": 5,
         "order": ["P2 Stage A", "P2 Stage B P1-P5 per adopted question", "n_i = valid P2 idea.json count",
                   "P1 n_i independent generations", "independent novelty/feasibility judge"],
@@ -75,7 +76,7 @@ def run(dataset: Path, out: Path, generator, judge, *, generator_config: ModelCo
                     p2 = read_json(folder / "P2_ideas.json")["ideas"]
                     say(f"    P2 resumed: {len(p2)} valid idea.json files")
                 else:
-                    p2 = run_p2(folder, refs, generator, max_questions=max_questions, say=say)
+                    p2 = run_p2(folder, refs, generator_config, max_questions=max_questions, say=say)
                 n = len(p2)
                 if n < 1:
                     raise ValueError("P2 produced no P5-valid idea.json; n_i is zero")
