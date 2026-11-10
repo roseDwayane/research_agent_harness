@@ -6,12 +6,15 @@ Protocol:
 
 1. Freeze five references per target from `filtered_references.csv`.
 2. Keep `target_papers.csv.abstract_summary` in a separate `gold/` path.
-3. P2 first runs offline Stage A to produce distinct gaps/questions.
-4. Every adopted question independently runs Stage B P1–P5 and must produce a valid seven-key `idea.json`.
-5. `n_i` is the number of P5-valid P2 ideas.
-6. P1 makes `n_i` independent direct-generation calls using the same five references.
-7. Only after generation, an independent judge receives anonymous P1/P2/gold proposals and ranks novelty and feasibility.
-8. Insight Score is the fraction of generated ideas ranked above the gold idea, averaged over balanced order rotations.
+3. The adapter freezes those references at the acquisition boundary, records their hashes, and marks online
+   search/full-text retrieval as intentionally bypassed.
+4. P2 runs the current production conductor from Stage A fusion (`F1/A7.D`) through gaps/questions (`F2–F4`).
+5. Every adopted question independently runs the current Stage B P0–P5/B5 recipes and must produce `idea.json`.
+   B6 performs offline bookkeeping only; its journal web lookup is disabled.
+6. `n_i` is the number of P5-valid P2 ideas.
+7. P1 makes `n_i` independent direct-generation calls using the same five references.
+8. Only after generation, an independent judge receives anonymous P1/P2/gold proposals and ranks novelty and feasibility.
+9. Insight Score is the fraction of generated ideas ranked above the gold idea, averaged over balanced order rotations.
 
 The target title, abstract, and gold summary are never supplied to the generator.
 
@@ -37,6 +40,13 @@ ideabench-offline run `
   --judge-num-ctx 32768
 ```
 
-Generation and ranking can be separated with `--phase generate` and `--phase rank`. Existing artifacts are resumed.
+The old Step 2/3 evaluation lifecycle is preserved as explicit phases:
+
+- `--phase prepare`: freeze inputs, write their contract and hashes, and create resumable pipeline artifacts.
+- `--phase generate`: run P2 and matched P1, resuming completed artifacts.
+- `--phase rank` (or `evaluate`): rank saved outputs without regenerating them.
+- `--phase all`: perform all phases.
+
+Changing frozen inputs or the experiment manifest requires a new output directory.
 Each model call is logged with its tag, token counts, and wall time; every task has `progress.jsonl`.
 

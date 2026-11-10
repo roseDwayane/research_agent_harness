@@ -9,7 +9,8 @@ from pathlib import Path
 from .adapter import import_official, load_tasks
 from .client import ModelConfig, OllamaJSONClient
 from .jsonio import append_jsonl, read_json, write_json
-from .pipeline import run_p1, run_p2
+from .pipeline import run_p1
+from .new_pipeline import prepare_research_dir, run_pipeline_p2
 from .ranking import p2_ranking_text, rank_protocol, summarize
 
 
@@ -38,9 +39,11 @@ def _usage_by_target(path: Path, task_ids: list[str]) -> dict:
 
 def run(dataset: Path, out: Path, generator, judge, *, generator_config: ModelConfig,
         judge_config: ModelConfig, limit: int | None = None, max_questions: int = 3,
-        phase: str = "all", seed: int = 0, say=print) -> dict:
-    if phase not in ("all", "generate", "rank"):
-        raise ValueError("phase must be all, generate, or rank")
+        phase: str = "all", seed: int = 0, say=print, p2_runner=run_pipeline_p2) -> dict:
+    if phase == "evaluate":
+        phase = "rank"
+    if phase not in ("all", "prepare", "generate", "rank"):
+        raise ValueError("phase must be all, prepare, generate, rank, or evaluate")
     if (generator_config.url.rstrip("/"), generator_config.model.casefold()) == \
             (judge_config.url.rstrip("/"), judge_config.model.casefold()):
         raise ValueError("generator and independent judge must not be the same endpoint/model pair")
@@ -69,13 +72,20 @@ def run(dataset: Path, out: Path, generator, judge, *, generator_config: ModelCo
         write_json(folder / "references.json", {"count": 5, "references": refs})
         say(f"[{index}/{len(tasks)}] {pid}")
         started = time.time()
+        if phase in ("all", "prepare", "generate"):
+            prepare_research_dir(folder / "P2" / "research", refs, max_questions=max_questions)
+        if phase == "prepare":
+            append_jsonl(out / "timing.jsonl", {"paperId": pid, "phase": phase,
+                         "wall_seconds": round(time.time() - started, 3)})
+            continue
         if phase in ("all", "generate"):
             try:
                 if (folder / "P2_ideas.json").is_file():
                     p2 = read_json(folder / "P2_ideas.json")["ideas"]
                     say(f"    P2 resumed: {len(p2)} valid idea.json files")
                 else:
-                    p2 = run_p2(folder, refs, generator, max_questions=max_questions, say=say)
+                    p2 = p2_runner(folder, refs, generator_config,
+                                   max_questions=max_questions, say=say)
                 n = len(p2)
                 if n < 1:
                     raise ValueError("P2 produced no P5-valid idea.json; n_i is zero")
@@ -85,8 +95,9 @@ def run(dataset: Path, out: Path, generator, judge, *, generator_config: ModelCo
                         raise ValueError(f"saved P1 count {len(p1)} does not match P2 n_i={n}")
                 else:
                     p1 = run_p1(folder, refs, generator, n, say=say)
-                write_json(folder / "generation_summary.json", {"paperId": pid, "n_i": n,
-                           "P1_count": len(p1), "P2_count": len(p2), "status": "ok"})
+                complete = {"paperId": pid, "n_i": n, "P1_count": len(p1), "P2_count": len(p2), "status": "ok"}
+                write_json(folder / "generation_summary.json", complete)
+                write_json(folder / "generation.complete.json", complete)
             except Exception as exc:
                 error = {"paperId": pid, "phase": "generate", "error": f"{type(exc).__name__}: {exc}"}
                 errors.append(error)
@@ -94,6 +105,10 @@ def run(dataset: Path, out: Path, generator, judge, *, generator_config: ModelCo
                 say(f"    generation FAILED: {exc}")
         append_jsonl(out / "timing.jsonl", {"paperId": pid, "phase": phase,
                      "wall_seconds": round(time.time() - started, 3)})
+    if phase == "prepare":
+        result = {"status": "complete", "m_requested": len(tasks), "prepared": len(tasks)}
+        write_json(out / "prepare_summary.json", result)
+        return result
     if phase == "generate":
         result = {"status": "complete" if not errors else "incomplete", "m_requested": len(tasks), "errors": errors}
         write_json(out / "generation_summary.json", result)
@@ -157,7 +172,7 @@ def main(argv: list[str] | None = None) -> int:
     go.add_argument("--out", type=Path, required=True)
     go.add_argument("--limit", type=int)
     go.add_argument("--max-questions", type=int, default=3)
-    go.add_argument("--phase", choices=("all", "generate", "rank"), default="all")
+    go.add_argument("--phase", choices=("all", "prepare", "generate", "rank", "evaluate"), default="all")
     go.add_argument("--seed", type=int, default=0)
     for prefix in ("generator", "judge"):
         go.add_argument(f"--{prefix}-url", required=True)
