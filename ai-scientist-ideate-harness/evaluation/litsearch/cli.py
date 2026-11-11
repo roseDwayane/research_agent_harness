@@ -141,6 +141,7 @@ def run_pipeline(tasks_path: Path, sessions: Path, *, step: int, model: str, url
             completed.append(task["qid"])
         except Exception as exc:  # one question must not erase the rest of a long benchmark run
             failures.append({"qid": task["qid"], "error": f"{type(exc).__name__}: {exc}"})
+            print(f"{task['qid']}: STEP-S{step} FAILED: {type(exc).__name__}: {exc}", flush=True)
         write_json(sessions / f"step{step}_progress.json", {
             "status": "running", "completed": completed, "skipped": skipped,
             "failures": failures, "total": len(tasks)})
