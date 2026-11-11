@@ -243,6 +243,24 @@ def test_worker_result_is_parsed_and_costed(tmp_path, fake_claude):
     assert (ctx.state_dir / "bin" / "ideate-tool").is_file()
 
 
+def test_worker_logs_its_task_and_a_copy_of_the_session_transcript(tmp_path, fake_claude, monkeypatch):
+    exe, _ = fake_claude
+    ctx = _ctx(tmp_path, exe)
+    home = tmp_path / "claude_home"
+    (home / "projects" / "-some-project").mkdir(parents=True)
+    (home / "projects" / "-some-project" / "s-1.jsonl").write_text('{"type": "user"}\n{"type": "assistant"}\n')
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+    log = ctx.state_dir / "A1.p@-" / "attempt_1"
+    log.mkdir(parents=True)
+    wr = cw.run_worker(ctx.cfg, task="Write the protocol", system="rules", cwd=ctx.rd, allowed=[], add_dirs=[],
+                       deny_read=[], budget_usd=None, bin_dir=None, log_dir=log, label="main.00.write.a1")
+    assert wr.ok and wr.session_id == "s-1"
+    assert (log / "main.00.write.a1.task.md").read_text() == "Write the protocol"
+    assert (log / "main.00.write.a1.system.md").read_text() == "rules"
+    assert (log / "main.00.write.a1.transcript.jsonl").read_text().count("\n") == 2
+    assert cw.copy_transcript("no-such-session", tmp_path / "x.jsonl", home / "projects") is None
+
+
 def test_a_refused_submission_goes_back_to_the_same_session(tmp_path, fake_claude):
     """write -> `validate` refuses the bad idea list -> feedback with --resume -> fixed -> validate passes."""
     exe, log = fake_claude

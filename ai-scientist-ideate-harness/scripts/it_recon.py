@@ -757,6 +757,9 @@ def r2_problems(W: World) -> list[dict]:
     return fs
 
 
+BODY_HEADINGS = {"Q3": "How the methods evolved", "Q5": "Dependencies and conflicts between lines"}   # knowledge-templates.md
+
+
 def r3_problems(W: World) -> list[dict]:
     U = "A7.R3"
     fs = []
@@ -766,7 +769,11 @@ def r3_problems(W: World) -> list[dict]:
         for q in ("Q3", "Q5"):
             s = section(text, q)
             ids = ids_in(s)
-            if not s or (TBD not in s and not ids):
+            if not re.search(r"^#{2,3} " + q + r"\b", text, re.M):     # say what is missing: the heading itself
+                fs.append(F("ERROR", "J07", U, f"{bid}: no section headed '## {q} ...' - the seven questions' headings "
+                                                f"start with Q1 ... Q7 as in references/knowledge-templates.md "
+                                                f"(here: '## {q} {BODY_HEADINGS[q]}')"))
+            elif not s or (TBD not in s and not ids):
                 fs.append(F("ERROR", "J07", U, f"{bid} {q}: cite Lines and collisions (or write {TBD})"))
             unknown = [i for i in ids if not W.known(i)]
             if unknown:

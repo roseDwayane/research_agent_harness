@@ -167,6 +167,8 @@ def run_worker(cfg: HarnessConfig, *, task: str, system: str, cwd: Path, allowed
     sys_file = (log_dir or cwd) / f"{label}.system.md"
     sys_file.parent.mkdir(parents=True, exist_ok=True)
     sys_file.write_text(system, encoding="utf-8")
+    if log_dir is not None:                      # the task is otherwise only in argv: keep it next to the system prompt
+        (log_dir / f"{label}.task.md").write_text(task, encoding="utf-8")
     argv = [cfg.claude, "-p", task, "--output-format", "json",
             "--append-system-prompt-file", str(sys_file),
             "--allowedTools", ",".join(BASE_TOOLS + allowed)]
@@ -196,7 +198,25 @@ def run_worker(cfg: HarnessConfig, *, task: str, system: str, cwd: Path, allowed
         (log_dir / f"{label}.out.json").write_text(p.stdout or "", encoding="utf-8")
         if p.stderr.strip():
             (log_dir / f"{label}.err.txt").write_text(p.stderr, encoding="utf-8")
-    return parse_result(p.returncode, p.stdout, p.stderr, argv, int((time.time() - t0) * 1000))
+    res = parse_result(p.returncode, p.stdout, p.stderr, argv, int((time.time() - t0) * 1000))
+    if log_dir is not None and res.session_id:
+        copy_transcript(res.session_id, log_dir / f"{label}.transcript.jsonl")
+    return res
+
+
+def copy_transcript(session_id: str, dest: Path, projects: Path | None = None) -> Path | None:
+    """Claude Code keeps each session's full transcript (every tool call, file read and answer) under
+    ~/.claude/projects/<project>/<session_id>.jsonl. A copy next to the worker's other logs keeps a run self-contained;
+    a resumed session's copy holds every turn so far. Missing or unreadable: no copy, never a failure."""
+    root = projects or Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude") / "projects"
+    try:
+        src = next(root.glob(f"*/{session_id}.jsonl"), None)
+        if src is None:
+            return None
+        dest.write_bytes(src.read_bytes())
+        return dest
+    except OSError:
+        return None
 
 
 def parse_result(code: int, stdout: str, stderr: str, argv: list[str], elapsed_ms: int) -> WorkerResult:
