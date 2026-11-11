@@ -494,7 +494,9 @@ class RecipeExecutor:
                 return False, metrics, ctx.error("IDEATE.WORKER.OUTPUT", f"{len(failed)} batch(es) without a valid "
                                                  f"answer after {tries} dispatch(es): {names} ({why})", unit=unit,
                                                  instance=inst, attempt=attempt, context={"step": label})
-            ctx.say(f"      ↺ {unit}: re-dispatching {len(failed)} batch(es) ({d['reason']})")
+            reasons = "; ".join(f"{b.name}: {(wr.error or 'no valid answer file')[:140]}"
+                                for (b, _), wr in failed[:3])
+            ctx.say(f"      ↺ {unit}: re-dispatching {len(failed)} batch(es) ({d['reason']}); {reasons}")
             todo = [it for it, _ in failed]
             tries += 1
         return True, metrics, None

@@ -13,6 +13,8 @@ production conductor rescreens A5 additions in A3 before its `GATE-a5-check`. Th
 final `step3_screening_all.json`, `step3_shortlist.json`, and snowball file only after that gate passes. It does not
 skip Step 3 when the initial Step 2 search misses a gold paper. The separate `step02` and `step03` commands above
 remain available for isolated checkpoints.
+The evaluation runner sends `think=false` to Ollama for its structured outputs; otherwise reasoning can exhaust
+`num_predict` before Qwen emits any JSON. The selected value is part of the resume key.
 
 `tasks.jsonl` uses one object per question. Step 2 requires `qid`, `query`, and `corpusids`. Step 3 preparation
 also requires `bm25_top100` and the official corpus file uses `corpusid`, `title`, and `abstract`.

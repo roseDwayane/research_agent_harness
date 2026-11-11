@@ -38,7 +38,8 @@ def _completion_path(rd: Path, step: int) -> Path:
 def _completion_key(task: dict, step: int, model: str, url: str, num_ctx: int,
                     max_tokens: int, rd: Path) -> dict:
     key = {"qid": task["qid"], "query": task["query"], "step": step,
-           "model": model, "url": url, "num_ctx": num_ctx, "max_tokens": max_tokens}
+           "model": model, "url": url, "num_ctx": num_ctx, "max_tokens": max_tokens,
+           "think": False}
     if step == 3:
         contract = rd / "_state" / "evaluation" / "input_contract.json"
         if contract.is_file():
@@ -112,7 +113,8 @@ def run_pipeline(tasks_path: Path, sessions: Path, *, step: int, model: str, url
                     verify_frozen(rd)
                 topic, frm, to = rd / "litsearch_topic.md", "S3", "S3"
             cfg = HarnessConfig(worker="ollama", model=model, ollama_url=url, num_ctx=num_ctx,
-                                num_predict=max_tokens, max_num_generations=1, resume=True)
+                                num_predict=max_tokens, think=False,
+                                max_num_generations=1, resume=True)
             reg, recipes, default = Registry.load(), load_recipes(), RecipeExecutor()
             ctx = RunContext(reg, cfg, Skill(cfg), rd, topic,
                              say=lambda message, q=task["qid"]: print(f"{q}: {message}", flush=True))

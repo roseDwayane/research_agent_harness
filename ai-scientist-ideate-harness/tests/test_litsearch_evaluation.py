@@ -35,6 +35,7 @@ def test_limit_selects_first_n_frozen_tasks(tmp_path):
 def test_completed_step_is_skipped_only_for_matching_successful_run(tmp_path):
     task = {"qid": "q1", "query": "biomedical mechanism"}
     key = _completion_key(task, 2, "qwen3.8", "http://localhost", 32768, 8192, tmp_path)
+    assert key["think"] is False
     write_json(tmp_path / "step2_raw_papers.json", {"papers": []})
     summary = tmp_path / "_state" / "harness" / "run1" / "summary.json"
     write_json(summary, {"failed": False, "steps": [{"step": "STEP-S2", "status": "done"}]})
