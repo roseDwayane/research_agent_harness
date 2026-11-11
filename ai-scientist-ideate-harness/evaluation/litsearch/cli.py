@@ -61,8 +61,14 @@ def _completed(rd: Path, step: int, key: dict) -> bool:
         if report.get("failed") or not any(s.get("step") == f"STEP-S{step}" and
                                            s.get("status") in ("done", "degraded") for s in report.get("steps", [])):
             return False
-        required = ("step2_raw_papers.json",) if step == 2 else \
-                   ("screening_scores.json", "step3_shortlist.json")
+        if step == 4 and not any(g.get("gate") == "GATE-a5-check" and g.get("passed")
+                                 for g in report.get("gates", [])):
+            return False
+        required = {2: ("step2_raw_papers.json",),
+                    3: ("screening_scores.json", "step3_shortlist.json"),
+                    4: ("step2_raw_papers.json", "step2b_snowball_papers.json",
+                        "screening_scores.json", "step3_shortlist.json",
+                        "step3_screening_all.json")}[step]
         return all((rd / name).is_file() and
                    hashlib.sha256((rd / name).read_bytes()).hexdigest() == record.get("outputs", {}).get(name)
                    for name in required)
@@ -96,11 +102,11 @@ def run_pipeline(tasks_path: Path, sessions: Path, *, step: int, model: str, url
                     "status": "running", "completed": completed, "skipped": skipped,
                     "failures": failures, "total": len(tasks)})
                 continue
-            if step == 2:
+            if step in (2, 4):
                 topic = sessions / "_topics" / f"{task['qid']}.md"
                 topic.parent.mkdir(parents=True, exist_ok=True)
                 topic.write_text("# LitSearch benchmark query\n\n" + task["query"] + "\n", encoding="utf-8")
-                frm, to = "S1", "S2"       # S1 creates the frame needed by S2; only S2 is scored.
+                frm, to = "S1", "S2" if step == 2 else "S4"
             else:
                 if (rd / "_state" / "evaluation" / "input_hashes.json").is_file():
                     verify_frozen(rd)
@@ -116,8 +122,14 @@ def run_pipeline(tasks_path: Path, sessions: Path, *, step: int, model: str, url
             if not any(s.get("step") == f"STEP-S{step}" and s.get("status") in ("done", "degraded")
                        for s in summary.get("steps", [])):
                 raise RuntimeError(f"STEP-S{step} did not complete")
-            required = ("step2_raw_papers.json",) if step == 2 else \
-                       ("screening_scores.json", "step3_shortlist.json")
+            if step == 4 and not any(g.get("gate") == "GATE-a5-check" and g.get("passed")
+                                     for g in summary.get("gates", [])):
+                raise RuntimeError("GATE-a5-check did not pass")
+            required = {2: ("step2_raw_papers.json",),
+                        3: ("screening_scores.json", "step3_shortlist.json"),
+                        4: ("step2_raw_papers.json", "step2b_snowball_papers.json",
+                            "screening_scores.json", "step3_shortlist.json",
+                            "step3_screening_all.json")}[step]
             if not all((rd / name).is_file() for name in required):
                 raise RuntimeError(f"STEP-S{step} missing output artifacts")
             write_json(_completion_path(rd, step), {"key": key,

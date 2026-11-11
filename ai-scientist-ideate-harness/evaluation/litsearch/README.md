@@ -8,6 +8,12 @@ This ports the old `evaluation/step02` and `evaluation/step03` experiment bounda
   `screening_scores.json` plus `step3_shortlist.json`. The evaluator ranks by relevance and composite score.
 - Gold corpus IDs remain only in `tasks.jsonl`; they are never written to a pipeline research directory or prompt.
 
+The combined `step0203 run` executes every question through `STEP-S1`–`STEP-S4`. `STEP-S4` is A5 snowball; the
+production conductor rescreens A5 additions in A3 before its `GATE-a5-check`. The combined evaluator reads the
+final `step3_screening_all.json`, `step3_shortlist.json`, and snowball file only after that gate passes. It does not
+skip Step 3 when the initial Step 2 search misses a gold paper. The separate `step02` and `step03` commands above
+remain available for isolated checkpoints.
+
 `tasks.jsonl` uses one object per question. Step 2 requires `qid`, `query`, and `corpusids`. Step 3 preparation
 also requires `bm25_top100` and the official corpus file uses `corpusid`, `title`, and `abstract`.
 
@@ -84,3 +90,7 @@ python -m evaluation.litsearch.cli evaluate-step3 `
 Preparation records SHA-256 hashes for Step 0, the frozen Step 2 candidates, and the ledger. Step 3 refuses to
 run or evaluate if those inputs change. Runs resume completed units through the production ledger, while progress
 and per-question failures are kept separately so an infrastructure failure is not counted as a retrieval miss.
+The combined results write each question's final screening audit into `results.jsonl.screening_audit`. The
+production shortlist calls the borderline lower bound `include_at` (3.0) and `total_screened` `screened`.
+The evaluator reports the normal inclusion threshold (3.5) from the production legacy tier conversion,
+reports `include_at` as `borderline_threshold`, and derives `inclusion_rate` as included/screened.
