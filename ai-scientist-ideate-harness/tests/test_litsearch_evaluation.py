@@ -3,7 +3,8 @@ from __future__ import annotations
 import hashlib
 
 from evaluation.litsearch.adapter import prepare_step3, scored_papers, verify_frozen, write_json
-from evaluation.litsearch.cli import (_completed, _completion_key, _completion_path, selected_tasks)
+from evaluation.litsearch.cli import (_completed, _completion_key, _completion_path,
+                                      _recover_completed, _required_outputs, selected_tasks)
 from evaluation.litsearch.metrics import ranking_metrics
 from evaluation.litsearch.cli import _canonical_ids
 from evaluation.step03.scoring import composite_score, rank_papers
@@ -64,6 +65,41 @@ def test_step3_completion_requires_screening_outputs(tmp_path):
                "outputs": {name: hashlib.sha256((tmp_path / name).read_bytes()).hexdigest()
                            for name in ("screening_scores.json", "step3_shortlist.json")}})
     assert _completed(tmp_path, 3, key)
+
+
+def test_recovers_successful_final_run_without_marker(tmp_path):
+    rd = tmp_path / "sessions" / "q1"
+    topic = tmp_path / "sessions" / "_topics" / "q1.md"
+    topic.parent.mkdir(parents=True)
+    topic.write_text("# LitSearch benchmark query\n\nmechanism\n", encoding="utf-8")
+    key = _completion_key({"qid": "q1", "query": "mechanism"}, 4, "qwen3.8",
+                          "http://localhost", 32768, 8192, rd)
+    for name in _required_outputs(4):
+        write_json(rd / name, {})
+    summary = rd / "_state" / "harness" / "r_20261111_202006_b21c" / "summary.json"
+    write_json(summary, {"failed": False, "steps": [{"step": "STEP-S4", "status": "done"}],
+               "gates": [{"gate": "GATE-a5-check", "passed": True}]})
+    assert _recover_completed(rd, 4, key, topic)
+    assert _completed(rd, 4, key)
+    assert not _recover_completed(rd, 4, {**key, "query": "different"}, topic)
+    (rd / "step3_screening_all.json").unlink()
+    assert not _completed(rd, 4, key)
+
+
+def test_does_not_recover_failed_final_gate(tmp_path):
+    rd = tmp_path / "sessions" / "q1"
+    topic = tmp_path / "sessions" / "_topics" / "q1.md"
+    topic.parent.mkdir(parents=True)
+    topic.write_text("# LitSearch benchmark query\n\nmechanism\n", encoding="utf-8")
+    key = _completion_key({"qid": "q1", "query": "mechanism"}, 4, "qwen3.8",
+                          "http://localhost", 32768, 8192, rd)
+    for name in _required_outputs(4):
+        write_json(rd / name, {})
+    summary = rd / "_state" / "harness" / "r_20261111_202006_b21c" / "summary.json"
+    write_json(summary, {"failed": False, "steps": [{"step": "STEP-S4", "status": "done"}],
+               "gates": [{"gate": "GATE-a5-check", "passed": False}]})
+    assert not _recover_completed(rd, 4, key, topic)
+    assert not _completion_path(rd, 4).exists()
 
 
 def test_final_screening_audit_uses_production_fields():

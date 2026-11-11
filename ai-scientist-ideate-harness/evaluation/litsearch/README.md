@@ -15,6 +15,9 @@ skip Step 3 when the initial Step 2 search misses a gold paper. The separate `st
 remain available for isolated checkpoints.
 The evaluation runner sends `think=false` to Ollama for its structured outputs; otherwise reasoning can exhaust
 `num_predict` before Qwen emits any JSON. The selected value is part of the resume key.
+For a completed STEP-S4 run that predates the completion marker, the runner checks the latest production summary,
+the passed `GATE-a5-check`, the unchanged query, and all final outputs. If they are valid it restores the marker
+and skips model calls. The restored marker records that the original model settings were not in the summary.
 
 `tasks.jsonl` uses one object per question. Step 2 requires `qid`, `query`, and `corpusids`. Step 3 preparation
 also requires `bm25_top100` and the official corpus file uses `corpusid`, `title`, and `abstract`.

@@ -35,6 +35,14 @@ def _completion_path(rd: Path, step: int) -> Path:
     return rd / "_state" / "evaluation" / f"step{step}_complete.json"
 
 
+def _required_outputs(step: int) -> tuple[str, ...]:
+    return {2: ("step2_raw_papers.json",),
+            3: ("screening_scores.json", "step3_shortlist.json"),
+            4: ("step2_raw_papers.json", "step2b_snowball_papers.json",
+                "screening_scores.json", "step3_shortlist.json",
+                "step3_screening_all.json")}[step]
+
+
 def _completion_key(task: dict, step: int, model: str, url: str, num_ctx: int,
                     max_tokens: int, rd: Path) -> dict:
     key = {"qid": task["qid"], "query": task["query"], "step": step,
@@ -65,14 +73,46 @@ def _completed(rd: Path, step: int, key: dict) -> bool:
         if step == 4 and not any(g.get("gate") == "GATE-a5-check" and g.get("passed")
                                  for g in report.get("gates", [])):
             return False
-        required = {2: ("step2_raw_papers.json",),
-                    3: ("screening_scores.json", "step3_shortlist.json"),
-                    4: ("step2_raw_papers.json", "step2b_snowball_papers.json",
-                        "screening_scores.json", "step3_shortlist.json",
-                        "step3_screening_all.json")}[step]
+        required = _required_outputs(step)
         return all((rd / name).is_file() and
                    hashlib.sha256((rd / name).read_bytes()).hexdigest() == record.get("outputs", {}).get(name)
                    for name in required)
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+
+def _recover_completed(rd: Path, step: int, key: dict, topic: Path) -> bool:
+    """Restore a missing marker from the latest successful production run, without model calls."""
+    if step != 4 or not topic.is_file():
+        return False
+    if topic.read_text(encoding="utf-8") != "# LitSearch benchmark query\n\n" + key["query"] + "\n":
+        return False
+    runs = sorted((rd / "_state" / "harness").glob("r_*/summary.json"), reverse=True)
+    if not runs:
+        return False
+    try:
+        summary = runs[0]
+        report = read_json(summary)
+        if report.get("failed") or not any(s.get("step") == "STEP-S4" and
+                                           s.get("status") in ("done", "degraded")
+                                           for s in report.get("steps", [])):
+            return False
+        if not any(g.get("gate") == "GATE-a5-check" and g.get("passed")
+                   for g in report.get("gates", [])):
+            return False
+        required = _required_outputs(step)
+        if not all((rd / name).is_file() for name in required):
+            return False
+        old_marker = _completion_path(rd, step)
+        old_key = read_json(old_marker).get("key") if old_marker.is_file() else None
+        write_json(_completion_path(rd, step), {"key": key,
+                   "summary": str(summary.relative_to(rd)),
+                   "outputs": {name: hashlib.sha256((rd / name).read_bytes()).hexdigest()
+                               for name in required},
+                   "recovered": True,
+                   "original_completion_key": old_key,
+                   "source_model_settings": "not recorded in production summary"})
+        return _completed(rd, step, key)
     except (OSError, ValueError, KeyError, TypeError):
         return False
 
@@ -93,7 +133,8 @@ def run_pipeline(tasks_path: Path, sessions: Path, *, step: int, model: str, url
         rd = sessions / task.get("session", task["qid"])
         try:
             key = _completion_key(task, step, model, url, num_ctx, max_tokens, rd)
-            if _completed(rd, step, key):
+            topic = sessions / "_topics" / f"{task['qid']}.md"
+            if _completed(rd, step, key) or _recover_completed(rd, step, key, topic):
                 if step == 3 and (rd / "_state" / "evaluation" / "input_hashes.json").is_file():
                     verify_frozen(rd)
                 print(f"{task['qid']}: STEP-S{step} already complete; skipped", flush=True)
@@ -104,7 +145,6 @@ def run_pipeline(tasks_path: Path, sessions: Path, *, step: int, model: str, url
                     "failures": failures, "total": len(tasks)})
                 continue
             if step in (2, 4):
-                topic = sessions / "_topics" / f"{task['qid']}.md"
                 topic.parent.mkdir(parents=True, exist_ok=True)
                 topic.write_text("# LitSearch benchmark query\n\n" + task["query"] + "\n", encoding="utf-8")
                 frm, to = "S1", "S2" if step == 2 else "S4"
@@ -127,11 +167,7 @@ def run_pipeline(tasks_path: Path, sessions: Path, *, step: int, model: str, url
             if step == 4 and not any(g.get("gate") == "GATE-a5-check" and g.get("passed")
                                      for g in summary.get("gates", [])):
                 raise RuntimeError("GATE-a5-check did not pass")
-            required = {2: ("step2_raw_papers.json",),
-                        3: ("screening_scores.json", "step3_shortlist.json"),
-                        4: ("step2_raw_papers.json", "step2b_snowball_papers.json",
-                            "screening_scores.json", "step3_shortlist.json",
-                            "step3_screening_all.json")}[step]
+            required = _required_outputs(step)
             if not all((rd / name).is_file() for name in required):
                 raise RuntimeError(f"STEP-S{step} missing output artifacts")
             write_json(_completion_path(rd, step), {"key": key,
