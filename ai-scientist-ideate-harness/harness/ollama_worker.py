@@ -433,6 +433,21 @@ def _parses(line: str) -> bool:
         return False
 
 
+def _log_messages(path: Path, cfg: HarnessConfig, messages: list[dict], fmt: dict, answer: str, res: WorkerResult,
+                  session_id: str | None, resume: str | None) -> None:
+    """The whole request as it was sent (every message, untruncated, and the answer format) with the answer: the
+    record a run is compared by (every inline worker: ollama, gemini, openai). The .<tag>.<turn>.json next to it keeps only the head and tail of the last message."""
+    try:
+        path.write_text(json.dumps(
+            {"model": cfg.model, "num_ctx": cfg.num_ctx, "num_predict": cfg.num_predict, "think": cfg.think,
+             "temperature": cfg.temperature, "session_id": session_id, "resumed": bool(resume),
+             "messages": messages, "format": fmt, "answer": answer or "",
+             "ok": res.ok, "error": res.error, "tokens_in": res.tokens_in, "tokens_out": res.tokens_out,
+             "duration_ms": res.duration_ms}, ensure_ascii=False, indent=1), encoding="utf-8")
+    except OSError:                              # a log that cannot be written never fails the Unit
+        pass
+
+
 def run_worker(cfg: HarnessConfig, *, task: str, system: str, cwd: Path, scope: FileScope | None = None,
                resume: str | None = None, timeout: float | None = None, log_dir: Path | None = None,
                label: str = "worker", say=None, **_claude_only) -> WorkerResult:
@@ -480,7 +495,8 @@ def converse(cfg: HarnessConfig, *, task: str, system: str, cwd: Path, scope: Fi
     for turn in (1, 2):                                       # the answer, and one correction of an unusable one
         if warm and sum(len(m["content"]) for m in history) > WARM_CHARS and not cfg.dry_run:
             prewarm(cfg, history, say)
-        res, content = chat_fn(cfg, history, limit, answer_format(scope))
+        fmt = answer_format(scope)
+        res, content = chat_fn(cfg, history, limit, fmt)
         total.tokens_in += res.tokens_in
         total.tokens_out += res.tokens_out
         total.cost_usd += res.cost_usd
@@ -492,6 +508,8 @@ def converse(cfg: HarnessConfig, *, task: str, system: str, cwd: Path, scope: Fi
                 {"model": cfg.model, "request_head": history[-1]["content"][:6000],
                  "request_tail": history[-1]["content"][-4000:], "answer": content, "error": res.error},
                 ensure_ascii=False, indent=1), encoding="utf-8")
+            _log_messages(log_dir / f"{label}.{log_tag}.{turn}.messages.json", cfg, history, fmt, content, res,
+                          total.session_id, resume)
         if not res.ok:
             total.ok, total.error, total.error_category = False, res.error, res.error_category
             break

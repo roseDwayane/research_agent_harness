@@ -103,6 +103,24 @@ def test_request_shape_auth_and_write(tmp_path, fake, monkeypatch):
     assert s.headers[0].get("User-Agent", "").startswith("ideate-harness/")      # not Python-urllib (Cloudflare 1010)
 
 
+def test_every_turn_logs_the_whole_request_untruncated(tmp_path, fake):
+    def responder(body, n):
+        return answer([("y.json", "{bad")]) if n == 1 else answer([("y.json", '{"fine": true}')])
+    s = fake(responder)
+    log = tmp_path / "log"
+    task = "T" * 11000             # longer than the head (6000) + tail (4000) the old log kept; short of WARM_CHARS
+    scope = ow.FileScope(base=tmp_path, writes=[tmp_path / "y.json"])
+    r = ow.run_worker(cfg_for(s.url), task=task, system="S", cwd=tmp_path, scope=scope, log_dir=log, label="w")
+    assert r.ok and len(s.requests) == 2
+    for turn in (1, 2):
+        rec = json.loads((log / f"w.ollama.{turn}.messages.json").read_text())
+        assert rec["messages"] == s.requests[turn - 1]["messages"]          # exactly what was sent, every message
+        assert rec["format"] == s.requests[turn - 1]["format"] and rec["model"] == "m"
+        assert rec["session_id"] == r.session_id and rec["tokens_in"] == 100
+    first = json.loads((log / "w.ollama.1.messages.json").read_text())
+    assert task in first["messages"][-1]["content"] and first["answer"] == answer([("y.json", "{bad")])[1]["message"]["content"]
+
+
 def test_only_allowed_paths_are_written_and_a_bad_answer_is_corrected_once(tmp_path, fake):
     def responder(body, n):
         if n == 1:

@@ -114,6 +114,15 @@ def test_a_bad_answer_is_corrected_once_in_the_same_conversation(tmp_path, fake)
     assert json.loads((tmp_path / "y.json").read_text()) == {"fine": True}
 
 
+def test_an_api_turn_logs_the_whole_request_too(tmp_path, fake):
+    s = fake(lambda body, n: completion([("x.md", "ok")]))
+    log = tmp_path / "log"
+    r = aw.run_worker(cfg_for(s.url), task="T" * 11000, system="S", cwd=tmp_path, log_dir=log, label="w",
+                      scope=ow.FileScope(base=tmp_path, writes=[tmp_path / "x.md"]))
+    rec = json.loads((log / "w.api.1.messages.json").read_text())
+    assert r.ok and rec["messages"] == s.requests[0]["messages"] and "sk-test-123" not in json.dumps(rec)
+
+
 def test_no_key_is_an_environment_error_and_nothing_is_sent(tmp_path, fake, monkeypatch):
     s = fake(lambda body, n: completion([]))
     monkeypatch.delenv("TEST_API_KEY")
