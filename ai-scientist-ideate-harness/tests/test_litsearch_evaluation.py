@@ -67,13 +67,14 @@ def test_step3_completion_requires_screening_outputs(tmp_path):
 
 def test_final_screening_audit_uses_production_fields():
     audit = screening_audit(
-        {"screening_config": {"include_at": 3.0, "weights": {"relevance": 0.5,
+        {"screening_config": {"threshold": 3.5, "borderline_threshold": 3.0,
+             "weights": {"relevance": 0.5,
              "quality": 0.3, "recency_impact": 0.2}},
-         "summary": {"screened": 10, "included": 4, "excluded": 6}},
-        {"summary": {"borderline": 1}, "papers": [{"manually_included": True}, {}]})
+         "summary": {"total_screened": 10, "included": 4, "borderline": 1,
+                     "excluded": 6, "inclusion_rate": "40%", "manually_included": 1}})
     assert audit["threshold"] == 3.5
     assert audit["borderline_threshold"] == 3.0
-    assert audit["inclusion_rate"] == 0.4
+    assert audit["inclusion_rate"] == "40%"
     assert audit["manually_included"] == 1
 
 

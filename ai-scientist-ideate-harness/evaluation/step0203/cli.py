@@ -18,32 +18,23 @@ def _mapping(path):
     return read_json(path) if path else {}
 
 
-def screening_audit(shortlist: dict, screening_all: dict) -> dict:
+def screening_audit(shortlist: dict) -> dict:
     """Report requested fields with production names and explicit derived values."""
     config = shortlist.get("screening_config") or {}
     summary = shortlist.get("summary") or {}
-    all_summary = screening_all.get("summary") or {}
-    screened = summary.get("screened")
     included = summary.get("included")
     return {
-        "threshold": 3.5 if config.get("include_at") == 3.0 else config.get("threshold"),
-        "borderline_threshold": config.get("include_at"),
+        "threshold": config.get("threshold"),
+        "borderline_threshold": config.get("borderline_threshold"),
         "weights": {k: (config.get("weights") or {}).get(k)
                     for k in ("relevance", "quality", "recency_impact")},
-        "total_screened": screened,
+        "total_screened": summary.get("total_screened"),
         "included": included,
-        "borderline": all_summary.get("borderline"),
+        "borderline": summary.get("borderline"),
         "excluded": summary.get("excluded"),
-        "inclusion_rate": included / screened if isinstance(included, int) and
-                          isinstance(screened, int) and screened else None,
-        "manually_included": sum(bool(p.get("manually_included"))
-                                 for p in screening_all.get("papers") or []),
-        "source_fields": {"threshold": "production it_legacy.INCLUDED_FLOOR (tiers 1-3 start at 3.5)",
-                          "borderline_threshold": "step3_shortlist.screening_config.include_at",
-                          "total_screened": "step3_shortlist.summary.screened",
-                          "borderline": "step3_screening_all.summary.borderline",
-                          "inclusion_rate": "included / screened",
-                          "manually_included": "count(step3_screening_all.papers[].manually_included)"}}
+        "inclusion_rate": summary.get("inclusion_rate"),
+        "manually_included": summary.get("manually_included"),
+        "source": "step3_shortlist.json; values written by production harness"}
 
 
 def rank_final_papers(papers: list[dict], by: str) -> list[dict]:
@@ -78,7 +69,7 @@ def evaluate(tasks_path: Path, sessions: Path, out: Path, mapping_path: Path | N
             papers = screen["papers"]
             snowball = read_json(rd / "step2b_snowball_papers.json").get("papers") or []
             final_ids = _canonical_ids(raw + snowball, mapping)
-            audit = screening_audit(shortlist, screen)
+            audit = screening_audit(shortlist)
         else:
             papers, final_ids, audit = [], initial_ids, None
         row = {**task, "step2_hit": bool(set(initial_ids) & set(gold)),

@@ -90,7 +90,6 @@ python -m evaluation.litsearch.cli evaluate-step3 `
 Preparation records SHA-256 hashes for Step 0, the frozen Step 2 candidates, and the ledger. Step 3 refuses to
 run or evaluate if those inputs change. Runs resume completed units through the production ledger, while progress
 and per-question failures are kept separately so an infrastructure failure is not counted as a retrieval miss.
-The combined results write each question's final screening audit into `results.jsonl.screening_audit`. The
-production shortlist calls the borderline lower bound `include_at` (3.0) and `total_screened` `screened`.
-The evaluator reports the normal inclusion threshold (3.5) from the production legacy tier conversion,
-reports `include_at` as `borderline_threshold`, and derives `inclusion_rate` as included/screened.
+The combined results write each question's final screening audit into `results.jsonl.screening_audit`. These
+values are read directly from the production `step3_shortlist.json` after its legacy-format augmentation:
+`screening_config.threshold`, `borderline_threshold`, the three weights, and the requested `summary` fields.
