@@ -436,7 +436,7 @@ def _parses(line: str) -> bool:
 def _log_messages(path: Path, cfg: HarnessConfig, messages: list[dict], fmt: dict, answer: str, res: WorkerResult,
                   session_id: str | None, resume: str | None) -> None:
     """The whole request as it was sent (every message, untruncated, and the answer format) with the answer: the
-    record a run is compared by. The .ollama.<turn>.json next to it keeps only the head and tail of the last message."""
+    record a run is compared by (every inline worker: ollama, gemini, openai). The .<tag>.<turn>.json next to it keeps only the head and tail of the last message."""
     try:
         path.write_text(json.dumps(
             {"model": cfg.model, "num_ctx": cfg.num_ctx, "num_predict": cfg.num_predict, "think": cfg.think,
@@ -453,13 +453,24 @@ def run_worker(cfg: HarnessConfig, *, task: str, system: str, cwd: Path, scope: 
                label: str = "worker", say=None, **_claude_only) -> WorkerResult:
     """One Ollama worker turn (and, for an answer the conductor cannot use, one correction turn in the same
     conversation). The claude-only arguments (allowed tools, add_dirs, budget_usd, bin_dir) do not apply."""
+    return converse(cfg, task=task, system=system, cwd=cwd, scope=scope, resume=resume, timeout=timeout,
+                    log_dir=log_dir, label=label, say=say, chat_fn=chat, context_tokens=int(cfg.num_ctx),
+                    warm=True, name="Ollama", log_tag="ollama")
+
+
+def converse(cfg: HarnessConfig, *, task: str, system: str, cwd: Path, scope: FileScope | None, resume: str | None,
+             timeout: float | None, log_dir: Path | None, label: str, say, chat_fn, context_tokens: int, warm: bool,
+             name: str, log_tag: str) -> WorkerResult:
+    """The conversation every inline worker holds (no tools: the files in the prompt, one JSON answer back, one
+    correction turn), whatever answers it: `chat_fn(cfg, messages, timeout, fmt) -> (WorkerResult, content)` is the
+    transport - Ollama's /api/chat here, an API provider's /chat/completions in api_worker.py."""
     if not cfg.model:
-        return WorkerResult(False, error="worker = \"ollama\" needs a model ([harness] model)",
+        return WorkerResult(False, error=f"worker = \"{cfg.worker}\" needs a model ([harness] model)",
                             error_category="environment")
     scope = scope or FileScope(base=Path(cwd))
     if scope.unavailable and not resume:
         return WorkerResult(False, error="this step needs a worker that runs skill commands itself ("
-                            + ", ".join(scope.unavailable) + "); the Ollama worker cannot run commands - the recipe "
+                            + ", ".join(scope.unavailable) + f"); the {name} worker cannot run commands - the recipe "
                             "has to run them as steps of its own", error_category="environment")
     if resume:      # the history has the model's own answer: show a file again only where a tool changed it since
         wrote = _WROTE.get(resume, {})                    # (re-reading its own answer made a revision the longest
@@ -473,29 +484,31 @@ def run_worker(cfg: HarnessConfig, *, task: str, system: str, cwd: Path, scope: 
         [{"role": "system", "content": ollama_system(system)}]
     history.append({"role": "user", "content": message})
     est = int(sum(len(m["content"]) for m in history) / CHARS_PER_TOKEN)
-    if est > int(cfg.num_ctx) * 0.95:
-        return WorkerResult(False, error=f"the prompt is about {est} tokens, more than num_ctx {cfg.num_ctx}: Ollama "
-                            "would cut it silently - raise num_ctx (and the server's) or give the Unit less to read",
-                            error_category="budget")
+    if est > context_tokens * 0.95:
+        hint = ("Ollama would cut it silently - raise num_ctx (and the server's)" if name == "Ollama" else
+                "the API would refuse it - raise max_context if the model allows more")
+        return WorkerResult(False, error=f"the prompt is about {est} tokens, more than the context {context_tokens}: "
+                            f"{hint}, or give the Unit less to read", error_category="budget")
     limit = timeout or cfg.worker_timeout_s
     total = WorkerResult(True, session_id=resume or uuid.uuid4().hex)
     note, written = "", []
     for turn in (1, 2):                                       # the answer, and one correction of an unusable one
-        if sum(len(m["content"]) for m in history) > WARM_CHARS and not cfg.dry_run:
+        if warm and sum(len(m["content"]) for m in history) > WARM_CHARS and not cfg.dry_run:
             prewarm(cfg, history, say)
         fmt = answer_format(scope)
-        res, content = chat(cfg, history, limit, fmt)
+        res, content = chat_fn(cfg, history, limit, fmt)
         total.tokens_in += res.tokens_in
         total.tokens_out += res.tokens_out
+        total.cost_usd += res.cost_usd
         total.duration_ms += res.duration_ms
         total.turns += 1
         if log_dir is not None:
             log_dir.mkdir(parents=True, exist_ok=True)
-            (log_dir / f"{label}.ollama.{turn}.json").write_text(json.dumps(
+            (log_dir / f"{label}.{log_tag}.{turn}.json").write_text(json.dumps(
                 {"model": cfg.model, "request_head": history[-1]["content"][:6000],
                  "request_tail": history[-1]["content"][-4000:], "answer": content, "error": res.error},
                 ensure_ascii=False, indent=1), encoding="utf-8")
-            _log_messages(log_dir / f"{label}.ollama.{turn}.messages.json", cfg, history, fmt, content, res,
+            _log_messages(log_dir / f"{label}.{log_tag}.{turn}.messages.json", cfg, history, fmt, content, res,
                           total.session_id, resume)
         if not res.ok:
             total.ok, total.error, total.error_category = False, res.error, res.error_category
