@@ -4,7 +4,8 @@
                       ``execute(ctx, unit, recipe, phase, gen, attempt) -> ExecResult``
   RecipeExecutor      the default: walks the Unit's recipe step by step
      run step         ScriptStep: a skill command
-     write step       ClaudeStep: one worker - claude -p, or an Ollama server (worker = "ollama", ollama_worker.py) -
+     write step       ClaudeStep: one worker - claude -p, an Ollama server (worker = "ollama", ollama_worker.py) or an
+                      API provider (worker = "gemini" | "openai", api_worker.py) -
                       an isolated one for A1.e
      fanout step      FanoutStep: one worker per batch file, max_parallel at once, a failed batch re-dispatched once
 
@@ -30,6 +31,7 @@ from ideate_v2 import retry
 
 from . import claude_worker as cw
 from . import ollama_worker as ow
+from . import api_worker as aw
 from .context import CODE_FOR, RunContext, instance_of
 from .recipes import Recipe, Step
 from .skill import CommandResult, Subs, classify_failure
@@ -204,7 +206,7 @@ class RecipeExecutor:
 
     @staticmethod
     def _tool(ctx: RunContext) -> str:
-        return f"ollama:{ctx.cfg.model}" if ctx.cfg.worker == "ollama" else "claude -p"
+        return f"{ctx.cfg.worker}:{ctx.cfg.model}" if ctx.cfg.inline else "claude -p"
 
     @staticmethod
     def _scratch(ctx: RunContext, unit: str) -> list[str]:
@@ -259,7 +261,7 @@ class RecipeExecutor:
 
     def _scope(self, ctx: RunContext, unit: str, body: dict, subs: Subs) -> ow.FileScope:
         exp = lambda x: Path(ctx.skill.expand(x, subs, quote=False))       # noqa: E731
-        lookups, unavailable = self._lookups(ctx, body, subs) if ctx.cfg.worker == "ollama" else ([], [])
+        lookups, unavailable = self._lookups(ctx, body, subs) if ctx.cfg.inline else ([], [])
         schema = None
         if body.get("schema") and exp(body["schema"]).is_file():     # written by an earlier step (frame strategy-brief)
             try:
@@ -273,7 +275,7 @@ class RecipeExecutor:
                             unavailable=unavailable, max_file_chars=ctx.cfg.file_chars(), schema=schema)
 
     def _worker_kw(self, ctx: RunContext, unit: str, body: dict, subs: Subs, log: Path) -> dict:
-        if ctx.cfg.worker == "ollama":
+        if ctx.cfg.inline:
             return dict(scope=self._scope(ctx, unit, body, subs), log_dir=log)
         bin_dir = cw.write_shims(ctx.state_dir / "bin", ctx.cfg)
         deny = [Path(ctx.skill.expand(p, subs, quote=False)) for p in body.get("forbid") or []]
@@ -289,6 +291,8 @@ class RecipeExecutor:
         while True:
             if ctx.cfg.worker == "ollama":
                 wr = ow.run_worker(ctx.cfg, label=f"{label}.a{attempt}", say=lambda m: ctx.say(f"      … {unit}: {m}"), **kw)
+            elif ctx.cfg.api:
+                wr = aw.run_worker(ctx.cfg, label=f"{label}.a{attempt}", **kw)
             else:
                 wr = cw.run_worker(ctx.cfg, label=f"{label}.a{attempt}", **kw)
             ctx.add_usage(wr.metrics)
@@ -333,7 +337,7 @@ class RecipeExecutor:
                 if src.is_file():
                     shutil.copy2(src, cwd / src.name)
                     shown.append((str(src), cwd / src.name))
-            if ctx.cfg.worker == "ollama":                 # it reads its copies, and writes into its folder only
+            if ctx.cfg.inline:                             # it reads its copies, and writes into its folder only
                 kw["scope"] = ow.FileScope(base=cwd, reads=shown, writes=[cwd / w.name for w in writes],
                                            max_file_chars=ctx.cfg.file_chars(), schema=kw["scope"].schema)
             task = task.replace(str(subs.rd) + "/", "./")
@@ -456,7 +460,7 @@ class RecipeExecutor:
                 task = task.replace(k, str(v))
             task = ctx.skill.expand(task, subs, quote=False)
             kw_b = dict(kw)
-            if ctx.cfg.worker == "ollama":
+            if ctx.cfg.inline:
                 shown = ([(str(bb), bb)] if bb else []) + [(str(b), b)] + _named_files(b, root, outs)
                 kw_b["scope"] = replace(kw["scope"], reads=shown, writes=list(outs), schema=_batch_schema(b))
             wr = self._call(ctx, unit, f"{label}.{b.stem}.t{tries}", task=task, system=system, cwd=root, **kw_b)
