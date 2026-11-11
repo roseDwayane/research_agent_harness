@@ -5,7 +5,7 @@
   RecipeExecutor      the default: walks the Unit's recipe step by step
      run step         ScriptStep: a skill command
      write step       ClaudeStep: one worker - claude -p, an Ollama server (worker = "ollama", ollama_worker.py) or an
-                      OpenAI-compatible API (worker = "openai", openai_worker.py) -
+                      API provider (worker = "gemini" | "openai", api_worker.py) -
                       an isolated one for A1.e
      fanout step      FanoutStep: one worker per batch file, max_parallel at once, a failed batch re-dispatched once
 
@@ -31,7 +31,7 @@ from ideate_v2 import retry
 
 from . import claude_worker as cw
 from . import ollama_worker as ow
-from . import openai_worker as aw
+from . import api_worker as aw
 from .context import CODE_FOR, RunContext, instance_of
 from .recipes import Recipe, Step
 from .skill import CommandResult, Subs, classify_failure
@@ -291,7 +291,7 @@ class RecipeExecutor:
         while True:
             if ctx.cfg.worker == "ollama":
                 wr = ow.run_worker(ctx.cfg, label=f"{label}.a{attempt}", say=lambda m: ctx.say(f"      … {unit}: {m}"), **kw)
-            elif ctx.cfg.worker == "openai":
+            elif ctx.cfg.api:
                 wr = aw.run_worker(ctx.cfg, label=f"{label}.a{attempt}", **kw)
             else:
                 wr = cw.run_worker(ctx.cfg, label=f"{label}.a{attempt}", **kw)

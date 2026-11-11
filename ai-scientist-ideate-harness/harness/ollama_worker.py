@@ -448,7 +448,7 @@ def converse(cfg: HarnessConfig, *, task: str, system: str, cwd: Path, scope: Fi
              name: str, log_tag: str) -> WorkerResult:
     """The conversation every inline worker holds (no tools: the files in the prompt, one JSON answer back, one
     correction turn), whatever answers it: `chat_fn(cfg, messages, timeout, fmt) -> (WorkerResult, content)` is the
-    transport - Ollama's /api/chat here, an OpenAI-compatible /chat/completions in openai_worker.py."""
+    transport - Ollama's /api/chat here, an API provider's /chat/completions in api_worker.py."""
     if not cfg.model:
         return WorkerResult(False, error=f"worker = \"{cfg.worker}\" needs a model ([harness] model)",
                             error_category="environment")

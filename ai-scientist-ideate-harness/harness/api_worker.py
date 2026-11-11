@@ -1,17 +1,18 @@
-"""An OpenAI-compatible worker: the Ollama worker's conversation (ollama_worker.converse - the files in the prompt,
-one JSON answer back, one correction turn) over a `/chat/completions` endpoint instead of Ollama's /api/chat.
+"""An API provider worker: the Ollama worker's conversation (ollama_worker.converse - the files in the prompt, one
+JSON answer back, one correction turn) over a provider's `/chat/completions` endpoint instead of Ollama's /api/chat.
 
-One worker covers every provider that speaks the OpenAI Chat Completions API:
+The worker is named after the provider; all of them speak the OpenAI Chat Completions format, so one transport
+serves them, and each provider only sets its defaults (config.API_PROVIDERS):
 
     [harness]                                       [harness]
-    worker = "openai"                               worker = "openai"
-    api_base = "https://api.openai.com/v1"          api_base = "https://generativelanguage.googleapis.com/v1beta/openai"
-    api_key_env = "OPENAI_API_KEY"                  api_key_env = "GEMINI_API_KEY"
-    model = "<a GPT model your key may use>"        model = "<a Gemini model your key may use>"
-    max_context = 128000                            max_context = 1000000
+    worker = "gemini"          # tested             worker = "openai"          # same format, not run yet
+    model = "gemini-3.5-flash"                      model = "<a GPT model your key may use>"
+    max_context = 1000000                           max_context = 128000
+    # key: GEMINI_API_KEY in the environment        # key: OPENAI_API_KEY in the environment
 
-The key is read from the environment variable `api_key_env` names - never from the config file - and is sent only
-as "Authorization: Bearer ..."; it is never logged. The answer is asked for under `response_format` = the step's JSON
+api_base and api_key_env default to the provider's and can be set to reach another compatible endpoint. The key is
+read from the environment variable `api_key_env` names - never from the config file - and is sent only as
+"Authorization: Bearer ..."; it is never logged. The answer is asked for under `response_format` = the step's JSON
 schema (non-strict: the conductor checks the answer anyway); a provider that refuses that form gets one plain
 `json_object` request with the schema written into the prompt instead. With `api_price_in` / `api_price_out` (USD per
 million tokens) every call's cost is counted, and `api_budget_usd` stops a run before it spends more.
@@ -79,7 +80,7 @@ def _failure(cfg: HarnessConfig, status: int, raw: str) -> tuple[str, str]:
 def chat(cfg: HarnessConfig, messages: list[dict], timeout: float, fmt: dict | None = None) -> tuple[WorkerResult, str]:
     """One /chat/completions call -> (result, the assistant's raw content). The transport of ollama_worker.converse."""
     if not os.environ.get(cfg.api_key_env):
-        return WorkerResult(False, error=f"no API key: export it as {cfg.api_key_env} (worker = \"openai\", "
+        return WorkerResult(False, error=f"no API key: export it as {cfg.api_key_env} (worker = \"{cfg.worker}\", "
                                          f"api_base {cfg.api_base})", error_category="environment"), ""
     if cfg.api_budget_usd is not None and spent() >= float(cfg.api_budget_usd):
         return WorkerResult(False, error=f"the run has spent ${spent():.2f} of api_budget_usd ${cfg.api_budget_usd}: "

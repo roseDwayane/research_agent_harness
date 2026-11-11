@@ -3,11 +3,12 @@
     [harness]
     python = "/path/to/python"          # interpreter for scripts/ (needs the mcp package); default: this one
     worker = "claude"                   # "claude": claude -p workers | "ollama": an Ollama server, no Claude Code
-                                        # | "openai": any OpenAI-compatible API (GPT, Gemini), no Claude Code
+                                        # | "gemini" / "openai": an API provider (api_worker.py), no Claude Code
     claude = "claude"                   # the Claude Code CLI used for the model Units
     # worker = "ollama": ollama_url = "http://127.0.0.1:11434", model = "qwen3.8", num_ctx = 131072, think = false
-    # worker = "openai": api_base = "https://api.openai.com/v1", api_key_env = "OPENAI_API_KEY", model = "...",
-    #                    max_context = 128000, api_price_in / api_price_out = USD per 1M tokens, api_budget_usd = 20
+    # worker = "gemini": model = "gemini-3.5-flash", max_context = 1000000 (key: GEMINI_API_KEY in the environment;
+    #                    api_base / api_key_env default to the provider's), api_price_in / api_price_out = USD per 1M
+    #                    tokens, api_budget_usd = 20. worker = "openai" the same, with OPENAI_API_KEY (not tested yet)
     model = "claude-opus-5-5"           # optional; default: the CLI's own
     max_parallel = 4                    # fan-out workers at once
     default_budget_usd = 5.0            # per worker (claude -p --max-budget-usd); unset: no cap
@@ -37,7 +38,14 @@ except ModuleNotFoundError:                      # Python 3.10
 
 MODULE_ROOT = Path(__file__).resolve().parent.parent
 DEPTHS = ("quick", "standard", "deep")
-WORKERS = ("claude", "ollama", "openai")
+# API providers: one transport (api_worker.py, the OpenAI Chat Completions format), and per provider the defaults a
+# config may override. "gemini" is tested (Google's OpenAI-compatible endpoint); "openai" speaks the same format and
+# has not been run yet.
+API_PROVIDERS = {
+    "gemini": {"api_base": "https://generativelanguage.googleapis.com/v1beta/openai", "api_key_env": "GEMINI_API_KEY"},
+    "openai": {"api_base": "https://api.openai.com/v1", "api_key_env": "OPENAI_API_KEY"},
+}
+WORKERS = ("claude", "ollama", *API_PROVIDERS)
 
 # Conservative bounds for the loops the contracts state no number for (OQ-07). LOOP-11 is bounded by the ready
 # questions that remain and LOOP-12 by max_num_generations; they are not listed here.
@@ -52,10 +60,11 @@ class HarnessConfig:
     model: str | None = None
     ollama_url: str = "http://127.0.0.1:11434"   # worker = "ollama": the server (OLLAMA_API_KEY -> Bearer header)
     ollama_api_key_env: str = "OLLAMA_API_KEY"
-    # worker = "openai": any OpenAI-compatible /chat/completions (OpenAI, Gemini's OpenAI endpoint, ...) - see
-    # openai_worker.py. The key is read from the environment variable named here, never from this file.
-    api_base: str = "https://api.openai.com/v1"
-    api_key_env: str = "OPENAI_API_KEY"
+    # worker = "gemini" | "openai": an API provider over the OpenAI-compatible /chat/completions (api_worker.py).
+    # api_base and api_key_env default to the provider's (API_PROVIDERS); set them to use another endpoint. The key
+    # is read from the environment variable api_key_env names, never from this file.
+    api_base: str | None = None
+    api_key_env: str | None = None
     max_context: int = 128000                    # the model's context window in tokens (prompt + answer)
     api_max_tokens_field: str = "max_completion_tokens"   # the request field for num_predict ("max_tokens" for some)
     api_reasoning_effort: str | None = None      # a thinking model's `reasoning_effort` ("none" | "low" | "medium" |
@@ -106,10 +115,18 @@ class HarnessConfig:
             raise ValueError("max_parallel must be >= 1")
         if self.worker not in WORKERS:
             raise ValueError(f"worker must be one of {WORKERS}, not {self.worker!r}")
-        if self.worker in ("ollama", "openai") and not self.model:
-            raise ValueError(f'worker = "{self.worker}" needs a model (e.g. model = "qwen3.8" for ollama, or the '
-                             'model name your API key may use for openai)')
+        if self.inline and not self.model:
+            raise ValueError(f'worker = "{self.worker}" needs a model (e.g. model = "qwen3.8" for ollama, or a model '
+                             f'name your API key may use for {self.worker})')
+        for k, v in API_PROVIDERS.get(self.worker, {}).items():          # the provider's defaults, unless set
+            if not getattr(self, k):
+                setattr(self, k, v)
         self.module_root = Path(self.module_root)
+
+    @property
+    def api(self) -> bool:
+        """An API provider (gemini, openai): the OpenAI-compatible transport of api_worker.py."""
+        return self.worker in API_PROVIDERS
 
     @property
     def inline(self) -> bool:

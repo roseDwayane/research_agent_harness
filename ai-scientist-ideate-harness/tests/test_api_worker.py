@@ -1,4 +1,4 @@
-"""The OpenAI-compatible worker (harness/openai_worker.py) against a fake /chat/completions server: no network, no key."""
+"""The API provider worker (harness/api_worker.py) against a fake /chat/completions server: no network, no key."""
 from __future__ import annotations
 
 import json
@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 
 from harness import ollama_worker as ow
-from harness import openai_worker as aw
-from harness.config import HarnessConfig
+from harness import api_worker as aw
+from harness.config import API_PROVIDERS, HarnessConfig
 from harness.context import RunContext
 from harness.executors import RecipeExecutor
 from harness.recipes import parse
@@ -197,15 +197,38 @@ def test_max_tokens_field_can_be_renamed(tmp_path, fake):
 
 
 def test_config_needs_a_model_and_sizes_batches_from_max_context():
-    with pytest.raises(ValueError):
-        HarnessConfig(worker="openai")
+    for w in API_PROVIDERS:
+        with pytest.raises(ValueError):
+            HarnessConfig(worker=w)
     c = HarnessConfig(worker="openai", model="m", max_context=200_000)
     assert c.inline and c.context_tokens() == 200_000 and c.file_chars() == 300_000 and c.batch_budget() == 40_000
     assert not HarnessConfig().inline and HarnessConfig().batch_budget() == 0
 
 
+def test_each_provider_brings_its_endpoint_and_key_variable_and_both_can_be_overridden():
+    g = HarnessConfig(worker="gemini", model="gemini-3.5-flash")
+    assert g.api and g.inline
+    assert g.api_base == "https://generativelanguage.googleapis.com/v1beta/openai" and g.api_key_env == "GEMINI_API_KEY"
+    o = HarnessConfig(worker="openai", model="m")
+    assert o.api_base == "https://api.openai.com/v1" and o.api_key_env == "OPENAI_API_KEY"
+    c = HarnessConfig(worker="gemini", model="m", api_base="https://proxy.example/v1", api_key_env="MY_KEY")
+    assert c.api_base == "https://proxy.example/v1" and c.api_key_env == "MY_KEY"
+    assert not HarnessConfig(worker="ollama", model="q").api and HarnessConfig().api_base is None
+
+
+def test_a_gemini_worker_sends_to_its_endpoint_with_its_key(tmp_path, fake, monkeypatch):
+    s = fake(lambda body, n: completion([("x.md", "ok")]))
+    monkeypatch.setenv("GEMINI_API_KEY", "g-key-456")
+    cfg = HarnessConfig(worker="gemini", model="gemini-3.5-flash", api_base=s.url)     # the endpoint faked, the key not
+    r = aw.run_worker(cfg, task="t", system="s", cwd=tmp_path, scope=ow.FileScope(base=tmp_path, writes=[tmp_path / "x.md"]))
+    assert r.ok and s.headers[0].get("Authorization") == "Bearer g-key-456" and s.requests[0]["model"] == "gemini-3.5-flash"
+    monkeypatch.delenv("GEMINI_API_KEY")
+    r2 = aw.run_worker(cfg, task="t", system="s", cwd=tmp_path, scope=ow.FileScope(base=tmp_path))
+    assert not r2.ok and "GEMINI_API_KEY" in r2.error and 'worker = "gemini"' in r2.error and len(s.requests) == 1
+
+
 # ------------------------------------------------------------------------------------------------- in the executor
-def test_executor_runs_the_openai_worker_and_feedback_continues_the_conversation(tmp_path, fake):
+def test_executor_runs_the_api_worker_and_feedback_continues_the_conversation(tmp_path, fake):
     target = tmp_path / "ideas.json"
 
     def responder(body, n):

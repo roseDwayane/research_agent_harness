@@ -183,20 +183,27 @@ Limits to know:
   still finishes reading the prompt, and the call then starts writing at once - instead of a dropped call whose whole
   answer the server writes for nobody before the re-send.
 
-## Without Claude Code: an OpenAI-compatible API (GPT, Gemini)
+## Without Claude Code: an API provider (Gemini, OpenAI)
 
-`worker = "openai"` holds the same conversation as the Ollama worker - the files in the prompt, one JSON answer back,
-one correction turn, every check and gate unchanged - over any `/chat/completions` endpoint
-(`harness/openai_worker.py`). OpenAI and Gemini (through its OpenAI-compatible endpoint) both speak it:
+`worker = "gemini"` (or `"openai"`) holds the same conversation as the Ollama worker - the files in the prompt, one
+JSON answer back, one correction turn, every check and gate unchanged - over the provider's API
+(`harness/api_worker.py`). Both providers speak the OpenAI Chat Completions format (Gemini through its
+OpenAI-compatible endpoint), so one transport serves them; the worker name picks the provider's endpoint and key
+variable:
+
+| `worker` | endpoint (`api_base`) | key variable (`api_key_env`) | status |
+|---|---|---|---|
+| `gemini` | `https://generativelanguage.googleapis.com/v1beta/openai` | `GEMINI_API_KEY` | tested (gemini-3.5-flash) |
+| `openai` | `https://api.openai.com/v1` | `OPENAI_API_KEY` | same format, not run yet |
 
 ```toml
 [harness]
-worker = "openai"
-api_base = "https://api.openai.com/v1"      # Gemini: "https://generativelanguage.googleapis.com/v1beta/openai"
-api_key_env = "OPENAI_API_KEY"              # Gemini: "GEMINI_API_KEY" - the NAME of the variable, never the key
-model = "<a model your key may use>"
-max_context = 128000                        # the model's context window: prompts and batches are sized from it
-num_predict = 16384                         # the longest answer
+worker = "gemini"
+model = "gemini-3.5-flash"                  # a model your key may use (gemini-2.5-flash is closed to new users)
+max_context = 1000000                       # the model's context window: prompts and batches are sized from it
+num_predict = 32768                         # the longest answer, hidden reasoning included
+# api_base = "..."                          # another OpenAI-compatible endpoint than the provider's
+# api_key_env = "..."                       # the NAME of the variable that holds the key, never the key itself
 # api_max_tokens_field = "max_tokens"       # if the provider wants this field instead of max_completion_tokens
 # api_reasoning_effort = "low"              # thinking models: "none" | "low" | "medium" | "high" - the reasoning
                                             # counts against num_predict and is billed, even where it is not shown
@@ -206,12 +213,16 @@ num_predict = 16384                         # the longest answer
 ```
 
 ```bash
-export OPENAI_API_KEY=...                   # in your shell profile or a .env kept out of git - never in harness.toml
+# the key: in a file only you can read, loaded by the shell profile - never in harness.toml or the repo
+echo 'export GEMINI_API_KEY="..."' >> ~/.config/api_keys.env && chmod 600 ~/.config/api_keys.env
+echo '[ -f ~/.config/api_keys.env ] && source ~/.config/api_keys.env' >> ~/.zshrc     # once; then a new terminal
+curl -s https://generativelanguage.googleapis.com/v1beta/openai/models \
+  -H "Authorization: Bearer $GEMINI_API_KEY" | head -c 300                             # the key works?
 .venv/bin/ideate-harness run path/to/topic.md --config harness.toml --to F4
-curl -s https://api.openai.com/v1/models -H "Authorization: Bearer $OPENAI_API_KEY" | head -c 300   # the key works?
 ```
 
 - The key is read from the environment and sent only as `Authorization: Bearer`; it is never logged or written.
+  In a key file, `=` takes no spaces around it (`export GEMINI_API_KEY="..."`).
 - The answer is asked for under `response_format` = the step's JSON schema (non-strict: the checks judge it). A
   provider that refuses that form is asked once more in plain JSON mode, with the schema written into the prompt.
 - These APIs bill per token. Without `api_price_in` / `api_price_out` the cost shows as $0; set them, and
