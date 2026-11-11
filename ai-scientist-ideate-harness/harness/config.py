@@ -3,8 +3,11 @@
     [harness]
     python = "/path/to/python"          # interpreter for scripts/ (needs the mcp package); default: this one
     worker = "claude"                   # "claude": claude -p workers | "ollama": an Ollama server, no Claude Code
+                                        # | "openai": any OpenAI-compatible API (GPT, Gemini), no Claude Code
     claude = "claude"                   # the Claude Code CLI used for the model Units
     # worker = "ollama": ollama_url = "http://127.0.0.1:11434", model = "qwen3.8", num_ctx = 131072, think = false
+    # worker = "openai": api_base = "https://api.openai.com/v1", api_key_env = "OPENAI_API_KEY", model = "...",
+    #                    max_context = 128000, api_price_in / api_price_out = USD per 1M tokens, api_budget_usd = 20
     model = "claude-opus-5-5"           # optional; default: the CLI's own
     max_parallel = 4                    # fan-out workers at once
     default_budget_usd = 5.0            # per worker (claude -p --max-budget-usd); unset: no cap
@@ -34,7 +37,7 @@ except ModuleNotFoundError:                      # Python 3.10
 
 MODULE_ROOT = Path(__file__).resolve().parent.parent
 DEPTHS = ("quick", "standard", "deep")
-WORKERS = ("claude", "ollama")
+WORKERS = ("claude", "ollama", "openai")
 
 # Conservative bounds for the loops the contracts state no number for (OQ-07). LOOP-11 is bounded by the ready
 # questions that remain and LOOP-12 by max_num_generations; they are not listed here.
@@ -49,6 +52,17 @@ class HarnessConfig:
     model: str | None = None
     ollama_url: str = "http://127.0.0.1:11434"   # worker = "ollama": the server (OLLAMA_API_KEY -> Bearer header)
     ollama_api_key_env: str = "OLLAMA_API_KEY"
+    # worker = "openai": any OpenAI-compatible /chat/completions (OpenAI, Gemini's OpenAI endpoint, ...) - see
+    # openai_worker.py. The key is read from the environment variable named here, never from this file.
+    api_base: str = "https://api.openai.com/v1"
+    api_key_env: str = "OPENAI_API_KEY"
+    max_context: int = 128000                    # the model's context window in tokens (prompt + answer)
+    api_max_tokens_field: str = "max_completion_tokens"   # the request field for num_predict ("max_tokens" for some)
+    api_reasoning_effort: str | None = None      # a thinking model's `reasoning_effort` ("none" | "low" | "medium" |
+                                                 # "high"); its reasoning counts against num_predict and is billed
+    api_price_in: float | None = None            # USD per million input tokens - with api_price_out, each call's cost
+    api_price_out: float | None = None           # USD per million output tokens   is counted (usage, summary)
+    api_budget_usd: float | None = None          # a ceiling for the whole run: past it, no further call is sent
     num_ctx: int = 65536                         # the context the model is run with - Ollama cuts longer prompts silently
     num_predict: int = 16384                     # the longest answer
     think: bool | None = None                    # a thinking model's reasoning on/off (None: the model's default)
@@ -92,9 +106,20 @@ class HarnessConfig:
             raise ValueError("max_parallel must be >= 1")
         if self.worker not in WORKERS:
             raise ValueError(f"worker must be one of {WORKERS}, not {self.worker!r}")
-        if self.worker == "ollama" and not self.model:
-            raise ValueError('worker = "ollama" needs a model (e.g. model = "qwen3.8")')
+        if self.worker in ("ollama", "openai") and not self.model:
+            raise ValueError(f'worker = "{self.worker}" needs a model (e.g. model = "qwen3.8" for ollama, or the '
+                             'model name your API key may use for openai)')
         self.module_root = Path(self.module_root)
+
+    @property
+    def inline(self) -> bool:
+        """A worker without tools: the conductor puts the files into the prompt and writes the JSON answer (ollama,
+        openai). A claude worker reads and writes with its own tools."""
+        return self.worker != "claude"
+
+    def context_tokens(self) -> int:
+        """The context an inline worker's prompt must fit: Ollama's num_ctx, or the API model's max_context."""
+        return int(self.num_ctx if self.worker == "ollama" else self.max_context)
 
     def parallel(self) -> int:
         """Fan-out workers at once: max_parallel, but for an Ollama server at most ollama_parallel."""
@@ -102,20 +127,20 @@ class HarnessConfig:
 
     def batch_budget(self) -> int:
         """$BUDGET: characters of papers, candidates or terms one worker call is given (a plan command's --max-chars).
-        0 keeps the tools' own batch sizes (a claude worker reads its files itself); an Ollama worker gets everything
+        0 keeps the tools' own batch sizes (a claude worker reads its files itself); an inline worker gets everything
         pasted into one prompt, so its batches are cut to what the context and max_file_chars hold."""
         if self.batch_chars is not None:
             return max(0, int(self.batch_chars))
-        if self.worker != "ollama":
+        if not self.inline:
             return 0
         # at most 40k characters (~12k tokens) whatever the context: a server reads such a prompt and sends its first
         # byte before a proxy gives up (100 s at Cloudflare; ~17k tokens took longer on a 27B model), and a refused
         # batch costs little to ask again
-        return max(8000, min(self.file_chars(), int(self.num_ctx * 3.0 * 0.4), 40000))
+        return max(8000, min(self.file_chars(), int(self.context_tokens() * 3.0 * 0.4), 40000))
 
     def file_chars(self) -> int:
-        """The most of one file an Ollama prompt carries: max_file_chars, or half of num_ctx (~3 characters a token)."""
-        return int(self.max_file_chars) if self.max_file_chars else int(self.num_ctx * 3.0 * 0.5)
+        """The most of one file an inline prompt carries: max_file_chars, or half the context (~3 characters a token)."""
+        return int(self.max_file_chars) if self.max_file_chars else int(self.context_tokens() * 3.0 * 0.5)
 
     def budget(self, unit_id: str) -> float | None:
         return self.unit_budget_usd.get(unit_id, self.default_budget_usd)
