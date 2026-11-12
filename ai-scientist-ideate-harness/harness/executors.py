@@ -4,14 +4,21 @@
                       ``execute(ctx, unit, recipe, phase, gen, attempt) -> ExecResult``
   RecipeExecutor      the default: walks the Unit's recipe step by step
      run step         ScriptStep: a skill command
-     write step       ClaudeStep: one worker - claude -p, or an Ollama server (worker = "ollama", ollama_worker.py) -
-                      an isolated one for A1.e
-     fanout step      FanoutStep: one worker per batch file, max_parallel at once, a failed batch re-dispatched once
+     write step       one worker call through the run's provider (ctx.provider, providers/: the Claude, OpenAI or
+                      Gemini API, an Ollama server, or one of your own) - an isolated one for A1.e
+     fanout step      FanoutStep: one worker per batch file, the provider's parallel() at once, a failed batch
+                      re-dispatched once
+
+Every worker call is one WorkerRequest -> WorkerResult, whatever the provider: the executor decides what the worker
+may read, write and run (FileScope, commands), and runs the read-only lookups first for a provider that cannot run
+commands itself (runs_commands False).
 
 Retry levels (ideate_v2.retry, decision D-08) - each failure is retried by exactly one owner:
   a worker's rejected or missing files   RP-MODEL-OUTPUT  unit-tool       feedback into the same session
   a fan-out batch without an answer      RP-FANOUT-BATCH  unit-tool       the batch re-dispatched
-  a network failure of a worker          RP-TRANSPORT     unit-transport  the call repeated after a backoff
+  a network failure of a worker          RP-TRANSPORT     unit-transport  the call repeated after the provider's wait
+                                                                          (Provider.retry_delay: the contract's
+                                                                          backoff, or an Ollama server's own)
   the whole Unit                         RP-UNIT          orchestrator    shell.py, not here
 """
 from __future__ import annotations
@@ -28,9 +35,10 @@ from typing import Protocol
 
 from ideate_v2 import retry
 
-from . import claude_worker as cw
-from . import ollama_worker as ow
 from .context import CODE_FOR, RunContext, instance_of
+from .providers import TRANSPORT, FileScope, WorkerRequest, WorkerResult
+from .providers.base import SCRATCH
+from .providers.chat import LOOKUPS, NEEDS_ARGUMENTS
 from .recipes import Recipe, Step
 from .skill import CommandResult, Subs, classify_failure
 
@@ -198,13 +206,14 @@ class RecipeExecutor:
         lines += [f"Research folder: {subs.rd}"] + ([f"Generation folder: {subs.gen_dir}"] if subs.gen_dir else [])
         if extra:
             lines += ["", extra]
-        system = cw.system_prompt(ctx.cfg.module_root, ctx.reg.units[unit], ctx.reg.legacy_card(unit),
-                                  list(body.get("rules") or []), list(body.get("commands") or []))
-        return "\n".join(lines), system
+        return "\n".join(lines), self._system(ctx, unit, body)
 
     @staticmethod
-    def _tool(ctx: RunContext) -> str:
-        return f"ollama:{ctx.cfg.model}" if ctx.cfg.worker == "ollama" else "claude -p"
+    def _system(ctx: RunContext, unit: str, body: dict) -> str:
+        """The provider's rules, then the Unit's: its card, the step's commands (for a worker that runs them) and the
+        reference sections."""
+        return ctx.provider.system_prompt(ctx.cfg.module_root, ctx.reg.units[unit], ctx.reg.legacy_card(unit),
+                                          list(body.get("rules") or []), list(body.get("commands") or []))
 
     @staticmethod
     def _scratch(ctx: RunContext, unit: str) -> list[str]:
@@ -212,7 +221,7 @@ class RecipeExecutor:
         allows it - the shared list let a model leave a note in _work/, and the done was refused for it - or, for a Unit
         whose card declares none as a list, the shared one."""
         sc = ((ctx.reg.legacy_card(unit) or {}).get("io") or {}).get("scratch")
-        return [*sc, "_state/harness/decisions/**"] if isinstance(sc, list) else list(ow.SCRATCH)
+        return [*sc, "_state/harness/decisions/**"] if isinstance(sc, list) else list(SCRATCH)
 
     @staticmethod
     def _output_globs(ctx: RunContext, unit: str, subs: Subs) -> list[str]:
@@ -239,76 +248,78 @@ class RecipeExecutor:
         task = str(body.get("task") or "")
         cmds = body.get("commands") or []
         if "lookups" in body:                      # the step names the lookups a tool-less worker is given
-            cmds = list(body["lookups"] or []) + [c for c in cmds if " ".join(c.split()[:2]) not in ow.LOOKUPS]
+            cmds = list(body["lookups"] or []) + [c for c in cmds if " ".join(c.split()[:2]) not in LOOKUPS]
         for c in cmds:
             words = c.split()
             key = " ".join(words[:2])
-            if key in ow.LOOKUPS:
-                for inv in ow.LOOKUPS[key]:
+            if key in LOOKUPS:
+                for inv in LOOKUPS[key]:
                     if inv in done or ("$GEN" in inv and subs.gen is None):
                         continue
                     done.add(inv)
                     r = ctx.skill.run(inv, subs, timeout=300)
-                    out = r.stdout if r.ok else f"(exit {r.returncode}) {r.tail()}"
-                    found.append((_short(ctx.skill.expand(inv, subs, quote=False)), out[-20000:]))
-            elif key in ow.NEEDS_ARGUMENTS:
+                    if r.ok:
+                        out = r.stdout
+                    elif r.stdout.strip():      # a check that finds errors exits 1: its findings are what the step
+                        out = f"(exit {r.returncode}: it reports findings)\n{r.stdout}"   # reads (B5 saw a tail of `]`)
+                    else:
+                        out = f"(exit {r.returncode}) {r.tail()}"
+                    found.append((_short(ctx.skill.expand(inv, subs, quote=False)), _clip(out, LOOKUP_CHARS)))
+            elif key in NEEDS_ARGUMENTS:
                 continue
             elif len(words) > 1 and words[1] in task:
                 unavailable.append(c)
         return found, unavailable
 
-    def _scope(self, ctx: RunContext, unit: str, body: dict, subs: Subs) -> ow.FileScope:
+    def _scope(self, ctx: RunContext, unit: str, body: dict, subs: Subs) -> FileScope:
         exp = lambda x: Path(ctx.skill.expand(x, subs, quote=False))       # noqa: E731
-        lookups, unavailable = self._lookups(ctx, body, subs) if ctx.cfg.worker == "ollama" else ([], [])
+        lookups, unavailable = ([], []) if ctx.provider.runs_commands else self._lookups(ctx, body, subs)
         schema = None
         if body.get("schema") and exp(body["schema"]).is_file():     # written by an earlier step (frame strategy-brief)
             try:
                 schema = json.loads(exp(body["schema"]).read_text(encoding="utf-8"))
             except ValueError:
                 schema = None                      # the files envelope then; the submit command still checks the file
-        return ow.FileScope(base=subs.rd, reads=[(str(exp(x)), exp(x)) for x in body.get("reads") or []],
-                            writes=[exp(x) for x in body.get("writes") or []],
-                            globs=self._scratch(ctx, unit) + self._output_globs(ctx, unit, subs),
-                            forbid=[exp(x) for x in body.get("forbid") or []], lookups=lookups,
-                            unavailable=unavailable, max_file_chars=ctx.cfg.file_chars(), schema=schema)
+        may = []                                   # files it may also write, not required (`may_write`)
+        for x in body.get("may_write") or []:
+            try:
+                may.append(str(exp(x).resolve().relative_to(subs.rd.resolve())))
+            except ValueError:
+                continue                           # outside the research folder: never writable
+        return FileScope(base=subs.rd, reads=[(str(exp(x)), exp(x)) for x in body.get("reads") or []],
+                         writes=[exp(x) for x in body.get("writes") or []],
+                         globs=self._scratch(ctx, unit) + self._output_globs(ctx, unit, subs) + may,
+                         forbid=[exp(x) for x in body.get("forbid") or []], lookups=lookups,
+                         unavailable=unavailable, max_file_chars=ctx.cfg.file_chars(), schema=schema)
 
-    def _worker_kw(self, ctx: RunContext, unit: str, body: dict, subs: Subs, log: Path) -> dict:
-        if ctx.cfg.worker == "ollama":
-            return dict(scope=self._scope(ctx, unit, body, subs), log_dir=log)
-        bin_dir = cw.write_shims(ctx.state_dir / "bin", ctx.cfg)
-        deny = [Path(ctx.skill.expand(p, subs, quote=False)) for p in body.get("forbid") or []]
-        return dict(allowed=cw.allowed_bash(list(body.get("commands") or [])) + list(body.get("tools") or []),
-                    add_dirs=[d for d in (ctx.topic.parent if ctx.topic else None, ctx.cfg.module_root / "references")
-                              if d is not None and d != subs.rd],
-                    deny_read=deny,
-                    budget_usd=ctx.cfg.budget(unit), bin_dir=bin_dir, log_dir=log)
+    def _request(self, ctx: RunContext, unit: str, body: dict, subs: Subs, log: Path, *, task: str,
+                 system: str) -> WorkerRequest:
+        """What a worker of this step is given - the same for every provider; each uses what it can."""
+        return WorkerRequest(task=task, system=system, cwd=subs.rd, scope=self._scope(ctx, unit, body, subs),
+                             commands=list(body.get("commands") or []), tools=list(body.get("tools") or []),
+                             add_dirs=[d for d in (ctx.topic.parent if ctx.topic else None,
+                                                   ctx.cfg.module_root / "references")
+                                       if d is not None and d != subs.rd],
+                             log_dir=log)
 
-    def _call(self, ctx: RunContext, unit: str, label: str, **kw) -> cw.WorkerResult:
-        """One worker call with the transport retry (RP-TRANSPORT, owner unit-transport)."""
+    def _call(self, ctx: RunContext, unit: str, label: str, req: WorkerRequest) -> WorkerResult:
+        """One worker call with the transport retry (RP-TRANSPORT, owner unit-transport): how long to wait, and
+        whether to try again at all, is the provider's to say."""
+        prov = ctx.provider
+        say = lambda m: ctx.say(f"      … {unit}: {m}")                    # noqa: E731
         attempt = 1
         while True:
-            if ctx.cfg.worker == "ollama":
-                wr = ow.run_worker(ctx.cfg, label=f"{label}.a{attempt}", say=lambda m: ctx.say(f"      … {unit}: {m}"), **kw)
-            else:
-                wr = cw.run_worker(ctx.cfg, label=f"{label}.a{attempt}", **kw)
+            wr = prov.run(replace(req, label=f"{label}.a{attempt}", say=say))
             ctx.add_usage(wr.metrics)
-            if wr.ok or wr.error_category not in ("external_service", "timeout"):
+            if wr.ok or wr.error_category not in TRANSPORT:
                 return wr
-            if ctx.cfg.worker == "ollama":           # one server, one answer at a time: when it is busy, a request
-                if attempt > ctx.cfg.ollama_busy_retries:   # waits and a proxy closes it (524) - and the server may
-                    return wr                               # still finish the dropped answer. Wait for it to drain:
-                delay = min(ctx.cfg.ollama_busy_wait_s * 2 ** (attempt - 1), 900.0)   # 2, 4, 8, 15 minutes
-            else:
-                d = retry.decide(ctx.reg, "RP-TRANSPORT", {"error_category": wr.error_category, "severity": "degraded",
-                                                           "retryable": True, "error_id": f"{unit}:{label}"},
-                                 attempt, "unit-transport")
-                if d["action"] != "retry":
-                    return wr
-                delay = d["delay_s"]
+            delay = prov.retry_delay(ctx, wr, attempt, f"{unit}:{label}")
+            if delay is None:
+                return wr
             ctx.say(f"      … {unit}: worker {wr.error_category}, again in {delay:.0f}s")
             time.sleep(0 if ctx.cfg.dry_run else delay)
-            if ctx.cfg.worker == "ollama" and not ctx.cfg.dry_run:     # never re-send to a server still busy
-                ow.wait_idle(ctx.cfg, say=lambda m: ctx.say(f"      … {unit}: {m}"))
+            if not ctx.cfg.dry_run:
+                prov.before_resend(say)
             attempt += 1
 
     def _write(self, ctx: RunContext, unit: str, s: Step, subs: Subs, log: Path, label: str, attempt: int):
@@ -317,10 +328,9 @@ class RecipeExecutor:
         task, system = self._prompt(ctx, unit, body, subs)
         writes = [Path(ctx.skill.expand(x, subs, quote=False)) for x in body.get("writes") or []]
         before = {w: _stamp(w) for w in writes}         # a file left from an earlier run is not this call's answer
-        kw = self._worker_kw(ctx, unit, body, subs, log)
+        req = self._request(ctx, unit, body, subs, log, task=task, system=system)
         cwd = subs.rd
         if body.get("isolated"):
-            kw["add_dirs"] = []                            # an independent reader sees its own folder only
             # a short name: on Windows a deep research folder plus a long label passes MAX_PATH (260)
             tag = hashlib.sha1(f"{unit}@{inst}.{label}".encode()).hexdigest()[:8]
             cwd = ctx.state_dir / "isolated" / f"{unit}.{tag}"
@@ -333,26 +343,28 @@ class RecipeExecutor:
                 if src.is_file():
                     shutil.copy2(src, cwd / src.name)
                     shown.append((str(src), cwd / src.name))
-            if ctx.cfg.worker == "ollama":                 # it reads its copies, and writes into its folder only
-                kw["scope"] = ow.FileScope(base=cwd, reads=shown, writes=[cwd / w.name for w in writes],
-                                           max_file_chars=ctx.cfg.file_chars(), schema=kw["scope"].schema)
             task = task.replace(str(subs.rd) + "/", "./")
             task += ("\n\nYou are an independent reader: work only with the files in this folder. Write your answer as "
                      + ", ".join(f"./{w.name}" for w in writes) + ".")
+            # an independent reader sees its own folder only: it reads its copies, and writes into its folder only
+            req = replace(req, task=task, cwd=cwd, add_dirs=[],
+                          scope=FileScope(base=cwd, reads=shown, writes=[cwd / w.name for w in writes],
+                                          forbid=req.scope.forbid, max_file_chars=req.scope.max_file_chars,
+                                          schema=req.scope.schema))
         ctx.say(f"      ✎ {unit}: worker" + (" (isolated)" if body.get("isolated") else ""))
-        ctx.emit("TOOL_CALLED", unit_id=unit, instance=inst, attempt=attempt, tool=self._tool(ctx), actor="worker",
+        ctx.emit("TOOL_CALLED", unit_id=unit, instance=inst, attempt=attempt, tool=ctx.provider.label, actor="worker",
                  context={"step": label})
-        wr = self._call(ctx, unit, label, task=task, system=system, cwd=cwd, **kw)
+        wr = self._call(ctx, unit, label, req)
         if wr.session_id:
             self._sessions[(unit, inst, label)] = wr.session_id
         if not wr.ok:
-            ctx.emit("TOOL_FAILED", unit_id=unit, instance=inst, attempt=attempt, tool=self._tool(ctx), actor="worker",
-                     message=wr.error[:300], metrics=wr.metrics)
+            ctx.emit("TOOL_FAILED", unit_id=unit, instance=inst, attempt=attempt, tool=ctx.provider.label,
+                     actor="worker", message=wr.error[:300], metrics=wr.metrics)
             code = CODE_FOR.get(wr.error_category, "IDEATE.WORKER.FAILED")
             return False, wr.metrics, ctx.error(code, f"worker failed: {wr.error}", unit=unit, instance=inst,
                                                 attempt=attempt, context={"step": label})
-        ctx.emit("TOOL_RETURNED", unit_id=unit, instance=inst, attempt=attempt, tool=self._tool(ctx), actor="worker",
-                 metrics=wr.metrics, message=wr.text[:300])
+        ctx.emit("TOOL_RETURNED", unit_id=unit, instance=inst, attempt=attempt, tool=ctx.provider.label,
+                 actor="worker", metrics=wr.metrics, message=wr.text[:300])
         if body.get("isolated"):
             for w in writes:
                 if (cwd / w.name).is_file():
@@ -365,13 +377,25 @@ class RecipeExecutor:
             d = retry.decide(ctx.reg, "RP-MODEL-OUTPUT", {"error_category": "model_output", "severity": "error",
                                                           "retryable": True, "error_id": f"{unit}:{label}"},
                              rounds, "unit-tool")
-            if d["action"] != "retry" or not wr.session_id or body.get("isolated"):
+            # an independent reader has no session to go back to: it is asked once more afresh, as blind as before
+            # (restatement 2 answered "the conductor runs the blind reader, not me" and wrote nothing)
+            again = body.get("isolated") and rounds == 1
+            if d["action"] != "retry" or not (wr.session_id or again) or (body.get("isolated") and not again):
                 return False, metrics, ctx.error("IDEATE.WORKER.OUTPUT", "the worker did not write: " +
                                                  ", ".join(str(m) for m in missing), unit=unit, instance=inst,
                                                  attempt=attempt, context={"step": label})
-            msg = "You have not written: " + ", ".join(str(m) for m in missing) + ". Write them now, then stop."
-            wr = self._call(ctx, unit, f"{label}.fix{rounds}", task=msg, system=system, cwd=cwd, resume=wr.session_id,
-                            **kw)
+            if again:
+                msg = (req.task + "\n\nAn earlier answer to this wrote no file. You are the independent reader this "
+                       "asks for - nobody else will write it: write " + ", ".join(f"./{w.name}" for w in missing)
+                       + " now.")
+                wr = self._call(ctx, unit, f"{label}.fix{rounds}", replace(req, task=msg))
+                for w in writes:
+                    if (cwd / w.name).is_file():
+                        w.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(cwd / w.name, w)
+            else:
+                msg = "You have not written: " + ", ".join(str(m) for m in missing) + ". Write them now, then stop."
+                wr = self._call(ctx, unit, f"{label}.fix{rounds}", replace(req, task=msg, resume=wr.session_id))
             _add(metrics, wr.metrics)
             rounds += 1
             missing = [w for w in writes if not w.exists() or _stamp(w) == before[w]]
@@ -391,12 +415,13 @@ class RecipeExecutor:
         msg = (f"The conductor ran `{_short(r.command)}` on your files and it refused them (exit {r.returncode}):\n\n"
                f"```\n{out}\n{(r.stderr or '')[-800:]}\n```\n\nFix what it reports in the same files - answer each "
                "finding, do not reword until it is silent - then stop.")
-        kw = self._worker_kw(ctx, unit, body, subs, log)
-        wr = self._call(ctx, unit, f"{label}.feedback", task=msg, system=system, cwd=subs.rd, resume=session, **kw)
+        req = self._request(ctx, unit, body, subs, log, task=msg, system=system)
+        wr = self._call(ctx, unit, f"{label}.feedback", replace(req, resume=session))
         if wr.session_id:
             self._sessions[key] = wr.session_id
         ctx.emit("TOOL_RETURNED" if wr.ok else "TOOL_FAILED", unit_id=unit, instance=inst, attempt=attempt,
-                 tool=self._tool(ctx) + " (resumed)", actor="worker", metrics=wr.metrics, message=(wr.text or wr.error)[:300])
+                 tool=ctx.provider.label + " (resumed)", actor="worker", metrics=wr.metrics,
+                 message=(wr.text or wr.error)[:300])
         return wr.ok, wr.metrics
 
     # ------------------------------------------------------------------------------------------------ fanout
@@ -443,9 +468,7 @@ class RecipeExecutor:
             return False, {}, ctx.error("IDEATE.ARTIFACT.MISSING", f"no batch files match {body['batches']}", unit=unit,
                                         instance=inst, attempt=attempt, context={"step": label})
         metrics: dict = {}
-        system = cw.system_prompt(ctx.cfg.module_root, ctx.reg.units[unit], ctx.reg.legacy_card(unit),
-                                  list(body.get("rules") or []), list(body.get("commands") or []))
-        kw = self._worker_kw(ctx, unit, body, subs, log)
+        req = self._request(ctx, unit, body, subs, log, task="", system=self._system(ctx, unit, body))
 
         def one(item, tries=1):
             b, outs = item
@@ -455,24 +478,24 @@ class RecipeExecutor:
             for k, v in (("{batch}", b), ("{out}", out), ("{brief}", bb or "")):
                 task = task.replace(k, str(v))
             task = ctx.skill.expand(task, subs, quote=False)
-            kw_b = dict(kw)
-            if ctx.cfg.worker == "ollama":
-                shown = ([(str(bb), bb)] if bb else []) + [(str(b), b)] + _named_files(b, root, outs)
-                kw_b["scope"] = replace(kw["scope"], reads=shown, writes=list(outs), schema=_batch_schema(b))
-            wr = self._call(ctx, unit, f"{label}.{b.stem}.t{tries}", task=task, system=system, cwd=root, **kw_b)
+            # the batch's own files: the brief, the batch, and the files it names (for a worker that cannot open them)
+            shown = ([(str(bb), bb)] if bb else []) + [(str(b), b)] + _named_files(b, root, outs)
+            req_b = replace(req, task=task, cwd=root,
+                            scope=replace(req.scope, reads=shown, writes=list(outs), schema=_batch_schema(b)))
+            wr = self._call(ctx, unit, f"{label}.{b.stem}.t{tries}", req_b)
             missing = [o for o in outs if not _valid_answer(o)]
             if wr.ok and missing and wr.session_id:   # a note alone is no answer (a B3.5 model declined, then its retry
-                fix = self._call(ctx, unit, f"{label}.{b.stem}.t{tries}.fix", resume=wr.session_id,   # did again)
-                                 task="You have not written: " + ", ".join(str(m) for m in missing) + ". Write them now "
-                                      "- where the batch lacks something, write (TBD) there and say so in the note - "
-                                      "then stop.", system=system, cwd=root, **kw_b)
+                fix = self._call(ctx, unit, f"{label}.{b.stem}.t{tries}.fix", replace(   # did again)
+                    req_b, resume=wr.session_id,
+                    task="You have not written: " + ", ".join(str(m) for m in missing) + ". Write them now - where "
+                         "the batch lacks something, write (TBD) there and say so in the note - then stop."))
                 _add(fix.metrics, wr.metrics)
                 wr = fix
             return item, wr
 
         tries = 1
         while todo:
-            ctx.emit("TOOL_CALLED", unit_id=unit, instance=inst, attempt=attempt, tool=self._tool(ctx) + " fan-out",
+            ctx.emit("TOOL_CALLED", unit_id=unit, instance=inst, attempt=attempt, tool=ctx.provider.label + " fan-out",
                      actor="worker", context={"step": label, "batches": len(todo), "try": tries})
             with ThreadPoolExecutor(max_workers=ctx.cfg.parallel()) as pool:
                 results = list(pool.map(lambda it: one(it, tries), todo))
@@ -481,7 +504,7 @@ class RecipeExecutor:
                 _add(metrics, wr.metrics)
                 if not (wr.ok and all(_valid_answer(o) for o in outs)):
                     failed.append(((b, outs), wr))
-            ctx.emit("TOOL_RETURNED", unit_id=unit, instance=inst, attempt=attempt, tool=self._tool(ctx) + " fan-out",
+            ctx.emit("TOOL_RETURNED", unit_id=unit, instance=inst, attempt=attempt, tool=ctx.provider.label + " fan-out",
                      actor="worker", metrics=metrics, context={"step": label, "failed": len(failed)})
             if not failed:
                 return True, metrics, None
@@ -559,6 +582,17 @@ def _valid_answer(path: Path) -> bool:
         except ValueError:
             return False
     return True
+
+
+LOOKUP_CHARS = 20000                 # the most of one lookup's output a tool-less worker's prompt carries
+
+
+def _clip(text: str, n: int) -> str:
+    """At most n characters: the head (a listing's header, a check's first findings) and the tail (its summary)."""
+    if len(text) <= n:
+        return text
+    head = int(n * 0.7)
+    return text[:head] + f"\n... ({len(text) - n} characters cut) ...\n" + text[-(n - head):]
 
 
 def _short(cmd: str, width: int = 140) -> str:

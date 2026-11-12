@@ -191,6 +191,7 @@ gap types (methodological, population, measurement, temporal, integration) stay;
 
 ---
 
+<a id="qc4-argument"></a>
 ## 4. The argument file — `gen_{k}/argument.json`
 
 Written at the end of B4, after `step8_hypothesis.md`. It is the argument laid out so that a script can check it: the
@@ -438,6 +439,7 @@ later stages take their old path.
 
 ---
 
+<a id="qc5-gates"></a>
 ## 5. Gates
 
 Two gates, both with the compute gate's behaviour: force one `ReviseHypothesis`, then finalize regardless and record
@@ -728,6 +730,7 @@ Reader question: "is the difference more than the instrument's own noise, and a 
 
 ---
 
+<a id="qc7-reader"></a>
 ## 7. Skeptical reader and blind restatement
 
 The gate checks structure. These two steps check content, and they exist because the author of an argument is its
@@ -785,6 +788,7 @@ check, re-answer questions 5, 6, 8, 9 and 12 for the claim as it now stands, und
 (research-cycle.md §5, round 2 step 2). C17 lists a primary claim whose `id`, `statement` or `mode` changed while
 `construction` or `positive_expected` did not.
 
+<a id="qc7-restatement"></a>
 ### 7.2 Blind restatement (after round 1, and again before `FinalizeIdea` if the primary claim changed; `standard` and `deep` only)
 
 How well a reader who only skimmed the text can restate its argument predicts how well the final readers will
@@ -890,6 +894,7 @@ On the fusion block the comparison has one cross-check more: the experiment the 
 the decision tree's primary test node (planning/P3-decision-tree.md). A reader who names another experiment has read the
 design differently from the tree — a mismatch on the `rule` criterion.
 
+<a id="qc8-seven-fields"></a>
 ## 8. Writing the seven fields
 
 Keys, order and types are unchanged, and `validate` / `append-idea` behave as before. What changes is where each

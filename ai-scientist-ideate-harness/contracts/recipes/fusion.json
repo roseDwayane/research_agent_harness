@@ -625,7 +625,8 @@
        "task": "Write the descriptive Body (A7.R3): the field's seven questions from Planes, Lines and collisions only (the digest lists every id you may cite), to $RD/knowledge/body/$DESC_BODY with the frontmatter the rules give.",
        "rules": [
         "references/fusion/F4-reconstruct.md#a7r3",
-        "references/knowledge-passes.md#pass-4"
+        "references/knowledge-passes.md#pass-4",
+        "references/knowledge-templates.md#body-descriptive"
        ],
        "reads": [
         "$RD/knowledge/_work/digest/A7.R3.md"

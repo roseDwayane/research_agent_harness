@@ -343,7 +343,9 @@ The topic file and the view `step1_protocol.md` (A1.p and A1.q pass).
 3. Save its reply verbatim to `$RD/_state/A1e/round_{n}.json` and store it with `frame set-evaluation`.
 
 The checks: **E1** the search follows from the question (every concept an axis, synonyms expanded, the anchor
-searched, no scope creep, sources fit); **E2** the criteria follow from the slots and outcomes and are applicable;
+searched, no scope creep, sources fit, and no query so narrow that it finds almost nothing - a **Low yield** line in
+the protocol is an E1 fail naming the axis to make `extraction-only`); **E2** the criteria follow from the slots and
+outcomes and are applicable;
 **E3** the frame fits the question's semantics, no invented slot; **E4** recall risks (missing spellings, a timeframe
 that cuts off the baselines, an unnamed anchor, implausible known items); **E5** completeness; **E6** readings — a
 criterion that rests on one reading of a word in the topic with another plausible reading ("elderly": aged 65 or

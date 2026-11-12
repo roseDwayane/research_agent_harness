@@ -1052,12 +1052,17 @@ def protocol_schema(depth: str) -> dict:
                     ["name", "rationale", "slots"])
     # every field required: a schema-decoded answer leaves an optional field out even when it means to write it;
     # "none" / "" say the field does not apply, and set-protocol drops them (_normal_axis)
-    axis = obj({"id": s, "kind": {"enum": list(AXIS_KINDS)}, "slot": s, "name": s, "terms": lst(s, 1), "outcome": s},
+    # the ids set-protocol requires, as patterns the decoding grammar keeps (a model wrote axes A1..A4, a P05 a round)
+    pat = lambda rx: {"type": "string", "pattern": rx}                          # noqa: E731
+    axis = obj({"id": pat(r"^C[0-9]+$"), "kind": {"enum": list(AXIS_KINDS)}, "slot": s, "name": s, "terms": lst(s, 1),
+                "outcome": s},
                ["id", "kind", "slot", "name", "terms", "outcome"])
-    crit = obj({"id": s, "text": s, "refs": lst(s, 1)}, ["id", "text", "refs"])
-    protocol = obj({"framework": framework, "axes": lst(axis, 2), "outcomes": lst(obj({"id": s, "text": s}, ["id", "text"]), 1),
-                    "timeframe": s, "timeframe_reason": s, "setting": s, "languages": lst(s),
-                    "criteria": obj({"inclusion": lst(crit, 1), "exclusion": lst(crit, 1)}, ["inclusion", "exclusion"]),
+    crit = lambda rx: obj({"id": pat(rx), "text": s, "refs": lst(s, 1)}, ["id", "text", "refs"])     # noqa: E731
+    protocol = obj({"framework": framework, "axes": lst(axis, 2),
+                    "outcomes": lst(obj({"id": pat(r"^O[0-9]+$"), "text": s}, ["id", "text"]), 1),
+                    "timeframe": pat(r"^[0-9]{4}-[0-9]{4}$"), "timeframe_reason": s, "setting": s, "languages": lst(s),
+                    "criteria": obj({"inclusion": lst(crit(r"^IN[0-9]+$"), 1), "exclusion": lst(crit(r"^EX[0-9]+$"), 1)},
+                                    ["inclusion", "exclusion"]),
                     "a1p_note": s}, ["framework", "axes", "outcomes", "timeframe", "timeframe_reason", "criteria"])
     return obj({"topic": s, "topic_file": s, "depth": {"enum": [depth]}, "protocol": protocol},
                ["topic", "topic_file", "depth", "protocol"])
@@ -1641,6 +1646,12 @@ def render_view(rd: Path, cfg: dict) -> Path:
         L += ["", f"Scope probe ({sp.get('at')}): " + (f"skipped — {sp['skipped']}" if sp.get("skipped") else
               f"rough yield {sp.get('rough_yield')}; known items found {sum(1 for k in sp.get('known_items') or [] if k.get('resolved'))}"
               f"/{len(sp.get('known_items') or [])}")]
+        low = low_yield(cfg)
+        if low:
+            L += ["", f"**Low yield** — OpenAlex's title+abstract search finds fewer than {PROBE_FLOOR} works for the "
+                  "Boolean form the search will send: " + "; ".join(low) + ". Every axis AND-ed into a query has to pass "
+                  "*not over-narrowing* (section 3): an outcome or measure that relevant papers need not name in their "
+                  "abstract belongs in `extraction-only`, not in the search."]
     L += ["", "## 5. Completion criterion", "", str(p.get("completion_criterion") or ""), "",
           "## 6. Screening, extraction, synthesis", "",
           "Fixed by the skill, not per topic: screening = `references/search/A3-screen.md` (evidence first; relevance and "
@@ -1667,14 +1678,38 @@ def _year_filter(timeframe) -> str | None:
     return f"{m[0]}-{m[1]}" if len(m) >= 2 else (m[0] if m else None)
 
 
+PROBE_FLOOR = 20                    # a probed query finding fewer works in OpenAlex's title+abstract search is flagged
+
+
+def low_yield(cfg: dict) -> list[str]:
+    """The probed queries below PROBE_FLOOR, each with its count and the axes it ANDs (slot and kind), for the
+    protocol the evaluator reads (A1.e, E1)."""
+    sp = cfg.get("scope_probe") or {}
+    axes = {a.get("id"): a for a in ((cfg.get("protocol") or {}).get("axes") or []) if isinstance(a, dict)}
+    by_id = {q.get("id"): q for q in cfg.get("queries") or []}
+    out = []
+    for q in sp.get("queries") or []:
+        n = q.get("openalex_total")
+        if n is None or n >= PROBE_FLOOR:
+            continue
+        ands = [f"{aid} {axes.get(aid, {}).get('slot') or ''} ({axes.get(aid, {}).get('kind') or ''})".replace(" ()", "")
+                for aid in ((by_id.get(q.get("id")) or {}).get("axes") or {})]
+        out.append(f"{q.get('id')} {n} works, AND of {', '.join(ands) or '?'}")
+    return out
+
+
 def openalex_total(query: str, year: str | None, mailto: str, rd: Path | None = None, fetch=None) -> int | None:
-    """How many works OpenAlex has for a query (meta.count) - the order-of-magnitude yield a scope probe reports."""
+    """How many works OpenAlex has for a query (meta.count) - the order-of-magnitude yield a scope probe reports.
+    Counted as the search asks it: the title+abstract search the scholar server sends (mcp/scholar_mcp
+    _search_openalex), on the query's OpenAlex form. A full-text `search=` on the flat words counted thousands for a
+    Boolean query of four AND-ed axes that the search then answered with three papers."""
     import urllib.parse
     from it_common import http_json
     fetch = fetch or http_json
     m = re.findall(r"\d{4}", str(year or ""))
-    filt = f"&filter=publication_year:{m[0]}-{m[1]}" if len(m) >= 2 else ""
-    url = (f"https://api.openalex.org/works?search={urllib.parse.quote(query)}{filt}&per-page=1&select=id"
+    filt = "title_and_abstract.search:" + str(query).replace(",", " ").replace(":", " ")
+    filt += f",publication_year:{m[0]}-{m[1]}" if len(m) >= 2 else ""
+    url = (f"https://api.openalex.org/works?filter={urllib.parse.quote(filt)}&per-page=1&select=id"
            f"&mailto={urllib.parse.quote(mailto)}")
     try:
         return int((fetch(url, rd).get("meta") or {}).get("count"))
@@ -1702,17 +1737,26 @@ async def _probe(server, cfg: dict, rd: Path, mailto: str, fetch=None, queries=N
     try:
         if server is None:
             raise RuntimeError("no scholar server")
+        import it_search
         for q in trial:
-            r = await server.call("scholar_search", {"query": q["query"], "sources": cfg.get("sources") or ["openalex"],
-                                                     "limit": limit, "year": year, "found_via": f"probe:{q['id']}"})
-            write_json(out_dir / f"{q['id']}.json", r)
-            per = {}
-            for p_ in r.get("papers") or []:
-                for src in p_.get("sources_found_in") or []:
-                    per[src] = per.get(src, 0) + 1
-            summary["queries"].append({"id": q["id"], "flat_query": q["query"], "hits_per_source": per,
-                                       "source_errors": r.get("source_errors") or {},
-                                       "openalex_total": openalex_total(q["query"], year, mailto, rd, fetch)})
+            # each source in the form the search will send it (it_search.plan): the probe of a flat string told a
+            # Boolean search of four AND-ed axes it would find thousands
+            per, errs, sent, papers = {}, {}, {}, []
+            for form, g in it_search.plan(cfg, q).items():
+                r = await server.call("scholar_search", {"query": g["query"], "sources": g["sources"], "limit": limit,
+                                                         "year": year, "found_via": f"probe:{q['id']}"})
+                papers += r.get("papers") or []
+                errs.update(r.get("source_errors") or {})
+                sent[form] = g["query"]
+                for p_ in r.get("papers") or []:
+                    for src in p_.get("sources_found_in") or []:
+                        if src in g["sources"]:
+                            per[src] = per.get(src, 0) + 1
+            write_json(out_dir / f"{q['id']}.json", {"sent": sent, "papers": papers, "source_errors": errs})
+            summary["queries"].append({"id": q["id"], "flat_query": q["query"], "sent": sent, "hits_per_source": per,
+                                       "source_errors": errs,
+                                       "openalex_total": openalex_total(sent.get(it_search.SOURCE_FORM["openalex"])
+                                                                        or q["query"], year, mailto, rd, fetch)})
             await sleep(3)
         hits = []
         for k in cfg.get("known_items") or []:

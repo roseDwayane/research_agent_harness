@@ -8,9 +8,15 @@ The rules (gates, loop bounds, retry ownership) and the records (events, errors,
   config.py         HarnessConfig (harness.toml [harness])
   skill.py          the boundary to the Unit implementation (scripts/ideate_tools.py, mcp_bridge.py)
   recipes.py        how each Unit is executed: run / write / fanout steps (contracts/recipes/*.json)
-  claude_worker.py  one `claude -p` worker: task, rules, allowed tools, cost
-  ollama_worker.py  the same job over an Ollama server's HTTP API (no Claude Code): files in the prompt, JSON out
-  executors.py      RecipeExecutor (script, Claude, fan-out steps) and the Executor protocol
+  providers/        who does the model Units: one interface (WorkerRequest -> WorkerResult), [harness] worker picks
+    base.py         Provider, WorkerRequest, WorkerResult, FileScope, the Unit's rules as a system prompt
+    chat.py         ChatProvider: a model without tools - files in the prompt, JSON out, the conductor writes
+    claude.py       ClaudeProvider (worker "claude", the default): the chat flow over the Anthropic Messages API
+    gpt.py          GPTProvider ("gpt"): the chat flow over the OpenAI Responses API
+    gemini.py       GeminiProvider ("gemini"): the chat flow over the Gemini API (generateContent)
+    ollama.py       OllamaProvider ("ollama"): the chat flow over an Ollama server's HTTP API
+    agent.py        AgentProvider: a worker with tools - it runs the skill commands itself (the shims); none built in
+  executors.py      RecipeExecutor (script, worker, fan-out steps) and the Executor protocol
   fake.py           FakeSkill + FakeExecutor: the dry run (fixtures, no network, no tokens)
   context.py        RunContext: the run's ids, events and error records
   shell.py          UnitAgent: preconditions -> executor -> output contract -> the Unit's checks -> retry
@@ -19,7 +25,9 @@ The rules (gates, loop bounds, retry ownership) and the records (events, errors,
   pipeline.py       PipelineAgent: Stage A, Stage B per generation, the report
   cli.py            ideate-harness run | status | report | trace | recipes | check
 
-Standard library only (Python >= 3.10); the Unit implementation it drives needs the packages in requirements.txt.
+Standard library only (Python >= 3.10), but for the model API's SDK, which only its provider imports (on its first
+call): the Anthropic SDK for worker = "claude", openai for "gpt", google-genai for "gemini". The Unit implementation
+it drives needs the packages in requirements.txt.
 """
 from __future__ import annotations
 

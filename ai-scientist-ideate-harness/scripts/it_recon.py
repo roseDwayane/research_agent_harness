@@ -237,7 +237,20 @@ def digest(W: World, unit: str) -> str:
                 L.append(f"- {cid} · {r.get('result')} · {','.join(r.get('axes_differ') or [])} · {_one(r.get('reason'), 140)}")
                 for x in r.get("sides") or []:
                     if x.get("paper"):                      # an empty cell's side is the cell, no paper and no quote
-                        L.append(f"  - {x.get('id')} · {x.get('paper')} · \"{_one(x.get('quote'), 100)}\"")
+                        # a full-text side's quote whole: it was checked verbatim (A7.D, <= 60 words), so a source
+                        # check (W05) copies it - a model that only reads this digest cannot open the full text
+                        full = (W.records.get(x.get("paper")) or {}).get("basis") == "full-text"
+                        whole = lambda s: re.sub(r"\s+", " ", str(s or "")).strip()        # noqa: E731
+                        if x.get("kind") == "row":     # a matrix row's headline is a summary, not the paper's words:
+                            alts = [u for _, u in sorted(W.units.items()) if u.get("paper") == x.get("paper")
+                                    and u.get("kind") == "claim" and u.get("quote")][:2] if full else []
+                            L.append(f"  - {x.get('id')} · {x.get('paper')} · row summary (not verbatim): "
+                                     f"\"{_one(x.get('quote'), 100)}\""
+                                     + ("; verbatim: " + " | ".join(f"{u.get('id')} \"{whole(u.get('quote'))}\""
+                                                                   for u in alts) if alts else ""))
+                            continue
+                        q = whole(x.get("quote")) if full else _one(x.get("quote"), 100)
+                        L.append(f"  - {x.get('id')} · {x.get('paper')} · \"{q}\"")
                 L.append(f"  - gap: {it_collide.gap_hint(I, r)}")
             L.append("")
         elif sec == "fn_units":
@@ -381,16 +394,73 @@ _LEGEND = re.compile(r"^## Methodology legend\b.*?(?=^## |\Z)", re.M | re.S | re
 _MAPPING = re.compile(r"^## Paper.{1,3}theme mapping\b.*?(?=^## |\Z)", re.M | re.S | re.I)
 
 
-def sota_tables(rd: Path, text: str) -> str:
-    """The review with its two bookkeeping sections written by code (the archived layout): the methodology legend - each
-    class's count over the papers the review cites - and the paper-theme mapping, one row per cited paper with its
-    Plane, its methodology class (A7.R2's, (TBD) without one) and whether it bridges themes. What the model wrote
-    under these headings is replaced; the papers count as cited only outside them."""
+_THEME = re.compile(r"^## Theme (\d+)\b.*?(?=^## |\Z)", re.M | re.S)
+KEY_ROWS = 12                       # Key results rows per theme: the theme's experiments, most-cited papers' first
+
+
+def _cell(v, n: int = 90) -> str:
+    v = re.sub(r"\s+", " ", " / ".join(map(str, v)) if isinstance(v, list) else str(v or "")).strip().replace("|", "/")
+    return _one(v, n) if v and v not in ("(NA)", "None") else TBD
+
+
+def theme_results(W: "World", members: list[str], section: str) -> str:
+    """A theme's `### Dominant methods` and `### Key results` (research-cycle.md §2's layout, the archived columns among
+    them) from its member papers' experiment rows, for the subsections the model left out: the method families by
+    rows, and one row per experiment - Study | N | Data | Method | Primary Outcome | Metric | Result."""
+    rows = [e for k in members for e in (W.records.get(k) or {}).get("experiments") or [] if e.get("exp_id")]
+    out = []
+    if not re.search(r"^### Dominant methods\b", section, re.M | re.I):
+        fam = Counter(f for e in rows for f in (e.get("method_family") or []) if f)
+        out += ["### Dominant methods", ""] + ([f"- {f}: {n} experiment row(s) - " + ", ".join(
+            [e["exp_id"] for e in rows if f in (e.get("method_family") or [])][:4])
+            for f, n in fam.most_common(6)] or [f"- {TBD}: no experiment row in this theme's papers"]) + [""]
+    if not re.search(r"^### Key results\b", section, re.M | re.I):
+        out += ["### Key results", "", "| Study | N | Data | Method | Primary Outcome | Metric | Result |",
+                "|---|---|---|---|---|---|---|"]
+        for e in rows[:KEY_ROWS]:
+            data = e.get("data") or []
+            out.append(f"| `{e['exp_id']}` | {_cell([d.get('n') for d in data if d.get('n')], 40)} | "
+                       f"{_cell([d.get('name') for d in data if d.get('name')], 50)} | {_cell(e.get('method_family'), 50)} | "
+                       f"{_cell((e.get('metrics') or [None])[0], 50)} | {_cell(e.get('stats'), 60)} | "
+                       f"{_cell(e.get('headline'), 140)} |")
+        if not rows:
+            out.append(f"| {TBD} | {TBD} | {TBD} | {TBD} | {TBD} | {TBD} | no experiment row in this theme's papers |")
+        out.append("")
+    return "\n".join(out)
+
+
+def _papers_cited(W: "World", text: str) -> set[str]:
+    """The papers a text cites: by key, or through an id that stands for papers - a collision's sides, a unit's or a
+    matrix row's paper, a findings Point's source and the papers it is also in."""
+    out = set()
+    for i in ids_in(text):
+        if i in W.cur:
+            out |= {s["paper"] for s in W.cur[i]["sides"] if s.get("paper")}
+        elif i in W.units or i in W.rows:
+            out.add(i.split("#")[0])
+        elif i in W.points:
+            p = W.points[i]
+            out |= {p.get("source"), *_ids(p.get("also_in"))}
+    return {k for k in out if k}
+
+
+def sota_tables(rd: Path, text: str, W: "World | None" = None) -> str:
+    """The review with its bookkeeping written by code (the archived layout): each theme's Dominant methods and Key
+    results where the model left them out (theme_results), the methodology legend - each class's count over the papers
+    the review cites - and the paper-theme mapping, one row per cited paper with its Plane, its methodology class
+    (A7.R2's, (TBD) without one) and whether it bridges themes. What the model wrote under the legend and mapping
+    headings is replaced; the papers count as cited only outside them - by key, or through a collision, unit, row or
+    Point id (_papers_cited)."""
+    W = W or World(rd)
     cards = read_json(rd / "knowledge_cards.json") if (rd / "knowledge_cards.json").exists() else {}
     meth, bridges = cards.get("methodology") or {}, cards.get("bridges") or {}
     theme = {k: f"T{p.get('n')}" for p in cards.get("planes") or [] for k in p.get("member_papers") or []}
+    members = {str(p.get("n")): list(p.get("member_papers") or []) for p in cards.get("planes") or []}
     body = _MAPPING.sub("", _LEGEND.sub("", text))
-    cited = sorted({k for k in theme if re.search(rf"\b{re.escape(k)}\b", body)})
+    body = _THEME.sub(lambda m: m.group(0).rstrip("\n") + "\n\n" + theme_results(W, members.get(m.group(1), []), m.group(0))
+                      + "\n" if m.group(1) in members else m.group(0), body)
+    via = _papers_cited(W, body)
+    cited = sorted({k for k in theme if k in via or re.search(rf"\b{re.escape(k)}\b", body)})
     counts = Counter(meth.get(k) for k in cited)
     legend = ["## Methodology legend", "", "| Color | Methodology | Count |", "|---|---|---|",
               *[f"| {c} | {m} | {counts.get(m, 0)} |" for m, c in METHODOLOGY.items()], ""]
@@ -418,12 +488,64 @@ def cmd_sota_tables(a):
     p = rd / SOTA
     if not p.exists():
         die(f"{SOTA} missing - B2 writes it first", 2)
-    write_text(p, sota_tables(rd, id_case(World(rd), p.read_text(encoding="utf-8"))))
-    print(f"sota-tables: methodology legend and paper-theme mapping written, ids spelled as their own -> {SOTA}")
+    W = World(rd)
+    write_text(p, sota_tables(rd, id_case(W, p.read_text(encoding="utf-8")), W))
+    print(f"sota-tables: methodology legend, paper-theme mapping and each theme's missing Dominant methods / Key "
+          f"results written, ids spelled as their own -> {SOTA}")
 
 
 def ids_in(text: str) -> list[str]:
     return ID.findall(text or "")
+
+
+ID_TEXT_FILES = ("question.json", "p1_prefill.json", "argument.json", "decision_tree.draft.json", "decision_tree.json",
+                 "attack_plan.draft.json", "attack_plan.json", "packaging.draft.json")
+
+
+def id_texts(W: World, text: str) -> list[str]:
+    """One line per id the text cites, saying what the record says: a unit's kind, text and verbatim quote, a
+    collision's result, axes, sides and reason, a Line's relation and title, a Point's claim, a matrix row's headline."""
+    rows = {e["exp_id"]: e for r in W.records.values() for e in r.get("experiments") or [] if e.get("exp_id")}
+    out = []
+    for i in dict.fromkeys(ids_in(text)):
+        if i in W.units:
+            u = W.units[i]
+            out.append(f"- {i} · {u.get('kind')} · {_one(u.get('text'), 220)}"
+                       + (f" · quote: \"{re.sub(r'\s+', ' ', str(u['quote'])).strip()}\"" if u.get("quote") else "")
+                       + (f" · {u['where']}" if u.get("where") else ""))
+        elif i in W.cur:
+            r = W.cur[i]
+            out.append(f"- {i} · {r.get('result')} · {','.join(r.get('axes_differ') or [])} · sides "
+                       f"{', '.join(x.get('id', '') for x in r.get('sides') or [])} · {_one(r.get('reason'), 220)}")
+        elif i in W.lines:
+            ln = W.lines[i]
+            title = next((x[2:].strip() for x in ln["text"].splitlines() if x.startswith("# ")), "")
+            out.append(f"- {i} · Line ({ln['fm'].get('relation_type')}) · {_one(title, 160)}")
+        elif i in W.points:
+            p = W.points[i]
+            out.append(f"- {i} · Point · {_one(p.get('core_claim') or p.get('description'), 220)}")
+        elif i in rows:
+            e = rows[i]
+            out.append(f"- {i} · row · {_one(e.get('headline'), 200)} · n {_cell([d.get('n') for d in e.get('data') or []], 40)}")
+    return out
+
+
+def cmd_id_texts(a):
+    """The generation's files' ids, each with what its record says - a tool-less worker reads them here instead of
+    opening the deconstruction records (P4 refused to write `holds` without the units' words)."""
+    gd = Path(a.gen_dir)
+    W = World(gd.parent)
+    text = "\n".join(p.read_text(encoding="utf-8") for p in (gd / f for f in ID_TEXT_FILES) if p.exists())
+    lines = id_texts(W, text)
+    out, n = [], 0
+    for ln in lines:
+        if n + len(ln) > a.max_chars:
+            out.append(f"... {len(lines) - len(out)} more id(s) not shown (--max-chars {a.max_chars})")
+            break
+        out.append(ln)
+        n += len(ln) + 1
+    print(f"# What the ids of {gd.name}'s files say ({len(lines)} id(s); units with their verbatim quotes)")
+    print("\n".join(out) or "(no ids)")
 
 
 # ================================================================================================ A7.R1 promotion
@@ -766,7 +888,11 @@ def r3_problems(W: World) -> list[dict]:
         for q in ("Q3", "Q5"):
             s = section(text, q)
             ids = ids_in(s)
-            if not s or (TBD not in s and not ids):
+            if not s:              # a heading of its own wording ("## 3. How did ...") is no section the check finds
+                fs.append(F("ERROR", "J07", U, f"{bid}: no `## {q} ...` section - the Body's headings are `## Q1 ...` "
+                                                f"to `## Q7 ...` as the template gives them; {q} cites Lines and "
+                                                f"collisions (or writes {TBD})"))
+            elif TBD not in s and not ids:
                 fs.append(F("ERROR", "J07", U, f"{bid} {q}: cite Lines and collisions (or write {TBD})"))
             unknown = [i for i in ids if not W.known(i)]
             if unknown:
@@ -1028,8 +1154,13 @@ def settle_handover(W: World, H: dict) -> dict:
         targets.append(t)
     if "targets" in H:
         H["targets"] = targets
+    varies = set(_ids(H.get("varies")))
     for i, ra in enumerate(x for x in H.get("rival_accounts") or [] if isinstance(x, dict)):
         ra["id"] = f"RA{i + 1}"
+        if ra.get("axis") in varies:
+            # the axis the question varies is no rival's (Y12): the account keeps no axis of its own - the form Y12 itself
+            # names - instead of a revision that cannot see which `varies` it will choose (a grammar cannot tie them)
+            print(f"  {ra['id']}: axis {ra.pop('axis')!r} left out - the question varies it (Y12)")
     return H
 
 
@@ -1061,7 +1192,11 @@ def handover_problems(W: World, qid: str, text: str, fm: dict, g: dict) -> list[
     fs = []
     # ---- Y11 targets: a sentence a paper holds, and the collision it loses (or stands untested) in
     T = H.get("targets")
-    if not isinstance(T, list) or not 1 <= len(T) <= 5:
+    if T == [] and not any(target_choices(handover_candidates(W, qid))):
+        fs.append(F("WARN", "Y11", U, f"{qid}: no attack target - no losing or untested side of its collisions holds a "
+                                       "claim or assumption and no unit overreaches, so section 9 has none (P4 then "
+                                       "has nothing to attack)"))
+    elif not isinstance(T, list) or not 1 <= len(T) <= 5:
         fs.append(F("ERROR", "Y11", U, f"{qid}: section 9 `targets` is a list of 1-5 attack targets"))
         T = []
     seen = set()
@@ -1691,6 +1826,20 @@ def cmd_questions_plan(a):
           + "".join(f"\n  {g} -> {q}" + (" (again: refused)" if again else "") for g, q, again in made))
 
 
+def target_choices(cand: dict) -> tuple[dict, list]:
+    """What a section 9 target can be chosen from (handover_candidates): a collision and the unit on its losing or
+    untested side - the premise's holder in a premise collision, either side of a conflict or boundary - and the units the
+    deconstruction marked `overreach`. settle_handover makes a choice claim_units + weakness, so a target on the
+    evidence against it cannot be written. -> ({collision: [units]}, [overreach units])"""
+    sides = defaultdict(list)
+    for e in cand["targets"]:
+        for x in e["collisions"]:
+            if x["role"] in ("holder", "side"):
+                sides[x["id"]].append(e["unit"])
+    over = [e["unit"] for e in cand["targets"] + cand["claims_without_collision"] if str(e.get("overreach") or "").strip()]
+    return sides, over
+
+
 def handover_schema(W: World, cand: dict, gap_id: str | None) -> dict:
     """Section 9's answer, for a worker whose answer is decoded under a schema: the choices from the question's own
     candidates - target units, weakness collisions or overreach units, rival-account bases and axes, magnitude rows. The
@@ -1703,15 +1852,7 @@ def handover_schema(W: World, cand: dict, gap_id: str | None) -> dict:
     obj = lambda props, req: {"type": "object", "additionalProperties": False, "properties": props,  # noqa: E731
                               "required": req}
     every = [e["unit"] for e in cand["targets"] + cand["claims_without_collision"]]
-    # a target is chosen as a collision and the unit on its losing or untested side - the premise's holder in a premise
-    # collision, either side of a conflict or boundary - plus what it bundles (`also`): settle_handover makes it
-    # claim_units + weakness, so a target on the evidence against it cannot be written
-    sides = defaultdict(list)
-    for e in cand["targets"]:
-        for x in e["collisions"]:
-            if x["role"] in ("holder", "side"):
-                sides[x["id"]].append(e["unit"])
-    over = [e["unit"] for e in cand["targets"] + cand["claims_without_collision"] if str(e.get("overreach") or "").strip()]
+    sides, over = target_choices(cand)
     basis = set(cand["collisions"]) | set(sides) | {ln["line"] for ln in cand["debate_lines"]} | \
         ({gap_id} if gap_id else set())
     codes = [a for a in it_collide.AXES_DIFFER if a != "none"]
@@ -1719,7 +1860,10 @@ def handover_schema(W: World, cand: dict, gap_id: str | None) -> dict:
     kinds = [obj({"collision": {"enum": [c]}, "unit": one(us), "also": also, "holds": txt(TEXT_MAX)},
                  ["collision", "unit", "holds"]) for c, us in sorted(sides.items())]
     kinds += [obj({"overreach": one(over), "also": also, "holds": txt(TEXT_MAX)}, ["overreach", "holds"])] if over else []
-    target = {"anyOf": kinds} if len(kinds) > 1 else (kinds or [obj({"holds": txt(TEXT_MAX)}, ["holds"])])[0]
+    # no losing or untested side holds a claim or assumption, and no unit overreaches (a development question on
+    # extends collisions between matrix rows): no target can be written, so the list is empty (Y11 then WARNs)
+    targets = arr(kinds[0] if len(kinds) == 1 else {"anyOf": kinds}, minItems=1, maxItems=5) if kinds else \
+        {"type": "array", "items": obj({"holds": txt(TEXT_MAX)}, ["holds"]), "maxItems": 0}
     vary = [x["axis"] for x in cand["axes"]] or codes
     # a rival account's axis is one its basis differs on and the question does not vary: when only one axis can be
     # varied, it is no rival's; when none is left, an account has no axis of its own (the schema then offers none)
@@ -1730,7 +1874,7 @@ def handover_schema(W: World, cand: dict, gap_id: str | None) -> dict:
     rows = [m["exp_id"] for m in cand["magnitudes"]]
     mag = arr(obj({"exp_id": one(rows), "value": txt(200), "relation": one(["same", "neighbour"]), "n": txt(80)},
                   ["exp_id", "value"]), minItems=1, maxItems=8)          # relation: same when left out
-    return obj({"varies": arr(one(vary), minItems=1, maxItems=2), "targets": arr(target, minItems=1, maxItems=5),
+    return obj({"varies": arr(one(vary), minItems=1, maxItems=2), "targets": targets,
                 "rival_accounts": arr(rival, minItems=1, maxItems=6),
                 "magnitudes": {"anyOf": [mag, {"enum": [NO_NUMBER]}]} if rows else {"enum": [NO_NUMBER]},
                 "magnitude_absent": txt(TEXT_MAX)}, ["varies", "targets", "rival_accounts", "magnitudes"])
@@ -1888,6 +2032,12 @@ def add_parsers(sub) -> None:
     sp = sub.add_parser("sota-tables", help="B2: the methodology legend and paper-theme mapping, from the Planes")
     sp.add_argument("research_dir")
     sp.set_defaults(fn=cmd_sota_tables)
+    sp = sub.add_parser("id-texts", help="planning: what each id a generation's files cite says - units with their "
+                                         "verbatim quotes, collisions, Lines, Points, rows (for a worker that cannot "
+                                         "open the records)")
+    sp.add_argument("gen_dir")
+    sp.add_argument("--max-chars", type=int, default=18000)
+    sp.set_defaults(fn=cmd_id_texts)
     sp = sub.add_parser("recon-digest", help="the ids a reconstruct unit may cite, one line each (for a worker "
                                              "that cannot open files)")
     sp.add_argument("research_dir")

@@ -17,6 +17,7 @@ from ideate_v2.registry import Registry
 from ideate_v2.report import record_error
 
 from .config import HarnessConfig
+from .providers import Provider, make_provider
 from .skill import Skill, Subs
 
 # a category -> the v2 code the conductor records a failure of that category under (a Unit's own check finding is
@@ -54,10 +55,14 @@ class RunContext:
     attempts: dict = field(default_factory=dict)            # (unit, instance) -> the last attempt number of this run
     units: list = field(default_factory=list)               # UnitResults, in the order they ran
     fresh_gens: set = field(default_factory=set)            # generations this run started (P0 ran in it)
+    provider: Provider | None = None                        # who does the model Units (providers/); None: the one
+                                                            # cfg.worker names, made here
 
     def __post_init__(self) -> None:
         self.rd = Path(self.rd)
         self.state_dir.mkdir(parents=True, exist_ok=True)
+        if self.provider is None:
+            self.provider = make_provider(self.cfg, self.state_dir)
 
     @property
     def state_dir(self) -> Path:

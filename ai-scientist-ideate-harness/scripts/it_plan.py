@@ -33,7 +33,7 @@ import json
 import re
 from pathlib import Path
 
-from it_common import die, now_iso, read_json, write_json
+from it_common import die, now_iso, read_json, write_json, write_text
 
 STEPS = (
     ("P0", "question.json", "the question taken from the fusion block (question-take)"),
@@ -58,6 +58,64 @@ def status(gd: Path) -> list[dict]:
         q = read_json(qj)
         out[0]["handover"] = bool(q.get("handover"))
     return out
+
+
+def reflection_tail(text: str, rounds: int = 2, max_chars: int = 14000) -> str:
+    """The last `rounds` '## Round' sections of a reflection log: the round-2 decision a revision enters with, or the
+    round-3 findings a forced revision answers - the earlier rounds are the history those already read. Each section
+    keeps its head when the whole would be longer than max_chars."""
+    parts = re.split(r"(?=^## Round )", text, flags=re.M)
+    secs = [s for s in parts if s.startswith("## Round ")][-max(1, rounds):]
+    if not secs:
+        return text[-max_chars:]
+    # the latest round has most room: it is what the step acts on (its findings, its decision)
+    shares = [0.6 if i == len(secs) - 1 else 0.4 / (len(secs) - 1) for i in range(len(secs))] if len(secs) > 1 else [1.0]
+    out = []
+    for s, share in zip(secs, shares):
+        each = int(max_chars * share)
+        out.append(s if len(s) <= each else s[:each] + f"\n... ({len(s) - each} characters of this round cut)\n")
+    return "\n".join(out)
+
+
+def reflection_append(log_text: str | None, entry: str, gen_name: str) -> str:
+    """The log with a round's entry added: everything before its '## Round' heading dropped (a model that wrote the
+    log's title again); appended - or, when the log's last entry has the same heading (that round run again after a
+    failure), in its place."""
+    m = re.search(r"^## Round .*$", entry, re.M)
+    if not m:
+        raise ValueError("the entry starts with its '## Round r/N' heading")
+    entry = entry[m.start():].strip()
+    head = m.group(0).strip()
+    text = (log_text or f"# Reflection Log — Generation {gen_name[4:] if gen_name.startswith('gen_') else gen_name}\n").rstrip()
+    secs = list(re.finditer(r"^## Round .*$", text, re.M))
+    if secs and secs[-1].group(0).strip() == head:
+        text = text[:secs[-1].start()].rstrip()
+    return text + "\n\n" + entry + "\n"
+
+
+def cmd_reflection_append(a):
+    """A B5 round writes its entry to a file of its own and this puts it into the log: a model never copies the whole
+    log back (each round re-wrote ~50k characters of earlier rounds, and the prompt outgrew a 64k-token context)."""
+    gd, src = Path(a.gen_dir), Path(a.entry)
+    if not src.exists():
+        die(f"{src} not found - the round writes its entry there first", 1)
+    log = gd / "reflection_log.md"
+    try:
+        text = reflection_append(log.read_text(encoding="utf-8") if log.exists() else None,
+                                 src.read_text(encoding="utf-8"), gd.name)
+    except ValueError as e:
+        die(f"{src.name}: {e}", 1)
+    write_text(log, text)
+    print(f"reflection-append: {src.name} -> {gd.name}/reflection_log.md ({len(text)} characters)")
+
+
+def cmd_reflection_tail(a):
+    p = Path(a.gen_dir) / "reflection_log.md"
+    if not p.exists():
+        print(f"(no {Path(a.gen_dir).name}/reflection_log.md yet)")
+        return
+    print(f"# The last {a.rounds} round(s) of {Path(a.gen_dir).name}/reflection_log.md")
+    print(reflection_tail(p.read_text(encoding="utf-8"), a.rounds, a.max_chars))
 
 
 def cmd_status(a):
@@ -110,6 +168,17 @@ def default_form(collision: dict | None) -> str:
 
 def _ids(v) -> list:
     return [v] if isinstance(v, str) else [x for x in (v or []) if isinstance(x, str)]
+
+
+def subtree_roots(tree: dict) -> list:
+    """The roots listed in `subtrees`: node ids, or objects naming one ({"root": "S0", "note": ...} - the rules say a
+    subtree's root "is listed in `subtrees`", and a model writes it with its note; the root is what counts)."""
+    out = []
+    for s in tree.get("subtrees") or []:
+        r = s if isinstance(s, str) else s.get("root") if isinstance(s, dict) else None
+        if isinstance(r, str) and r not in out:
+            out.append(r)
+    return out
 
 
 def context(gd: Path) -> dict | None:
@@ -530,7 +599,7 @@ def tree_findings(tree: dict, arg: dict, gd: Path | None = None) -> list[dict]:
     if root not in nodes:
         add("ERROR", "T05", f"root {root!r} is not a node")
         return out
-    subroots = _ids(tree.get("subtrees"))
+    subroots = subtree_roots(tree)
     bad_sub = [s for s in subroots if s not in nodes]
     if bad_sub:
         add("ERROR", "T05", f"subtrees {bad_sub} are not nodes")
@@ -848,7 +917,7 @@ def render(tree: dict) -> str:
                 L.append(f"{pre}{b.get('kind')} {tail} →")
                 node(b.get("next"), ind + ("   " if last else "│  "))
     node(tree.get("root"), "")
-    for s in _ids(tree.get("subtrees")):
+    for s in subtree_roots(tree):
         L.append("")
         L.append(f"subtree (read on every path):")
         node(s, "")
@@ -1001,7 +1070,7 @@ def _tree_paths(tree: dict) -> list:
     nodes = {n.get("id"): n for n in tree.get("nodes") or [] if isinstance(n, dict)}
     leaves = {l.get("id"): l for l in tree.get("leaves") or [] if isinstance(l, dict)}
     paths, _ = _walk(nodes, leaves, tree.get("root"))
-    for s in _ids(tree.get("subtrees")):
+    for s in subtree_roots(tree):
         sp, _ = _walk(nodes, leaves, s)
         paths += sp
     return [([nodes[nid].get("experiment") for nid, _ in p], lid) for p, lid in paths]
@@ -1230,8 +1299,13 @@ def attack_prefill(gd: Path) -> dict:
                         "concede_paper_level": paper_level[:6],
                         "_check": "prefill does not judge whether the design tests this target: drop it (`dropped`) if no "
                                   "experiment reaches its sentence"})
+    # what common_ground may cite (R07: collision, unit or Line ids - a model given none listed paper keys): the agree
+    # collisions on the targets' papers, the gist of each beside it
+    tp = {p for t in q.get("targets") or [] for p in _ids(t.get("papers"))}
+    cg = [{"id": r["collision_id"], "gist": str(r.get("reason") or "")[:160]} for r in cur
+          if r["result"] == "agree" and tp & {s.get("paper") for s in r["sides"]}][:8]
     return {"schema": ATTACK_SCHEMA, "idea": arg.get("idea"), "generation": arg.get("generation"),
-            "question": q.get("question"), "common_ground": [], "targets": targets,
+            "question": q.get("question"), "common_ground": [], "_common_ground_candidates": cg, "targets": targets,
             "closest": {"papers": [], "lookup": "(the round-1 novelty lookup)", "distinction": "(write)"},
             "related_work": [{"role": "common-ground", "text": "(write)"}] +
                             [{"role": t["id"], "text": "(write)"} for t in targets] + [{"role": "closest", "text": "(write)"}],
@@ -1596,6 +1670,17 @@ def add_parsers(sub) -> None:
     sp.add_argument("gen_dir")
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(fn=cmd_status)
+    sp = sub.add_parser("reflection-append", help="B5: a round's entry (its own file) into gen_k/reflection_log.md - "
+                                                  "appended, or in place of the same round written just before")
+    sp.add_argument("gen_dir")
+    sp.add_argument("entry")
+    sp.set_defaults(fn=cmd_reflection_append)
+    sp = sub.add_parser("reflection-tail", help="planning: the last rounds of gen_k/reflection_log.md (what a revision "
+                                                "acts on), for a worker whose prompt cannot carry the whole log")
+    sp.add_argument("gen_dir")
+    sp.add_argument("--rounds", type=int, default=2)
+    sp.add_argument("--max-chars", type=int, default=14000)
+    sp.set_defaults(fn=cmd_reflection_tail)
     sp = sub.add_parser("hypo-prefill", help="planning P1: default form, rival candidates and magnitudes for the primary "
                                              "hypothesis")
     sp.add_argument("gen_dir")

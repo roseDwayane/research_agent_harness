@@ -9,19 +9,21 @@ A recipe is a list of steps per phase. Most Units have one phase, `main`; B5 has
         "optional": true                a failure is recorded as a warning and the recipe goes on
         "depth": ["standard", "deep"]   run only at these depths
         "capture": {"name": "Q", "regex": "question-next: (Q_\\d+)"}   a value from its output, $Q in later steps
-  {"write": {...}}                      one Claude worker writes files (claude_worker.py)
+  {"write": {...}}                      one worker writes files (the run's provider, providers/)
         "task"      what to do, in the words of the rules (placeholders allowed)
         "rules"     the reference sections it follows: "references/search/A1-frame.md#a1p"
         "reads"     paths it should read (beyond the rules); "writes": the files it must leave behind
+        "may_write" files it may also write but need not (P2: the rest of step8_hypothesis.md, which a revision
+                    of the design alone leaves as it is)
         "forbid"    paths it must not read (a scorer's blinding: bibliometrics, venues)
         "commands"  skill commands it may run itself (e.g. a lookup: "ideate_tools.py list-papers")
         "isolated"  true: an independent reader (A1.e): it sees only `reads` and the rules, not the research folder
-        "tools"     extra Claude Code tools beyond Read/Write/Edit/Glob/Grep (B6's journal lookup: WebSearch, WebFetch)
+        "tools"     an agent's extra tools (B6's journal lookup: WebSearch, WebFetch); a chat model has none
         "lookups"   the read-only lookups a worker without tools is given (default: every lookup in `commands`);
                     [] when the step's brief already holds what it needs
-        "schema"    a JSON schema file (written by an earlier run step) for the step's one `writes` file: an Ollama
-                    worker's answer is decoded under it and written as that file (A1.q: frame strategy-brief)
-  {"fanout": {...}}                     one worker per batch file, at most max_parallel at once
+        "schema"    a JSON schema file (written by an earlier run step) for the step's one `writes` file: a chat
+                    worker's (Ollama's) answer is decoded under it and written as that file (A1.q: frame strategy-brief)
+  {"fanout": {...}}                     one worker per batch file, at most the provider's parallel() at once
         "batches"   a glob under $RD: "_state/fanout/A3/batch_*.in.json"
         "task"      the instruction per batch; {batch} {out} {brief} are filled in
         "brief"     the brief every batch worker reads ($RD-relative)
@@ -87,7 +89,7 @@ class Recipe:
     @property
     def executor(self) -> str:
         kinds = self.step_kinds
-        return "fanout" if "fanout" in kinds else "claude" if "write" in kinds else "script"
+        return "fanout" if "fanout" in kinds else "worker" if "write" in kinds else "script"
 
     def steps(self, phase: str = "main") -> list[Step]:
         if phase not in self.phases:

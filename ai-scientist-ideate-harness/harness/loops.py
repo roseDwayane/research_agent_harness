@@ -108,7 +108,8 @@ def ready_questions_left(rd: Path) -> list[str]:
             used.add(c.get("question") if isinstance(c, dict) else None)
     for gd in rd.glob("gen_*/question.json"):
         try:
-            used.add(json.loads(gd.read_text(encoding="utf-8")).get("id"))
+            q = json.loads(gd.read_text(encoding="utf-8"))
+            used.add(q.get("question") or q.get("id"))        # question-take writes "question" (the dry run "id")
         except ValueError:
             pass
     return [q for q in ready if q not in used]

@@ -240,6 +240,7 @@ provenance: {source_files: [], generated_at: YYYY-MM-DD}
 
 ## Body
 
+<a id="body-descriptive"></a>
 ### Descriptive — `knowledge/body/B_draft_{topic_slug}_descriptive.md` (stage A, one per topic)
 
 ```markdown
@@ -264,6 +265,7 @@ provenance: {source_files: [], generated_at: YYYY-MM-DD}
 ## Q7 The real problem it claims to solve
 ```
 
+<a id="body-prescriptive"></a>
 ### Prescriptive — `gen_{k}/body/B_draft_{idea_Name}.md` (stage B, one per idea)
 
 The original seven questions, unchanged, answered from the locked gap and the final hypothesis.

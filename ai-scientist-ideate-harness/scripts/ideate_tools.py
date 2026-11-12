@@ -691,7 +691,49 @@ def _methods_signals(kd: Path) -> dict:
 
 
 # -------------------------------------------------------------- consume / ledger
+def _consume_from_gen(a) -> bool:
+    """`consume --from-gen <gen_dir>`: the conductor's form of B6's consume (research-cycle section 6), which any worker
+    can be given, a chat model too. The question comes from question.json, the idea from idea.json, the angle's
+    uncovered part from argument.json's coverage (`--angle "<angle> [not covered: ...]"`), and with --abandoned-by-gate
+    the reason from the decision gate's T09 findings (tree-check). -> True when the ledger already holds the entry the
+    step would write: a re-run of the step does nothing."""
+    gd = Path(a.from_gen)
+    q = read_json(gd / "question.json") if (gd / "question.json").exists() else {}
+    if not q.get("question"):
+        die(f"{gd}/question.json names no question: consume --from-gen needs the generation's question.json")
+    a.question = q["question"]
+    if a.abandoned_by_gate:
+        import it_plan
+        try:
+            texts = [f["text"] for f in it_plan.tree_findings(read_json(gd / it_plan.TREE), read_json(gd / "argument.json"),
+                                                               gd) if f["code"] == "T09" and f["level"] == "ERROR"]
+        except (OSError, ValueError, KeyError, TypeError):
+            texts = []
+        a.abandoned = "decision gate T09 still failing after the forced revision" + (
+            ": " + "; ".join(texts[:3]) if texts else "")
+    else:
+        idea = read_json(gd / "idea.json") if (gd / "idea.json").exists() else {}
+        if not idea.get("Name"):
+            die(f"{gd}/idea.json has no Name: finalize the idea before consuming its question")
+        a.idea = idea["Name"]
+        cov = (read_json(gd / "argument.json") if (gd / "argument.json").exists() else {}).get("coverage") or {}
+        if cov.get("angle") == "part" and q.get("angle"):
+            dropped = cov.get("angle_dropped")
+            dropped = "; ".join(map(str, dropped)) if isinstance(dropped, list) else str(dropped or "part of the angle")
+            a.angle = f"{q['angle']} [not covered: {dropped[:160]}]"
+    p = Path(a.research_dir) / "step0_session_config.json"
+    for e in (read_json(p) if p.exists() else {}).get("consumed") or []:
+        if e.get("question") != a.question:
+            continue
+        if (a.abandoned is not None and e.get("status") == "abandoned") or (a.abandoned is None and e.get("idea") == a.idea):
+            print(f"{a.question}: already in the ledger as this generation left it - nothing to do")
+            return True
+    return False
+
+
 def cmd_consume(a):
+    if getattr(a, "from_gen", None) and _consume_from_gen(a):
+        return
     rd = Path(a.research_dir)
     p = rd / "step0_session_config.json"
     cfg = read_json(p) if p.exists() else {}
@@ -811,7 +853,14 @@ def cmd_append_idea(a):
             data = read_json(archive)
         except Exception as e:
             die(f"{archive} does not parse ({e}); refusing to overwrite a possibly truncated archive")
-    if any(isinstance(x, dict) and x.get("Name") == idea.get("Name") for x in data):
+    same = [x for x in data if isinstance(x, dict) and x.get("Name") == idea.get("Name")]
+    if same and getattr(a, "if_absent", False) and not problems and isinstance(idea, dict) \
+            and same[0] == {k: idea.get(k) for k in IDEA_KEYS}:
+        # --if-absent (B6 run again, its later steps redone): the idea is in the archive as it is - nothing to append;
+        # without the flag a duplicate Name is refused, as it always was
+        print(f"{idea['Name']!r} is already in {archive}, unchanged - nothing to append")
+        return
+    if same:
         problems.append(f"an idea named {idea.get('Name')!r} is already in the archive")
     if problems:
         for m in problems:
@@ -840,6 +889,123 @@ def _authors_short(p: dict) -> str:
     return ", ".join(fam) + (" et al." if len(au) > 3 else "")
 
 
+def cmd_venues(a):
+    """B6's journal lookup, read-only: the session's target venues, then every venue of the shortlist with the citation
+    keys published there - what the journal table needs when the web cannot be searched (research-cycle section 7)."""
+    rd = Path(a.research_dir)
+    if not (rd / "step3_shortlist.json").exists():
+        die(f"no step3_shortlist.json in {rd}: the screen has not run", 2)
+    cfg = read_json(rd / "step0_session_config.json") if (rd / "step0_session_config.json").exists() else {}
+    print("# target venues (step0): " + ("; ".join(map(str, cfg.get("target_venues") or [])) or "(none)"))
+    by: dict[str, list[str]] = {}
+    for p in load_shortlist(rd)["papers"]:
+        venue = str(p.get("journal") or "").strip()
+        if venue and p.get("citation_key"):
+            by.setdefault(venue, []).append(p["citation_key"])
+    print(f"# {len(by)} venues of the shortlist, most papers first: venue (n): citation keys")
+    for venue, keys in sorted(by.items(), key=lambda kv: (-len(kv[1]), kv[0].lower()))[:a.top]:
+        print(f"{venue} ({len(keys)}): {', '.join(keys[:12])}" + (" ..." if len(keys) > 12 else ""))
+
+
+def grep_papers(papers: list[dict], grep: str) -> list[dict]:
+    """The papers whose title + abstract hold every term of `grep`: a bare word matches at the start of a word (so
+    "hot pixel" does not hit "photo ... pixel", yet "compress" finds "compression"); a quoted string is an exact phrase
+    (--grep 'bit error "fixed huffman"' -> bit, error AND "fixed huffman")."""
+    import shlex
+    try:
+        words = shlex.split(grep)
+    except ValueError:                     # an unbalanced quote: the words as they are
+        words = grep.replace('"', " ").split()
+    terms = [re.compile(r"\b" + re.escape(x).replace(r"\ ", r"\s+"), re.I) for x in words if x.strip()]
+    return [p for p in papers if terms and all(rx.search(f"{p.get('title') or ''} {p.get('abstract') or ''}")
+                                               for rx in terms)]
+
+
+NOVELTY_QUERIES, NOVELTY_LOOKUPS = "_work/novelty_queries.json", "_work/novelty_lookups.md"
+
+
+def cmd_novelty_plan(a):
+    """B5 round 1, first half for a worker that cannot run commands: the schema of its novelty queries (2-4, each
+    the words of one `list-papers --grep` and its scope); novelty-lookup runs them."""
+    gd = Path(a.gen_dir)
+    item = {"type": "object", "additionalProperties": False, "required": ["terms", "scope", "why"], "properties": {
+        "terms": {"type": "array", "items": {"type": "string", "maxLength": 40}, "minItems": 1, "maxItems": 4},
+        "scope": {"enum": ["raw", "excluded"]},
+        "why": {"type": "string", "maxLength": 200}}}
+    schema = {"type": "object", "additionalProperties": False, "required": ["queries"],
+              "properties": {"queries": {"type": "array", "items": item, "minItems": 2, "maxItems": 4}}}
+    write_json(gd / "_work" / "novelty_queries.schema.json", schema)
+    (gd / NOVELTY_QUERIES).unlink(missing_ok=True)          # a query of an earlier round is not this round's
+    print(f"novelty-plan {gd.name}: schema -> _work/novelty_queries.schema.json; write 2-4 queries to {NOVELTY_QUERIES}")
+
+
+def cmd_novelty_lookup(a):
+    """B5 round 1, second half: each query of _work/novelty_queries.json run as `list-papers --grep` over every
+    record the search returned (raw) or those screening left out (excluded), each hit marked shortlisted or excluded -
+    the round pastes them. A query with no hit is retried with its last word dropped, until it finds something or one
+    word is left (a worker cannot rephrase it itself); the relaxation is said."""
+    gd = Path(a.gen_dir)
+    rd = gd.parent
+    qp = gd / NOVELTY_QUERIES
+    if not qp.exists():
+        die(f"{qp} not found - the round writes its queries there first (novelty-plan)", 1)
+    def terms_of(q) -> list[str]:          # a list of terms (each a word or a phrase), or one string of them (an agent)
+        v = q.get("terms")
+        if isinstance(v, list):
+            return [str(x).strip().strip('"') for x in v if str(x).strip().strip('"')]
+        import shlex
+        try:
+            return shlex.split(str(v or ""))
+        except ValueError:
+            return str(v or "").replace('"', " ").split()
+
+    as_grep = lambda ws: " ".join(f'"{w}"' if " " in w else w for w in ws)          # noqa: E731
+    queries = [{**q, "terms": terms_of(q)} for q in (read_json(qp).get("queries") or []) if isinstance(q, dict)]
+    queries = [q for q in queries if q["terms"]]
+    if not (rd / "step2_raw_papers.json").exists():
+        die(f"no step2_raw_papers.json in {rd}: nothing to look the queries up in", 2)
+    raw = all_candidates(rd)
+    short = {p["id"] for p in load_shortlist(rd)["papers"]} if (rd / "step3_shortlist.json").exists() else set()
+    keys = {}
+    ck = rd / "step4_citation_keys.jsonl"
+    if ck.exists():
+        for ln in ck.read_text(encoding="utf-8").splitlines():
+            try:
+                r = json.loads(ln)
+                keys[r.get("id")] = r.get("key")
+            except ValueError:
+                continue
+    L = [f"# Novelty lookups for {gd.name} (the queries of {NOVELTY_QUERIES}, run by novelty-lookup)", "",
+         f"raw = every record the search returned ({len(raw)}); excluded = those screening left out "
+         f"({len(raw) - len(short)}); a hit is marked shortlisted (with its citation key) or excluded. --grep reads "
+         "titles and abstracts only: a miss on a method is weak evidence.", ""]
+    if not any(q.get("scope") == "excluded" for q in queries) and queries:
+        queries.append({**queries[0], "scope": "excluded", "why": "the excluded lookup the rules always ask for "
+                                                                   "(added: no query had that scope)"})
+    for q in queries:
+        pool = [p for p in raw if q.get("scope") != "excluded" or p["id"] not in short]
+        words = list(q["terms"])                      # a phrase is one term, dropped whole
+        asked = used = as_grep(words)
+        hits = grep_papers(pool, used)
+        while not hits and len(words) > 1:
+            words = words[:-1]
+            used = as_grep(words)
+            hits = grep_papers(pool, used)
+        head = f"## `{asked}` ({q.get('scope')}) - {len(hits)} hit(s)"
+        if used != asked:
+            head += f"; none for all of it, these are for `{used}`" if hits else "; none, not even for one word"
+        L += [head, f"why: {q.get('why') or '-'}"]
+        for p in hits[:a.max_hits]:
+            mark = f"shortlisted {keys.get(p['id']) or p.get('citation_key') or p['id']}" if p["id"] in short \
+                else f"excluded {p['id']}"
+            L.append(f"- {mark} · {p.get('year')} · {str(p.get('title') or '')[:140]}")
+        if len(hits) > a.max_hits:
+            L.append(f"- ... {len(hits) - a.max_hits} more")
+        L.append("")
+    atomic_text(gd / NOVELTY_LOOKUPS, "\n".join(L) + "\n")
+    print(f"novelty-lookup {gd.name}: {len(queries)} quer(ies) -> {NOVELTY_LOOKUPS}")
+
+
 def cmd_list_papers(a):
     """Print papers in slices small enough for one tool result (full abstracts of 20 papers overflow it)."""
     rd = Path(a.research_dir)
@@ -855,12 +1021,7 @@ def cmd_list_papers(a):
     papers = {"raw": lambda: all_candidates(rd), "shortlist": lambda: load_shortlist(rd)["papers"],
               "snowball": lambda: read_json(rd / "step2b_snowball_papers.json")["papers"], "excluded": excluded}[a.file]()
     if a.grep:  # local lookup used by ConsultKnowledge: every term must appear in title+abstract
-        # Match at the start of a word, so "hot pixel" does not hit "photo ... pixel" yet "compress" still finds
-        # "compression". Every term must occur somewhere in title + abstract.
-        import shlex
-        # --grep 'bit error "fixed huffman"'  ->  words bit, error (word-start) AND the exact phrase "fixed huffman"
-        terms = [re.compile(r"\b" + re.escape(x).replace(r"\ ", r"\s+"), re.I) for x in shlex.split(a.grep)]
-        papers = [p for p in papers if all(rx.search(f"{p.get('title') or ''} {p.get('abstract') or ''}") for rx in terms)]
+        papers = grep_papers(papers, a.grep)
     if a.ids:
         want = {x.strip() for x in a.ids.split(",")}
         chosen = [p for p in papers if p.get("id") in want or p.get("citation_key") in want]
@@ -2638,10 +2799,42 @@ def cmd_argument_check(a):
     sys.exit(1 if errors else 0)
 
 
+def settle_shared_terms(arg: dict) -> list[str]:
+    """C18's mechanical half, done by code: a construction's shared_terms are what both formulas contain - a listed
+    term that is not in both is taken out, a subscripted symbol in both is put in (the check's own tests). A model
+    swapped one wrong list for the other across revisions ('protocol' listed but absent, then 'assumption_violation'
+    present but unlisted, then listed but absent). What stays the claim's own: the incorporation rival shared terms
+    call for, and computable_without_experiment. -> what changed, one line per claim"""
+    notes = []
+    for c in arg.get("claims") or []:
+        con = c.get("construction") if isinstance(c, dict) else None
+        if not isinstance(con, dict) or not isinstance(con.get("shared_terms"), list):
+            continue
+        raw_p, raw_o = str(con.get("predictor_formula") or ""), str(con.get("outcome_formula") or "")
+        pf, of = _norm_text(raw_p), _norm_text(raw_o)
+        if not pf or not of:
+            continue
+        keep = [t for t in con["shared_terms"] if str(t).strip() and _norm_text(t) in pf and _norm_text(t) in of]
+        drop = [t for t in con["shared_terms"] if t not in keep]
+        listed = lambda sym: any(sym.lower() in _norm_text(t) or _norm_text(t) in sym.lower() for t in keep)  # noqa: E731
+        add = [x for x in dict.fromkeys(SYMBOL_SUBSCRIPTED.findall(raw_p))
+               if x in set(SYMBOL_SUBSCRIPTED.findall(raw_o)) and not listed(x)]
+        if drop or add:
+            con["shared_terms"] = keep + add
+            notes.append(f"{c.get('id')}: shared_terms" + (f" - {drop} (not in both formulas)" if drop else "")
+                         + (f" + {add} (in both formulas)" if add else ""))
+    return notes
+
+
 def cmd_argument_render(a):
-    """argument.json -> argument.md, the tables a person reads. Generated: edit the JSON, not this file."""
+    """argument.json -> argument.md, the tables a person reads. Generated: edit the JSON, not this file. The
+    mechanical part of the construction (settle_shared_terms) is settled in argument.json first."""
     gd = Path(a.gen_dir)
     arg = _load_argument(gd)
+    settled = settle_shared_terms(arg)
+    if settled:
+        write_json(gd / "argument.json", arg)
+        print("argument-render: " + "; ".join(settled) + " - settled from the formulas (C18)")
     d = lambda x: x if isinstance(x, dict) else {}
     ls = lambda x: x if isinstance(x, list) else []
     cell = lambda v, n=10_000: _cell(v, n)
@@ -3025,7 +3218,14 @@ def main():
         (("--abandoned",), {"default": None, "help": "fusion block: the generation gives the question up (the decision "
                                                       "gate could not be passed) - the reason; nothing is consumed"}),
         (("--also-uses",), {"default": "", "help": "comma-separated gap ids whose "
-         "controls/designs this idea borrows; a later generation should avoid re-using them the same way"}))
+         "controls/designs this idea borrows; a later generation should avoid re-using them the same way"}),
+        (("--from-gen",), {"default": None, "help": "fusion block, B6 run by the conductor: read the question, the idea "
+                                                     "and the angle's uncovered part from this gen_k folder"}),
+        (("--abandoned-by-gate",), {"action": "store_true", "help": "with --from-gen: abandon the question, the "
+                                                                    "reason being the decision gate's T09 findings"}))
+    add("venues", cmd_venues, rd, (("--top",), {"type": int, "default": 40, "help": "most venues listed"}))
+    add("novelty-plan", cmd_novelty_plan, (("gen_dir",), {}))
+    add("novelty-lookup", cmd_novelty_lookup, (("gen_dir",), {}), (("--max-hits",), {"type": int, "default": 12}))
     add("list-papers", cmd_list_papers, rd,
         (("--file",), {"choices": ["raw", "shortlist", "snowball", "excluded"], "default": "raw"}),
         (("--grep",), {"default": "", "help": "only papers whose title+abstract contain ALL of these words"}),
@@ -3044,7 +3244,9 @@ def main():
     add("consumed", cmd_consumed, rd)
     add("link-run", cmd_link_run, (("run_dir",), {}), (("ideas_json",), {}))
     add("validate", cmd_validate, (("ideas_json",), {}))
-    add("append-idea", cmd_append_idea, (("ideas_json",), {}), (("idea_json",), {}))
+    add("append-idea", cmd_append_idea, (("ideas_json",), {}), (("idea_json",), {}),
+        (("--if-absent",), {"action": "store_true", "help": "an identical idea already in the archive is nothing to do "
+                                                             "(B6 run again), not a refused duplicate"}))
     gd = (("gen_dir",), {"help": "<research_dir>/gen_k"})
     add("argument-check", cmd_argument_check, gd,
         (("--idea",), {"default": "", "help": "7-key idea JSON; default <gen_dir>/idea.json, then idea_draft.json"}),

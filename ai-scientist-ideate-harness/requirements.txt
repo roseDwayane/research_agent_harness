@@ -1,5 +1,8 @@
 # Runtime: the Unit implementation (scripts/), the bundled MCP servers and the ideate_v2 MCP server.
-# The v2 core (ideate_v2/) and the conductor (harness/) are standard library only.
+# The v2 core (ideate_v2/) is standard library only, and the conductor (harness/) but for the Anthropic SDK, which
+# only worker = "claude" (the default) imports.
 mcp>=1.27,<2        # official MCP Python SDK; tested with 1.30.0
 httpx>=0.27
 pydantic>=2.6
+anthropic>=2.8,<3   # the Claude API worker (harness/providers/claude.py); tested with 2.8.0
+# worker = "gpt": openai>=3.49,<4 (pip install -e ".[gpt]"); worker = "gemini": google-genai>=3.2,<4 (".[gemini]")
