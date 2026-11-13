@@ -248,6 +248,16 @@ def test_only_the_decision_gate_counts_as_a_failed_tree():
     assert gate("ERROR T09: decision gate: the likeliest outcome is a weak one\n").tree_failed
     t14 = gate("ERROR T14: publishable leaves ['L2'] of the round-1 tree are gone\n")
     assert not t14.tree_failed and t14.failing_steps() == ["P3"]
+    # argument-check's findings are routed by their code: the step that owns the fields, the earliest first
+    def arg(out):
+        r = CommandResult("ideate_tools.py argument-check gen_1", [], 1, out)
+        r.command_template = COHERENCE[0]
+        return GateResult("GATE-coherence", "gen_1", False, {"findings": []}, [r]).failing_steps()
+    assert arg("ERROR C17 C1: controls.negative_can_move is no\nWARN C20: angle part\n") == ["P2"]
+    assert arg("ERROR C17 C1: x\nERROR C20: the question includes 'y', which no claim covers\n") == ["P1", "P2"]
+    assert arg("ERROR C26 C1: rival / set_aside accounts ['RA3'] are not in question.json\n") == ["P1"]
+    assert arg("ERROR C28: decision_tree.json was built on another argument\n") == ["P3"]
+    assert arg("argument-check: 2 error(s)\n") == ["P2"]                 # no code read: the command's own step
     weak = GateResult("GATE-coherence", "gen_1", False, {"findings": [
         {"level": "ERROR", "code": "GATE.RULE.decision_tree_weak_mass", "message": "x"}]}, [])
     assert weak.tree_failed

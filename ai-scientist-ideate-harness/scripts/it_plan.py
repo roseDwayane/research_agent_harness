@@ -274,7 +274,10 @@ def p1_findings(arg: dict, P: dict) -> list[dict]:
         aside = {x.get("account"): x for x in ((d or {}).get("set_aside") or []) if isinstance(x, dict)}
         unknown = sorted(a for a in used | set(aside) if a and a not in accounts)
         if unknown:
-            add("ERROR", "C26", f"rival / set_aside accounts {unknown} are not in question.json rival_accounts", cid)
+            add("ERROR", "C26", f"rival / set_aside accounts {unknown} are not in question.json rival_accounts "
+                                f"(it has {sorted(accounts)}): question.json is the hand-over and is not "
+                                "edited - drop the `account` of a rival that is your own (it stays a rival), or name "
+                                "one of the handed-over accounts", cid)
         for aid in sorted(accounts):
             if aid in used:
                 continue

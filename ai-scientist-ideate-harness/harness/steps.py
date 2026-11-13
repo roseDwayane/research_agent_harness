@@ -18,6 +18,7 @@ Stage B (research-cycle.md section 5 "On the fusion block"; references/planning/
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from ideate_v2 import gates
@@ -81,6 +82,21 @@ PLANNING_STEPS = ("STEP-P1", "STEP-P2", "STEP-P3", "STEP-P4", "STEP-P5")
 REVISION_ENTRIES = ("P1", "P2", "P3")
 # a failing coherence command -> the step its finding belongs to (research-cycle.md section 5, round 3)
 COHERENCE_STEP = dict(zip(COHERENCE, ("P2", "P3", "P4", "P5")))
+# argument-check reads the whole argument, and its findings belong to more than one step: a finding is routed by its
+# code, to the step that owns the fields it reads (P1-gap2hypo.md "Outputs": the primary claim's statement, mode,
+# negation, rivals[] and derivation, and the question's scope; P2-design.md: the design fields; C28: the later files
+# rest on an older argument). A forced revision that enters at P2 for a P1 finding is asked for what P2 may not
+# change (qwen3.8, EEG run gen_2: C20 and C26 sent to P2, which wrote nothing and said why).
+ARGUMENT_CODE_STEP = {**{c: "P1" for c in ("C1", "C7", "C8", "C16", "C20", "C21", "C25", "C26")}, "C28": "P3"}
+_ERROR_CODE = re.compile(r"^ERROR\s+([A-Z]+\d+)\b", re.M)
+
+
+def steps_of(template: str, output: str) -> set[str]:
+    """The planning steps a failing coherence command's ERROR findings belong to."""
+    if template != COHERENCE[0]:
+        return {COHERENCE_STEP[template]}
+    codes = set(_ERROR_CODE.findall(output or ""))
+    return {ARGUMENT_CODE_STEP.get(c, "P2") for c in codes} or {"P2"}     # no code read: the command's own step
 RULE_STEP = {"GATE.RULE.decision_tree_weak_mass": "P3", "GATE.RULE.abstract_word_limit": "P5"}
 
 
@@ -99,9 +115,12 @@ class GateResult:
         return [f["message"] for f in self.contract.get("findings") or [] if f["level"] == "WARN"]
 
     def failing_steps(self) -> list[str]:
-        """Planning steps the failure belongs to (for the coherence gate's forced revision)."""
-        out = {COHERENCE_STEP[r.command_template] for r in self.legacy if not r.ok and
-               getattr(r, "command_template", None) in COHERENCE_STEP}
+        """Planning steps the failure belongs to, earliest first (the coherence gate's forced revision enters at the
+        first: a revision redoes everything after its entry)."""
+        out = set()
+        for r in self.legacy:
+            if not r.ok and getattr(r, "command_template", None) in COHERENCE_STEP:
+                out |= steps_of(r.command_template, (r.stdout or "") + "\n" + (r.stderr or ""))
         out |= {RULE_STEP[f["code"]] for f in self.contract.get("findings") or []
                 if f["level"] == "ERROR" and f["code"] in RULE_STEP}
         return sorted(out)
