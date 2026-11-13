@@ -399,9 +399,14 @@ class RecipeExecutor:
             # (restatement 2 answered "the conductor runs the blind reader, not me" and wrote nothing)
             again = body.get("isolated") and rounds == 1
             if d["action"] != "retry" or not (wr.session_id or again) or (body.get("isolated") and not again):
-                return False, metrics, ctx.error("IDEATE.WORKER.OUTPUT", "the worker did not write: " +
-                                                 ", ".join(str(m) for m in missing), unit=unit, instance=inst,
-                                                 attempt=attempt, context={"step": label})
+                # `declined`: it answered, and wrote none of its files - with its reason, when it gave one. A revision
+                # goes on from the files as they were (steps.py); a first writing has nothing to go on from
+                said = (wr.text or "").strip()
+                said = "" if said == "no file written" else said
+                return False, metrics, ctx.error(
+                    "IDEATE.WORKER.OUTPUT", "the worker did not write: " + ", ".join(str(m) for m in missing)
+                    + (f" - it said: {said[:600]}" if said else ""), unit=unit, instance=inst, attempt=attempt,
+                    context={"step": label, "declined": True, "note": said[:4000]})
             if again:
                 msg = (req.task + "\n\nAn earlier answer to this wrote no file. You are the independent reader this "
                        "asks for - nobody else will write it: write " + ", ".join(f"./{w.name}" for w in missing)
@@ -412,7 +417,13 @@ class RecipeExecutor:
                         w.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copy2(cwd / w.name, w)
             else:
-                msg = "You have not written: " + ", ".join(str(m) for m in missing) + ". Write them now, then stop."
+                said = (wr.text or "").strip()
+                msg = ("You have not written: " + ", ".join(str(m) for m in missing) + "."
+                       + (f" Your note gave this reason: \"{said[:1500]}\"" if said and said != "no file written" else "")
+                       + " This step's files are written whole even when little or nothing of them changes: do what "
+                       "is this step's to do, keep the rest as it is, and name in `note` what belongs to another "
+                       "step or to a file you may not write - the conductor reads the note. Answering with no file "
+                       "leaves the step undone. Write them now, then stop.")
                 wr = self._call(ctx, unit, f"{label}.fix{rounds}", replace(req, task=msg, resume=wr.session_id))
             _add(metrics, wr.metrics)
             rounds += 1

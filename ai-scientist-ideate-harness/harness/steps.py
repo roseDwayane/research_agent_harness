@@ -353,14 +353,45 @@ class GenerationAgent:
         self.steps = {s: StepAgent(s, agents) for s in ("STEP-P0", *PLANNING_STEPS, "STEP-B5", "STEP-B6")}
 
     def _planning(self, ctx: RunContext, k: int, res: GenerationResult, frm: str, to: str, *, force: bool,
-                  phase: str = "main") -> bool:
+                  phase: str = "main", revision: bool = False) -> bool:
+        """The planning steps frm..to. In a `revision` (round 2's, or the forced one) a step whose worker declined -
+        it answered and wrote none of its files - does not end the generation: the step's files stand as they were,
+        the steps after it are still produced again on them, and the reason goes into Risk Factors (revision-declined,
+        must disclose). A model that sees a task it cannot do as asked and says so has not crashed; the run ends with
+        an idea and an honest doubt. A first writing (round 1) has no earlier files: there a decline fails."""
         ids = [s.split("-")[1] for s in PLANNING_STEPS]
         for s in PLANNING_STEPS[ids.index(frm): ids.index(to) + 1]:
             sr = self.steps[s].run(ctx, k, blocking=False, force=force, phase=phase, check_entry=False)
             res.steps.append(sr)
             if not sr.ok:
-                return False
+                said = self._declined(sr) if revision else None
+                if said is None:
+                    return False
+                self._decline(ctx, k, res, sr, said)
         return True
+
+    @staticmethod
+    def _declined(sr: StepResult):
+        """(error record, the worker's reason) when the step failed only because its worker wrote no file."""
+        errs = [e for u in sr.units for e in u.errors if getattr(e, "severity", "") in ("error", "fatal")]
+        if not errs or sr.status == "stopped":
+            return None
+        if not all((getattr(e, "context", None) or {}).get("declined") for e in errs):
+            return None
+        return errs[-1], (errs[-1].context.get("note") or "").strip()
+
+    @staticmethod
+    def _decline(ctx: RunContext, k: int, res: GenerationResult, sr: StepResult, said) -> None:
+        err, note = said
+        unit = sr.step.split("-")[1]
+        ctx.say(f"    · {unit} declined the revision - its files stand as they were; the doubt is disclosed")
+        ctx.error("IDEATE.WORKER.OUTPUT", f"{unit} declined the revision and its files stand as they were"
+                  + (f": {note[:800]}" if note else ""), unit=unit, step=sr.step, instance=instance_of(k),
+                  severity="degraded", caveat="revision-declined", must_disclose=True, parent=err.error_id)
+        ctx.emit("RECOVERY_COMPLETED", unit_id=unit, instance=instance_of(k), error_id=err.error_id,
+                 message="the revision was declined: the earlier files stand, the doubt is disclosed")
+        res.doubts.append(f"revision-declined ({unit})")
+        sr.status = "degraded"
 
     @staticmethod
     def _resolved(ctx: RunContext, k: int, g: GateResult | None, how: str) -> None:
@@ -421,8 +452,8 @@ class GenerationAgent:
             elif not skip("revised") and \
                     loops.allowed(ctx, "LOOP-09", 0, unit="B5", step="STEP-B5", instance=instance_of(k))["allowed"]:
                 # the steps from the entry to P3 produced again, then P4 and P5 on the revised design
-                if not self._planning(ctx, k, res, enters, "P3", force=True, phase="revise") or \
-                        not self._planning(ctx, k, res, "P4", "P5", force=True):
+                if not self._planning(ctx, k, res, enters, "P3", force=True, phase="revise", revision=True) or \
+                        not self._planning(ctx, k, res, "P4", "P5", force=True, revision=True):
                     return self._stop(res)
                 prog.mark("revised")
         # round 3
@@ -438,7 +469,7 @@ class GenerationAgent:
                 ctx.say(f"    forced revision entering at {entry}")
                 if not skip("forced"):
                     prog.mark("forcing")     # a re-run after a failure in it resumes the forced revision
-                    if not self._planning(ctx, k, res, entry, "P5", force=True,
+                    if not self._planning(ctx, k, res, entry, "P5", force=True, revision=True,
                                           phase="revise" if entry in REVISION_ENTRIES else "main"):
                         return self._stop(res)
                     prog.mark("forced")

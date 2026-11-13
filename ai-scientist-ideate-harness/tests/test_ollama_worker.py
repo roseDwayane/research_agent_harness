@@ -680,3 +680,43 @@ def test_an_advising_check_goes_back_to_the_worker_and_never_fails_the_unit(tmp_
     before = len(s.requests)
     res = RecipeExecutor().execute(ctx, "B6", crash, "main", 1, 2)
     assert res.ok and len(s.requests) == before + 1 and any("did not run" in n for n in res.notes)
+
+
+def test_a_worker_that_wrote_nothing_is_answered_and_a_declined_revision_goes_on(tmp_path, fake):
+    """The reminder answers the reason the worker gave; a decline is recorded as one, with the reason. In a revision
+    the generation goes on from the files as they were, the doubt disclosed; in a first writing it fails."""
+    from harness.shell import UnitResult
+    from harness.steps import PLANNING_STEPS, GenerationAgent, GenerationResult, StepResult
+    target = tmp_path / "t_research" / "gen_1" / "argument.json"
+    s = fake(lambda body, n: answer([], note="C20 needs the question narrowed: that is P1's, not mine"))
+    ctx = ctx_for(tmp_path, cfg_for(s.url))
+    target.parent.mkdir(parents=True)
+    target.write_text("{}")
+    recipe = parse({"recipes": [{"unit": "P2", "scope": "generation", "phases": {"revise": [
+        {"write": {"task": "P2 again", "writes": [str(target)], "rules": []}}]}}]})[0]
+    res = RecipeExecutor().execute(ctx, "P2", recipe, "revise", 1, 1)
+    assert not res.ok and len(s.requests) == 2
+    assert "Your note gave this reason" in s.user(1) and "that is P1's, not mine" in s.user(1)
+    assert "name in `note` what belongs to another step" in s.user(1)
+    err = res.errors[-1]
+    assert err.context["declined"] and "P1's, not mine" in err.context["note"] and "it said:" in err.error_message
+
+    class Stub:                                              # P2 declines, every other step is done
+        def __init__(self, step):
+            self.step, self.ran = step, 0
+
+        def run(self, ctx, k, **kw):
+            self.ran += 1
+            bad = self.step == "STEP-P2"
+            unit = UnitResult(self.step.split("-")[1], "gen_1", "failed" if bad else "done", errors=[err] if bad else [])
+            return StepResult(self.step, "gen_1", unit.status, [unit])
+    gen = GenerationAgent({})
+    gen.steps = {st: Stub(st) for st in PLANNING_STEPS}
+    out = GenerationResult(1, "failed")
+    assert gen._planning(ctx, 1, out, "P1", "P5", force=True, phase="revise", revision=True)
+    assert [st.ran for st in gen.steps.values()] == [1, 1, 1, 1, 1]                 # the steps after it still ran
+    assert out.doubts == ["revision-declined (P2)"] and out.steps[1].status == "degraded"
+    disclosed = [e for e in ctx.errors if e.caveat == "revision-declined"]
+    assert len(disclosed) == 1 and disclosed[0].must_disclose and "P1's, not mine" in disclosed[0].error_message
+    first = GenerationResult(1, "failed")                    # round 1: nothing to go on from
+    assert not gen._planning(ctx, 1, first, "P1", "P5", force=False) and not first.doubts
