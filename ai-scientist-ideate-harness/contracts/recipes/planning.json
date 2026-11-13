@@ -75,6 +75,11 @@
      {
       "run": "ideate_tools.py argument-render $GEN",
       "submit": true
+     },
+     {
+      "run": "ideate_tools.py hypo-check $GEN",
+      "submit": true,
+      "advise": true
      }
     ],
     "revise": [
@@ -125,6 +130,11 @@
      {
       "run": "ideate_tools.py argument-render $GEN",
       "submit": true
+     },
+     {
+      "run": "ideate_tools.py hypo-check $GEN",
+      "submit": true,
+      "advise": true
      }
     ]
    },
@@ -177,6 +187,11 @@
      {
       "run": "ideate_tools.py argument-render $GEN",
       "submit": true
+     },
+     {
+      "run": "ideate_tools.py argument-check $GEN --no-idea",
+      "submit": true,
+      "advise": true
      }
     ],
     "revise": [
@@ -225,6 +240,11 @@
      {
       "run": "ideate_tools.py argument-render $GEN",
       "submit": true
+     },
+     {
+      "run": "ideate_tools.py argument-check $GEN --no-idea",
+      "submit": true,
+      "advise": true
      }
     ]
    },
@@ -272,6 +292,11 @@
      {
       "run": "ideate_tools.py tree-render $GEN --project",
       "submit": true
+     },
+     {
+      "run": "ideate_tools.py tree-check $GEN",
+      "submit": true,
+      "advise": true
      }
     ],
     "revise": [
@@ -315,6 +340,11 @@
      {
       "run": "ideate_tools.py tree-render $GEN --project",
       "submit": true
+     },
+     {
+      "run": "ideate_tools.py tree-check $GEN",
+      "submit": true,
+      "advise": true
      }
     ]
    },
@@ -369,6 +399,11 @@
      {
       "run": "ideate_tools.py attack-render $GEN",
       "submit": true
+     },
+     {
+      "run": "ideate_tools.py attack-check $GEN",
+      "submit": true,
+      "advise": true
      }
     ]
    },
@@ -425,6 +460,11 @@
      {
       "run": "ideate_tools.py pack-render $GEN",
       "submit": true
+     },
+     {
+      "run": "ideate_tools.py pack-check $GEN",
+      "submit": true,
+      "advise": true
      }
     ]
    },

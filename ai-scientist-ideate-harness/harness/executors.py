@@ -130,6 +130,15 @@ class RecipeExecutor:
                               context={"command": r.command})
                     i += 1
                     continue
+                if s.spec.get("advise") and ("Traceback" in (r.stdout or "") + (r.stderr or "")
+                                             or (r.stderr or "").lstrip().startswith("usage:")):
+                    # the check itself could not run (a crash, a bad command line): nothing a worker can answer
+                    res.notes.append(f"advising check did not run: {_short(r.command)}: {r.tail()}")
+                    ctx.error(f"{unit}:ADVISE", f"advising check did not run: {r.tail()}", unit=unit, instance=inst,
+                              attempt=attempt, category="tool_invocation", severity="warning",
+                              context={"command": r.command})
+                    i += 1
+                    continue
                 if s.spec.get("submit") and last_write is not None:
                     err = {"error_category": "model_output", "severity": "error", "retryable": True,
                            "error_id": f"{unit}:{label}"}
@@ -148,6 +157,15 @@ class RecipeExecutor:
                         if ok:
                             i = last_write + 1
                             continue
+                    if s.spec.get("advise"):
+                        # a check that advises: its findings went back to the worker while they were its own to fix
+                        # (the revisions above); what is left is recorded by the step's gate and read by the next
+                        # round - it does not fail the Unit
+                        res.notes.append(f"{_short(r.command)}: findings left after {feedback_rounds - 1} revision(s)")
+                        ctx.say(f"      · {unit}: the check still reports findings after {feedback_rounds - 1} "
+                                "revision(s) - left to the gate and the next round")
+                        i += 1
+                        continue
                     rec = ctx.error("IDEATE.WORKER.OUTPUT", f"`{_short(r.command)}` refused the worker's files after "
                                     f"{feedback_rounds - 1} revision(s): {r.tail()}", unit=unit, instance=inst,
                                     attempt=attempt, context={"command": r.command, "stdout": r.stdout[-2000:]})
@@ -414,7 +432,9 @@ class RecipeExecutor:
         out = (r.stdout or "")[-3500:]
         msg = (f"The conductor ran `{_short(r.command)}` on your files and it refused them (exit {r.returncode}):\n\n"
                f"```\n{out}\n{(r.stderr or '')[-800:]}\n```\n\nFix what it reports in the same files - answer each "
-               "finding, do not reword until it is silent - then stop.")
+               "finding, do not reword until it is silent - then stop. A finding this step cannot fix (it reads "
+               "another step's fields, or a file you may not write): fix the others, write your files, and name that "
+               "finding and the reason in `note` - never answer with no file because one finding is not yours.")
         req = self._request(ctx, unit, body, subs, log, task=msg, system=system)
         wr = self._call(ctx, unit, f"{label}.feedback", replace(req, resume=session))
         if wr.session_id:

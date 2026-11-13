@@ -658,3 +658,25 @@ def test_a_file_that_is_not_there_is_said_and_every_message_is_logged_uncut(tmp_
     assert [m["role"] for m in full["messages"]] == ["system", "user"] and full["messages"][0]["content"] == "the rules"
     assert full["messages"][1]["content"] == msg and long_text in msg          # the whole prompt, the middle included
     assert len(summary["request_head"]) + len(summary["request_tail"]) < len(msg) and full["answer"]
+
+
+def test_an_advising_check_goes_back_to_the_worker_and_never_fails_the_unit(tmp_path, fake):
+    """A check step with advise: its findings go into the same conversation while they are the worker's to fix; what
+    is left after the revisions is left to the gate and the next round - the Unit goes on. A check that could not run
+    at all (a crash) is nothing a worker can answer: no call is spent on it."""
+    target = tmp_path / "ideas.json"
+    s = fake(lambda body, n: answer([(str(target), json.dumps([{"Name": "Bad Name"}]))]))     # never fixed
+    ctx = ctx_for(tmp_path, cfg_for(s.url))
+    recipe = parse({"recipes": [{"unit": "B6", "scope": "generation", "phases": {"main": [
+        {"write": {"task": "Write the ideas list", "writes": [str(target)], "rules": []}},
+        {"run": f"ideate_tools.py validate {target}", "submit": True, "advise": True}]}}]})[0]
+    res = RecipeExecutor().execute(ctx, "B6", recipe, "main", 1, 1)
+    assert res.ok, res.errors
+    assert len(s.requests) == 2 and "refused them" in s.user(1) and "name that finding and the reason" in s.user(1)
+    assert any("findings left after 1 revision" in n for n in res.notes)
+    crash = parse({"recipes": [{"unit": "B6", "scope": "generation", "phases": {"main": [
+        {"write": {"task": "Write the ideas list", "writes": [str(target)], "rules": []}},
+        {"run": "ideate_tools.py validate /nonexistent/dir/ideas.json --no-such-flag", "submit": True, "advise": True}]}}]})[0]
+    before = len(s.requests)
+    res = RecipeExecutor().execute(ctx, "B6", crash, "main", 1, 2)
+    assert res.ok and len(s.requests) == before + 1 and any("did not run" in n for n in res.notes)
