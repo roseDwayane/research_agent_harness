@@ -77,18 +77,28 @@ def reflection_tail(text: str, rounds: int = 2, max_chars: int = 14000) -> str:
     return "\n".join(out)
 
 
-def reflection_append(log_text: str | None, entry: str, gen_name: str) -> str:
-    """The log with a round's entry added: everything before its '## Round' heading dropped (a model that wrote the
-    log's title again); appended - or, when the log's last entry has the same heading (that round run again after a
-    failure), in its place."""
-    m = re.search(r"^## Round .*$", entry, re.M)
-    if not m:
-        raise ValueError("the entry starts with its '## Round r/N' heading")
-    entry = entry[m.start():].strip()
-    head = m.group(0).strip()
+# a round's heading as a model may write it: any level (# Round 3/3, ### Round 3/3), any case, spaces around the slash
+_ANY_ROUND = re.compile(r"^#{1,6}[ \t]*round[ \t]+(\d+)[ \t]*/[ \t]*(\d+)(.*)$", re.M | re.I)
+_LOG_ROUND = re.compile(r"^## Round (\d+)/(\d+).*$", re.M)
+
+
+def reflection_append(log_text: str | None, entry: str, gen_name: str, round_no: int | None = None) -> str:
+    """The log with a round's entry added under the heading the code writes, '## Round r/N': the heading is form, not
+    a judgement, so a model's '# Round 3/3' or '### round 3 / 3' is rewritten, not refused. Everything before the
+    model's heading is dropped (a model that wrote the log's title again). An entry with no heading at all takes it
+    from `round_no` (the entry file's round) and the N of the log's earlier rounds. The entry is appended - or, when
+    the log's last entry is the same round (that round run again after a failure), put in its place."""
+    m = _ANY_ROUND.search(entry)
     text = (log_text or f"# Reflection Log — Generation {gen_name[4:] if gen_name.startswith('gen_') else gen_name}\n").rstrip()
-    secs = list(re.finditer(r"^## Round .*$", text, re.M))
-    if secs and secs[-1].group(0).strip() == head:
+    secs = list(_LOG_ROUND.finditer(text))
+    if m:
+        r, n, rest, body = int(m.group(1)), int(m.group(2)), m.group(3).rstrip(), entry[m.end():]
+    else:
+        if round_no is None or not secs:
+            raise ValueError("the entry starts with its '## Round r/N' heading")
+        r, n, rest, body = round_no, int(secs[-1].group(2)), "", entry
+    entry = (f"## Round {r}/{n}{rest}\n\n" + body.strip()).strip()
+    if secs and int(secs[-1].group(1)) == r:
         text = text[:secs[-1].start()].rstrip()
     return text + "\n\n" + entry + "\n"
 
@@ -100,9 +110,10 @@ def cmd_reflection_append(a):
     if not src.exists():
         die(f"{src} not found - the round writes its entry there first", 1)
     log = gd / "reflection_log.md"
+    hint = re.search(r"round(\d+)", src.stem)                    # reflection_round3.md: the round it writes
     try:
         text = reflection_append(log.read_text(encoding="utf-8") if log.exists() else None,
-                                 src.read_text(encoding="utf-8"), gd.name)
+                                 src.read_text(encoding="utf-8"), gd.name, int(hint.group(1)) if hint else None)
     except ValueError as e:
         die(f"{src.name}: {e}", 1)
     write_text(log, text)

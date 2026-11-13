@@ -360,6 +360,25 @@ class Helpers(unittest.TestCase):
         with self.assertRaises(ValueError):
             it_plan.reflection_append(log, "no heading", "gen_2")
 
+    def test_a_round_heading_in_another_form_is_rewritten_not_refused(self):
+        """The heading is form: '# Round 3/3' (qwen3.8, gen_1 of the EEG run) stopped the whole run before."""
+        log = it_plan.reflection_append(None, "## Round 1/3\n\nfirst", "gen_1")
+        log = it_plan.reflection_append(log, "## Round 2/3\n\nsecond", "gen_1")
+        log = it_plan.reflection_append(log, "# Round 3/3\n\n### Step 1\n\nthird", "gen_1")
+        self.assertIn("\n## Round 3/3\n\n### Step 1\n\nthird\n", log)
+        self.assertNotIn("\n# Round 3/3", log)
+        # another level, case and spacing; a suffix kept; the same round again replaces the last entry
+        log = it_plan.reflection_append(log, "### round 3 / 3 — again\n\nthird, run again", "gen_1")
+        self.assertEqual(log.count("## Round 3/3"), 1)
+        self.assertIn("## Round 3/3 — again\n\nthird, run again", log)
+        self.assertNotIn("\nthird\n", log)
+        # no heading at all: the round from the entry file, N from the log's earlier rounds
+        log2 = it_plan.reflection_append(None, "## Round 1/3\n\nfirst", "gen_1")
+        log2 = it_plan.reflection_append(log2, "second, no heading", "gen_1", round_no=2)
+        self.assertIn("## Round 2/3\n\nsecond, no heading", log2)
+        with self.assertRaises(ValueError):                  # nothing to take N from
+            it_plan.reflection_append(None, "no heading", "gen_1", round_no=1)
+
     def test_the_reflection_tail_is_the_last_rounds_with_the_latest_whole(self):
         log = "# Reflection Log\n\n" + "".join(f"## Round {i}/3\n\n" + f"round {i} text " * 300 + "\n" for i in (1, 2, 3))
         out = it_plan.reflection_tail(log, rounds=2, max_chars=20000)
