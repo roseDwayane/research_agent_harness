@@ -499,7 +499,7 @@
     "round2": [
      {
       "write": {
-       "task": "B5 round 2 for generation $K: the critique - the 12 skeptical-reader questions, the comparison with restatement_1.json, the four tree questions - as the round's '## Round 2/N' entry; then ONE decision, written to $RD/_state/harness/decisions/gen_$K/B5.round2.json as {\"decision\": \"finalize\"} or {\"decision\": \"revise\", \"enters\": \"P1\"|\"P2\"|\"P3\", \"reason\": \"...\", \"revision\": {...}} (the earliest step the revision changes). Every round-1 ERROR and every reader doubt needs an answer. Write only this round's entry, starting with its heading, to $GEN/_work/reflection_round2.md: the conductor appends it to $GEN/reflection_log.md (the earlier rounds' last part is in the lookups) - never copy the log.",
+       "task": "B5 round 2 for generation $K: the critique - the 12 skeptical-reader questions, the comparison with restatement_1.json, the four tree questions - as the round's '## Round 2/N' entry. Every round-1 ERROR and every reader doubt needs an answer. End the entry with a '### Decision' section: finalize, or revise entering at P1, P2 or P3 (the earliest step the revision changes), with the reason and the changes - the next step records it. Write only this round's entry to $GEN/_work/reflection_round2.md: the conductor appends it to $GEN/reflection_log.md (the earlier rounds' last part is in the lookups) - never copy the log.",
        "rules": [
         "references/research-cycle.md#b5-reflection",
         "references/question-craft.md#qc7-reader"
@@ -509,8 +509,7 @@
         "$GEN/idea_draft.json"
        ],
        "writes": [
-        "$GEN/_work/reflection_round2.md",
-        "$RD/_state/harness/decisions/gen_$K/B5.round2.json"
+        "$GEN/_work/reflection_round2.md"
        ],
        "commands": [
         "ideate_tools.py reflection-tail",
@@ -532,6 +531,20 @@
      },
      {
       "run": "ideate_tools.py reflection-append $GEN $GEN/_work/reflection_round2.md"
+     },
+     {
+      "write": {
+       "task": "B5 round 2 decision for generation $K: record the ONE decision the critique in $GEN/_work/reflection_round2.md reached in its '### Decision' section. decision: finalize or revise. enters: the earliest step the revision changes (P1, P2 or P3; when the decision is finalize it is not read - give P1). reason: why, in a few sentences. changes: what the revision changes, one item each (empty when finalize). Decide nothing new: take the critique's decision.",
+       "rules": [],
+       "reads": [
+        "$GEN/_work/reflection_round2.md"
+       ],
+       "writes": [
+        "$RD/_state/harness/decisions/gen_$K/B5.round2.json"
+       ],
+       "schema": "$SK/contracts/schemas/b5_round2_decision.json",
+       "lookups": []
+      }
      }
     ],
     "round3": [

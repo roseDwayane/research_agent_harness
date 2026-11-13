@@ -1,0 +1,12 @@
+{
+ "$comment": "B5 round 2's ONE decision (harness/steps.py reads it from _state/harness/decisions/gen_k/B5.round2.json). Asked in a call of its own, under this schema, after the critique is written: a model that writes the critique well can still forget the second file (qwen3.8, gen_2 of the EEG run). `enters` is read only when decision is revise.",
+ "type": "object",
+ "properties": {
+  "decision": {"type": "string", "enum": ["finalize", "revise"]},
+  "enters": {"type": "string", "enum": ["P1", "P2", "P3"]},
+  "reason": {"type": "string", "maxLength": 1500},
+  "changes": {"type": "array", "items": {"type": "string", "maxLength": 300}, "maxItems": 12}
+ },
+ "required": ["decision", "enters", "reason", "changes"],
+ "additionalProperties": false
+}
