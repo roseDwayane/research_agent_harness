@@ -293,6 +293,47 @@ class Good(unittest.TestCase):
         with self.assertRaises(jsonschema.ValidationError):
             jsonschema.validate(m, schema)
 
+    def test_a_rival_on_the_varied_axis_keeps_no_axis(self):
+        """Y12: the axis the question varies is no rival's - attach leaves it out (the form Y12 names) instead of a
+        revision that cannot see which `varies` the answer will choose."""
+        W = it_recon.World(self.rd)
+        H = it_recon.handover_of((self.rd / "questions" / "Q_001.md").read_text())
+        m = json.loads(json.dumps(H))
+        m["rival_accounts"][0]["axis"] = m["varies"][0]
+        out = it_recon.settle_handover(W, m)
+        self.assertNotIn("axis", out["rival_accounts"][0])
+
+    def test_no_target_candidate_means_an_empty_target_list(self):
+        """A question whose collisions hold no claim or assumption on a losing or untested side, and no overreach (a
+        development question on matrix rows): its schema takes only `targets: []`, and Y11 WARNs instead of failing a
+        list no answer could fill."""
+        W = it_recon.World(self.rd)
+        cand = it_recon.handover_candidates(W, "Q_001")
+        none = {**cand, "targets": [], "claims_without_collision": []}
+        self.assertEqual(it_recon.target_choices(none), ({}, []))
+        schema = it_recon.handover_schema(W, none, "GAP_001")
+        self.assertEqual(schema["properties"]["targets"]["maxItems"], 0)
+        self.assertTrue(any(it_recon.target_choices(cand)))
+        self.assertEqual(it_recon.handover_schema(W, cand, "GAP_001")["properties"]["targets"]["minItems"], 1)
+
+    def test_the_b3_digest_quotes_a_full_text_side_whole_and_marks_a_row(self):
+        """B3 copies a source check from the digest (W05: verbatim from the full text): a full-text side's quote is
+        whole, and a matrix row's headline - a summary - is marked, with its paper's verified claim quotes."""
+        W = it_recon.World(self.rd)
+        cid, r = next((c, r) for c, r in sorted(W.cur.items())
+                      if any(x.get("paper") and (W.records.get(x["paper"]) or {}).get("basis") == "full-text"
+                             for x in r.get("sides") or []))
+        side = next(x for x in r["sides"] if x.get("paper") and W.records[x["paper"]].get("basis") == "full-text")
+        long = "one two three four five six seven eight nine ten " * 14
+        side.update(quote=long, kind=side.get("kind"))
+        d = it_recon.digest(W, "B3")
+        if side.get("kind") != "row":
+            self.assertIn(f'"{long.strip()}"', d)
+        side["kind"] = "row"
+        d = it_recon.digest(W, "B3")
+        self.assertIn(f"{side['id']} · {side['paper']} · row summary (not verbatim):", d)
+
+
     def test_a_refused_question_is_asked_again_with_why(self):
         with tempfile.TemporaryDirectory() as t:
             rd = Path(t) / self.rd.name

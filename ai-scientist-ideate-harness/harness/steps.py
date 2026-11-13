@@ -28,6 +28,55 @@ from .context import RunContext, instance_of
 from .shell import UnitAgent, UnitResult
 from .skill import COHERENCE
 
+class B5Progress:
+    """Which of a generation's B5 stages (round1, round2, revised, round3) are done, so a re-run after a failure
+    starts at the failed stage instead of repeating the rounds before it (each a model call; a revision several).
+    A stage counts as done only while the design is as it was when the last stage finished: the hash of the files the
+    stages build on (DESIGN) is recorded with it, and any other change - by hand, by a stage that failed half-way, by
+    another run - starts the rounds over. reflection_log.md and idea_draft.json are left out: every round appends to
+    the one and round 3 rewrites the other. Once the forced revision after a failed coherence gate has begun
+    ("forcing"), the design is its to change: a re-run resumes it without repeating rounds 1 to 3."""
+
+    DESIGN = ("question.json", "step7b_problem.md", "step8_hypothesis.md", "argument.json", "decision_tree.json",
+              "attack_plan.json", "packaging.json", "restatement_1.json")
+    ORDER = ("round1", "round2", "revised", "round3", "forcing", "forced", "forced3", "finalized")
+
+    def __init__(self, ctx: RunContext, k: int):
+        self.gd = ctx.rd / f"gen_{k}"
+        self.decision = ctx.decision_path(k)
+        self.path = self.decision.with_name("B5.progress.json")
+
+    def _sha(self) -> str:
+        import hashlib
+        h = hashlib.sha256()
+        for p in [*(self.gd / n for n in self.DESIGN), self.decision]:
+            h.update(p.name.encode() + b"\0" + (p.read_bytes() if p.is_file() else b"-") + b"\0")
+        return h.hexdigest()
+
+    def _read(self) -> dict:
+        import json
+        try:
+            return json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+
+    def done(self, stage: str) -> bool:
+        d = self._read()
+        stages = d.get("stages") or []
+        if "forcing" in stages and stage not in ("forcing", "forced", "forced3", "finalized"):
+            return stage in stages      # a forced revision was under way: what it changed is its own (resumed)
+        return stage in stages and d.get("sha") == self._sha()
+
+    def mark(self, stage: str) -> None:
+        import json
+        stages = [s for s in (self._read().get("stages") or []) if s in self.ORDER[:self.ORDER.index(stage)]]
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(json.dumps({"stages": stages + [stage], "sha": self._sha()}) + "\n", encoding="utf-8")
+
+    def reset(self) -> None:
+        self.path.unlink(missing_ok=True)
+
+
 PLANNING_STEPS = ("STEP-P1", "STEP-P2", "STEP-P3", "STEP-P4", "STEP-P5")
 REVISION_ENTRIES = ("P1", "P2", "P3")
 # a failing coherence command -> the step its finding belongs to (research-cycle.md section 5, round 3)
@@ -59,7 +108,16 @@ class GateResult:
 
     @property
     def tree_failed(self) -> bool:
-        return "P3" in self.failing_steps()
+        """The decision gate failed - T09 among tree-check's findings, or the weak-mass rule: what abandons a question
+        (P3-decision-tree.md, "When the gate fails"). Another tree finding (T05's structure, T14's missing tradeoffs
+        row) is a defect the idea is finalized with, disclosed - not a reason to drop the question."""
+        import re
+        tree_cmd = COHERENCE[1]
+        if any(getattr(r, "command_template", None) == tree_cmd and not r.ok
+               and re.search(r"\bT09\b", (r.stdout or "") + (r.stderr or "")) for r in self.legacy):
+            return True
+        return any(f["level"] == "ERROR" and f["code"] == "GATE.RULE.decision_tree_weak_mass"
+                   for f in self.contract.get("findings") or [])
 
 
 def check_gate(ctx: RunContext, gate_id: str, gen: int | None, *, blocking: bool = True) -> GateResult:
@@ -285,6 +343,15 @@ class GenerationAgent:
                 return False
         return True
 
+    @staticmethod
+    def _resolved(ctx: RunContext, k: int, g: GateResult | None, how: str) -> None:
+        """A coherence-gate failure the conductor answered - a forced revision ran (LOOP-10), the question was
+        abandoned (LOOP-11), or the idea was finalized with the doubt disclosed: no longer an open error of the run
+        (report.active_errors), so the step reads as what it ended as, not as failed."""
+        if g is not None and getattr(g, "error", None) is not None:
+            ctx.emit("RECOVERY_COMPLETED", unit_id="B5", instance=instance_of(k), error_id=g.error.error_id,
+                     message=how)
+
     def _b5(self, ctx: RunContext, k: int, res: GenerationResult, phase: str) -> bool:
         r = self.agents["B5"].run(ctx, k, phase, force=phase != "round1")
         res.steps.append(StepResult("STEP-B5", instance_of(k), r.status if r.ok else r.status, [r]))
@@ -302,42 +369,67 @@ class GenerationAgent:
         q = ctx.rd / f"gen_{k}" / "question.json"
         if q.is_file():
             import json
-            res.question = json.loads(q.read_text(encoding="utf-8")).get("id")
+            qj = json.loads(q.read_text(encoding="utf-8"))
+            res.question = qj.get("question") or qj.get("id")  # question-take writes "question" (the dry run "id")
+
+        prog = B5Progress(ctx, k)            # a re-run starts at the stage that failed (B5Progress)
+        if k in ctx.fresh_gens:
+            prog.reset()
+
+        def skip(stage: str) -> bool:
+            if prog.done(stage):
+                ctx.say(f"    · B5 {stage} @gen_{k} already done - skipped (the design is as it left it)")
+                return True
+            return False
 
         # round 1
-        if not self._planning(ctx, k, res, "P1", "P5", force=False) or not self._b5(ctx, k, res, "round1"):
-            return self._stop(res)
+        if not skip("round1"):
+            if not self._planning(ctx, k, res, "P1", "P5", force=False) or not self._b5(ctx, k, res, "round1"):
+                return self._stop(res)
+            prog.mark("round1")
         # round 2: one decision
-        if not self._b5(ctx, k, res, "round2"):
-            return self._stop(res)
+        if not skip("round2"):
+            if not self._b5(ctx, k, res, "round2"):
+                return self._stop(res)
+            prog.mark("round2")
         decision = self._decision(ctx, k)
-        revised = False
         if decision.get("decision") == "revise":
             enters = decision.get("enters")
             if enters not in REVISION_ENTRIES:
                 ctx.error("IDEATE.WORKER.OUTPUT", f"B5 round 2 decided revise entering at {enters!r} (P1 | P2 | P3)",
                           unit="B5", instance=instance_of(k), severity="degraded", caveat="revision-unclear",
                           must_disclose=True)
-            elif loops.allowed(ctx, "LOOP-09", 0, unit="B5", step="STEP-B5", instance=instance_of(k))["allowed"]:
-                if not self._planning(ctx, k, res, enters, "P3", force=True, phase="revise"):
+            elif not skip("revised") and \
+                    loops.allowed(ctx, "LOOP-09", 0, unit="B5", step="STEP-B5", instance=instance_of(k))["allowed"]:
+                # the steps from the entry to P3 produced again, then P4 and P5 on the revised design
+                if not self._planning(ctx, k, res, enters, "P3", force=True, phase="revise") or \
+                        not self._planning(ctx, k, res, "P4", "P5", force=True):
                     return self._stop(res)
-                revised = True
+                prog.mark("revised")
         # round 3
-        if revised and not self._planning(ctx, k, res, "P4", "P5", force=True):
-            return self._stop(res)
-        if not self._b5(ctx, k, res, "round3"):
-            return self._stop(res)
+        if not skip("round3"):
+            if not self._b5(ctx, k, res, "round3"):
+                return self._stop(res)
+            prog.mark("round3")
         g = check_gate(ctx, "GATE-coherence", k)
         res.steps[-1].gates.append(g)
         if not g.passed:
             entry = (g.failing_steps() or ["P2"])[0]
             if loops.allowed(ctx, "LOOP-10", 0, unit="B5", step="STEP-B5", instance=instance_of(k))["allowed"]:
                 ctx.say(f"    forced revision entering at {entry}")
-                if not self._planning(ctx, k, res, entry, "P5", force=True, phase="revise" if entry in REVISION_ENTRIES
-                                      else "main") or not self._b5(ctx, k, res, "round3"):
-                    return self._stop(res)
-                g = check_gate(ctx, "GATE-coherence", k)
+                if not skip("forced"):
+                    prog.mark("forcing")     # a re-run after a failure in it resumes the forced revision
+                    if not self._planning(ctx, k, res, entry, "P5", force=True,
+                                          phase="revise" if entry in REVISION_ENTRIES else "main"):
+                        return self._stop(res)
+                    prog.mark("forced")
+                if not skip("forced3"):
+                    if not self._b5(ctx, k, res, "round3"):
+                        return self._stop(res)
+                    prog.mark("forced3")
+                first, g = g, check_gate(ctx, "GATE-coherence", k)
                 res.steps[-1].gates.append(g)
+                self._resolved(ctx, k, first, "answered by the forced revision (LOOP-10)")
             if not g.passed:
                 left = [x for x in loops.ready_questions_left(ctx.rd) if x != res.question]
                 if g.tree_failed and left and loops.allowed(ctx, "LOOP-11", 0, unit="B5", step="STEP-B5",
@@ -348,6 +440,11 @@ class GenerationAgent:
                     res.doubts.append(f"decision gate T09 still failing: question {res.question} abandoned")
                     if ab.ok:
                         import json
+                        ctx.error("IDEATE.GATE.FAILED", f"decision gate T09 still failing after the forced revision: "
+                                  f"question {res.question} abandoned, the next ready one is taken (LOOP-11)",
+                                  unit="B5", step="STEP-B5", instance=instance_of(k), severity="warning",
+                                  parent=g.error.error_id if g.error else None)
+                        self._resolved(ctx, k, g, f"question {res.question} abandoned (LOOP-11)")
                         mark = ctx.decision_path(k).with_name("abandoned.json")
                         mark.parent.mkdir(parents=True, exist_ok=True)
                         mark.write_text(json.dumps({"question": res.question, "run_id": ctx.run_id,
@@ -362,8 +459,11 @@ class GenerationAgent:
                 res.doubts.append(caveat)
                 ctx.gates_passed.add(("GATE-coherence", instance_of(k)))      # waived: the doubt is disclosed
                 g.waived = True
-        if not self._b5(ctx, k, res, "finalize"):
-            return self._stop(res)
+                self._resolved(ctx, k, g, f"finalized with the doubt disclosed ({caveat})")
+        if not skip("finalized"):            # idea.json is what the archive takes: never rewritten by a re-run
+            if not self._b5(ctx, k, res, "finalize"):
+                return self._stop(res)
+            prog.mark("finalized")
         b6 = self.steps["STEP-B6"].run(ctx, k)
         res.steps.append(b6)
         if not b6.ok:

@@ -2,27 +2,27 @@
 
     [harness]
     python = "/path/to/python"          # interpreter for scripts/ (needs the mcp package); default: this one
-    worker = "claude"                   # "claude": claude -p workers | "ollama": an Ollama server, no Claude Code
-                                        # | "gemini" / "openai": an API provider (api_worker.py), no Claude Code
-    claude = "claude"                   # the Claude Code CLI used for the model Units
+    worker = "claude"                   # the provider of the model Units (harness/providers/): "claude" = the Anthropic
+                                        # Messages API, "gpt" = the OpenAI API, "gemini" = the Gemini API, "ollama" =
+                                        # an Ollama server, or "package.module:Class"
     # worker = "ollama": ollama_url = "http://127.0.0.1:11434", model = "qwen3.8", num_ctx = 131072, think = false
-    # worker = "gemini": model = "gemini-3.5-flash", max_context = 1000000 (key: GEMINI_API_KEY in the environment;
-    #                    api_base / api_key_env default to the provider's), api_price_in / api_price_out = USD per 1M
-    #                    tokens, api_budget_usd = 20. worker = "openai" the same, with OPENAI_API_KEY (not tested yet)
-    model = "claude-opus-5-5"           # optional; default: the CLI's own
+    model = "claude-opus-5-5"           # optional; default: the provider's own (claude: claude-opus-5-5, gpt:
+                                        # gpt-6-astra, gemini: gemini-4-argon; ollama needs one)
     max_parallel = 4                    # fan-out workers at once
-    default_budget_usd = 5.0            # per worker (claude -p --max-budget-usd); unset: no cap
     worker_timeout_s = 3600
     command_timeout_s = 3600
     depth = "standard"                  # quick | standard | deep
     max_num_generations = 3
     num_reflections = 3
 
-    [harness.unit_budget_usd]           # per Unit, overrides default_budget_usd
-    A3 = 20.0
-
     [harness.loop_bounds]               # the loops the contracts leave unbounded (OQ-07); others come from the contracts
     "LOOP-03" = 2
+
+    [harness.provider_options.claude]   # a provider's own settings (Provider.options()), under its worker name: the
+    effort = "high"                     # APIs' are in harness/providers/claude.py, gpt.py, gemini.py
+
+    [harness.provider_options.my_api]   # ... and a provider of one's own reads its table the same way
+    base_url = "https://llm.example.org/v1"
 """
 from __future__ import annotations
 
@@ -38,14 +38,9 @@ except ModuleNotFoundError:                      # Python 3.10
 
 MODULE_ROOT = Path(__file__).resolve().parent.parent
 DEPTHS = ("quick", "standard", "deep")
-# API providers: one transport (api_worker.py, the OpenAI Chat Completions format), and per provider the defaults a
-# config may override. "gemini" is tested (Google's OpenAI-compatible endpoint); "openai" speaks the same format and
-# has not been run yet.
-API_PROVIDERS = {
-    "gemini": {"api_base": "https://generativelanguage.googleapis.com/v1beta/openai", "api_key_env": "GEMINI_API_KEY"},
-    "openai": {"api_base": "https://api.openai.com/v1", "api_key_env": "OPENAI_API_KEY"},
-}
-WORKERS = ("claude", "ollama", *API_PROVIDERS)
+
+# [harness] keys of the claude -p worker, removed with it: a config that still sets them is told so
+REMOVED_KEYS = ("claude", "default_budget_usd", "unit_budget_usd")
 
 # Conservative bounds for the loops the contracts state no number for (OQ-07). LOOP-11 is bounded by the ready
 # questions that remain and LOOP-12 by max_num_generations; they are not listed here.
@@ -55,34 +50,24 @@ DEFAULT_LOOP_BOUNDS = {"LOOP-03": 2, "LOOP-05": 1, "LOOP-06": 1}
 @dataclass
 class HarnessConfig:
     python: str = sys.executable
-    worker: str = "claude"                       # who does the model Units: "claude" (claude -p) | "ollama" (HTTP API)
-    claude: str = "claude"
-    model: str | None = None
+    worker: str = "claude"                       # the provider of the model Units (providers/): "claude" (Messages
+                                                 # API) | "gpt" | "gemini" | "ollama" | "package.module:Class"
+    model: str | None = None                     # None: the provider's default_model() (claude: claude-opus-5-5,
+                                                 # gpt: gpt-6-astra, gemini: gemini-4-argon)
     ollama_url: str = "http://127.0.0.1:11434"   # worker = "ollama": the server (OLLAMA_API_KEY -> Bearer header)
     ollama_api_key_env: str = "OLLAMA_API_KEY"
-    # worker = "gemini" | "openai": an API provider over the OpenAI-compatible /chat/completions (api_worker.py).
-    # api_base and api_key_env default to the provider's (API_PROVIDERS); set them to use another endpoint. The key
-    # is read from the environment variable api_key_env names, never from this file.
-    api_base: str | None = None
-    api_key_env: str | None = None
-    max_context: int = 128000                    # the model's context window in tokens (prompt + answer)
-    api_max_tokens_field: str = "max_completion_tokens"   # the request field for num_predict ("max_tokens" for some)
-    api_reasoning_effort: str | None = None      # a thinking model's `reasoning_effort` ("none" | "low" | "medium" |
-                                                 # "high"); its reasoning counts against num_predict and is billed
-    api_price_in: float | None = None            # USD per million input tokens - with api_price_out, each call's cost
-    api_price_out: float | None = None           # USD per million output tokens   is counted (usage, summary)
-    api_budget_usd: float | None = None          # a ceiling for the whole run: past it, no further call is sent
     num_ctx: int = 65536                         # the context the model is run with - Ollama cuts longer prompts silently
     num_predict: int = 16384                     # the longest answer
     think: bool | None = None                    # a thinking model's reasoning on/off (None: the model's default)
     temperature: float | None = None             # None: the model's (Modelfile) default
-    max_file_chars: int | None = None            # a file put into an Ollama prompt is cut beyond this; None:
-                                                 # half of num_ctx (a digest that fits the context is never cut)
+    max_file_chars: int | None = None            # a file put into a chat prompt is cut beyond this; None: half
+                                                 # of the context (a digest that fits the context is never cut)
     feedback_rounds: int | None = None           # revisions a refused submission gets (RP-MODEL-OUTPUT); None: the
                                                  # contract's one - a smaller model may be given two or three
     batch_chars: int | None = None               # the material one fan-out call may carry ($BUDGET); None: the
-                                                 # worker's own - 0 for claude (the tools' batch sizes), and for ollama
-                                                 # what fits num_ctx and max_file_chars, so no batch is ever cut
+                                                 # provider's own - 0 for an agent (the tools' batch sizes), and
+                                                 # for a chat model (claude, gpt, gemini, ollama) what fits its context and
+                                                 # max_file_chars, at most 40k characters, so no batch is ever cut
     max_parallel: int = 4
     ollama_keep_alive: str | None = "30m"        # how long the server keeps the model loaded after a call: the
                                                  # network steps between model Units run longer than Ollama's 5 min,
@@ -92,8 +77,8 @@ class HarnessConfig:
                                                  # as long each time (at most 15 minutes)
     ollama_parallel: int = 1                     # fan-out calls at once to one Ollama server: it answers one at a
                                                  # time, and a queued request sends nothing (a proxy closes it)
-    default_budget_usd: float | None = None
-    unit_budget_usd: dict[str, float] = field(default_factory=dict)
+    provider_options: dict[str, dict] = field(default_factory=dict)   # [harness.provider_options.<name>]: a
+                                                 # provider's own settings (claude's, or one of your own)
     worker_timeout_s: float = 3600.0
     command_timeout_s: float = 3600.0
     depth: str = "standard"
@@ -113,54 +98,33 @@ class HarnessConfig:
             raise ValueError(f"depth must be one of {DEPTHS}, not {self.depth!r}")
         if self.max_parallel < 1:
             raise ValueError("max_parallel must be >= 1")
-        if self.worker not in WORKERS:
-            raise ValueError(f"worker must be one of {WORKERS}, not {self.worker!r}")
-        if self.inline and not self.model:
-            raise ValueError(f'worker = "{self.worker}" needs a model (e.g. model = "qwen3.8" for ollama, or a model '
-                             f'name your API key may use for {self.worker})')
-        for k, v in API_PROVIDERS.get(self.worker, {}).items():          # the provider's defaults, unless set
-            if not getattr(self, k):
-                setattr(self, k, v)
+        provider = self.provider_class()              # an unknown worker raises here
+        if not self.model:
+            self.model = provider.default_model(self)
+        provider.check_config(self)                  # a config its provider cannot run with
         self.module_root = Path(self.module_root)
 
-    @property
-    def api(self) -> bool:
-        """An API provider (gemini, openai): the OpenAI-compatible transport of api_worker.py."""
-        return self.worker in API_PROVIDERS
-
-    @property
-    def inline(self) -> bool:
-        """A worker without tools: the conductor puts the files into the prompt and writes the JSON answer (ollama,
-        openai). A claude worker reads and writes with its own tools."""
-        return self.worker != "claude"
-
-    def context_tokens(self) -> int:
-        """The context an inline worker's prompt must fit: Ollama's num_ctx, or the API model's max_context."""
-        return int(self.num_ctx if self.worker == "ollama" else self.max_context)
+    def provider_class(self):
+        """The provider class `worker` names (harness/providers/)."""
+        from .providers import provider_class        # here, not at the top: a provider's module may import this one
+        return provider_class(self.worker)
 
     def parallel(self) -> int:
-        """Fan-out workers at once: max_parallel, but for an Ollama server at most ollama_parallel."""
-        return max(1, min(self.max_parallel, self.ollama_parallel)) if self.worker == "ollama" else self.max_parallel
+        """Fan-out workers at once: max_parallel, or fewer where the provider says so (an Ollama server: ollama_parallel)."""
+        return self.provider_class().parallel(self)
 
     def batch_budget(self) -> int:
-        """$BUDGET: characters of papers, candidates or terms one worker call is given (a plan command's --max-chars).
-        0 keeps the tools' own batch sizes (a claude worker reads its files itself); an inline worker gets everything
-        pasted into one prompt, so its batches are cut to what the context and max_file_chars hold."""
+        """$BUDGET: characters of papers, candidates or terms one worker call is given (a plan command's --max-chars):
+        batch_chars, or the provider's own - 0 keeps the tools' batch sizes (an agent reads its files itself); a chat
+        model gets everything pasted into one prompt, so its batches are cut to what the context and max_file_chars
+        hold."""
         if self.batch_chars is not None:
             return max(0, int(self.batch_chars))
-        if not self.inline:
-            return 0
-        # at most 40k characters (~12k tokens) whatever the context: a server reads such a prompt and sends its first
-        # byte before a proxy gives up (100 s at Cloudflare; ~17k tokens took longer on a 27B model), and a refused
-        # batch costs little to ask again
-        return max(8000, min(self.file_chars(), int(self.context_tokens() * 3.0 * 0.4), 40000))
+        return self.provider_class().batch_budget(self)
 
     def file_chars(self) -> int:
-        """The most of one file an inline prompt carries: max_file_chars, or half the context (~3 characters a token)."""
-        return int(self.max_file_chars) if self.max_file_chars else int(self.context_tokens() * 3.0 * 0.5)
-
-    def budget(self, unit_id: str) -> float | None:
-        return self.unit_budget_usd.get(unit_id, self.default_budget_usd)
+        """The most of one file a prompt carries: max_file_chars, or half of the provider's context window."""
+        return self.provider_class().file_chars(self)
 
     def env(self) -> dict[str, str]:
         """The environment of every command the conductor runs."""
@@ -186,6 +150,10 @@ class HarnessConfig:
         if data.get("fixtures"):
             data["fixtures"] = Path(data["fixtures"]).expanduser()
         known = set(cls.__dataclass_fields__)
+        gone = sorted(set(data) & set(REMOVED_KEYS))
+        if gone:
+            raise ValueError(f"[harness] key(s) in {path} that went with the claude -p worker: {', '.join(gone)} - "
+                             "remove them (a worker's tokens and cost are in the run's summary)")
         unknown = sorted(set(data) - known)
         if unknown:
             raise ValueError(f"unknown [harness] key(s) in {path}: {', '.join(unknown)}")

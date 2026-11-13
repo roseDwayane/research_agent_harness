@@ -120,8 +120,8 @@ class UnitAgent:
                 ctx.say(f"    · {unit}{'@' + inst if gen is not None else ''} already done - skipped")
                 return self._closed(ctx, UnitResult(unit, inst, "skipped", note=why))
 
-        # 2. upstream
-        for up in ctx.reg.requires(unit):
+        # 2. upstream (not for an abandonment: B6 abandons a question exactly when B5 could not finish - LOOP-11)
+        for up in ([] if phase == "abandon" else ctx.reg.requires(unit)):
             if up not in ctx.reg.units:
                 continue
             up_gen = gen if is_planning(ctx, up) else None

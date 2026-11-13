@@ -220,6 +220,7 @@ Placeholders:
 
 Trailing newline present in the template.
 
+<a id="ir-finalize-schema"></a>
 ### 2.5 FinalizeIdea IDEA JSON schema and field descriptions
 
 The `ARGUMENTS` for `FinalizeIdea` must be a JSON object with a single top-level key `"idea"` whose value has these seven keys (order as specified in the prompt):

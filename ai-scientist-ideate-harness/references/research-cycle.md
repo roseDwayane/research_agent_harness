@@ -453,7 +453,7 @@ dataset or real recording exists, is decided from what is on the disk. Write `ge
   **independent units** — subjects, not trials or epochs. The output is a rough normal-approximation estimate and
   understates the needed sample when n < 30; use it for a three-level verdict (adequate / marginal / underpowered)
   against the effect the literature reports, not as an exact figure.
-- **Operational definitions** — from `step7b_problem.md` part 8: for each term the argument hangs on, the definition
+- <a id="b4-p2-part"></a>**Operational definitions** — from `step7b_problem.md` part 8: for each term the argument hangs on, the definition
   used here in measurable form, the other definitions found in the literature, and why this one.
 - **Scope** — IN table (population/data, intervention/method, comparison, primary and secondary outcomes, setting,
   design, timeframe) and OUT table where every exclusion has a rationale a reviewer would accept. For every
@@ -583,6 +583,7 @@ experiments contain no coupling analysis cannot be answered `whole` once the phr
 
 ---
 
+<a id="b5-reflection"></a>
 ## 5. B5 — reflection loop
 
 **On the fusion block** (a generation with `gen_k/question.json`) the rounds wrap the five planning steps; everything else
@@ -923,6 +924,7 @@ once and count as nothing. A restart after an abandoned pair begins a new count,
 
 ---
 
+<a id="b6-finalize"></a>
 ## 6. B6 — finalize
 
 ### Mapping the hypothesis to the 7-key idea
@@ -1047,6 +1049,7 @@ still applies: keep the already-finalized ideas in view so the new one differs i
 
 ---
 
+<a id="b6-journals"></a>
 ## 7. Journal recommendations
 
 `gen_{k}/step8_journal_recommendations.md` — kept because the writeup stage is planned to target journals. This is

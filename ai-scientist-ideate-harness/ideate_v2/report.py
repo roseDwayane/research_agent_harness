@@ -57,7 +57,11 @@ def collect_errors(run_dir: Path, run_id: str) -> tuple[list[dict], list[dict]]:
 def active_errors(records: list[dict], events: list[dict] | None = None) -> list[dict]:
     """Only the latest attempt of each Unit instance counts; earlier attempts stay as history. With the run's events,
     an attempt started later supersedes too - a retry that succeeded leaves no record of its own, and the failure it
-    recovered from is history, not an active error."""
+    recovered from is history, not an active error. So does an error a RECOVERY_COMPLETED event names: the coherence
+    gate's failure that a forced revision answered, or that the conductor resolved by abandoning the question or by
+    finalizing with the doubt disclosed (those leave a record of their own, at the severity the outcome has)."""
+    resolved = {e.get("error_id") for e in events or []
+                if e.get("event_type") == "RECOVERY_COMPLETED" and e.get("error_id")}
     latest: dict[tuple, int] = {}
     for r in records:
         k = (r.get("unit_id"), r.get("instance", "-"))
@@ -67,7 +71,8 @@ def active_errors(records: list[dict], events: list[dict] | None = None) -> list
             k = (e.get("unit_id"), e.get("instance", "-"))
             if k in latest:
                 latest[k] = max(latest[k], int(e.get("attempt", 1)))
-    return [r for r in records if int(r.get("attempt", 1)) == latest[(r.get("unit_id"), r.get("instance", "-"))]]
+    return [r for r in records if int(r.get("attempt", 1)) == latest[(r.get("unit_id"), r.get("instance", "-"))]
+            and r.get("error_id") not in resolved]
 
 
 def read_caveats(run_dir: Path) -> list[dict]:

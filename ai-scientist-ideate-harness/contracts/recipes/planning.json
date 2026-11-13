@@ -34,23 +34,33 @@
      },
      {
       "write": {
-       "task": "P1 Gap2Hypo for generation $K: from p1_prefill.json and question.json write the RQ, hypotheses and rival explanations of $GEN/step8_hypothesis.md and argument.json's claims, derivation and rivals[].id.",
+       "task": "P1 Gap2Hypo for generation $K: from p1_prefill.json and question.json write the RQ, hypotheses and rival explanations of $GEN/step8_hypothesis.md and argument.json's claims, derivation and rivals[].id. step8_hypothesis.md's sections are `## Selected gap summary`, `## Research questions`, `## Hypotheses`, `## Rival explanations` (research-cycle section 4; P2 adds the rest).",
        "rules": [
         "references/planning/P1-gap2hypo.md"
        ],
        "reads": [
         "$GEN/question.json",
-        "$GEN/step7b_problem.md"
+        "$GEN/p1_prefill.json",
+        "$GEN/step7b_problem.md",
+        "$RD/lens.json"
        ],
        "writes": [
         "$GEN/step8_hypothesis.md",
         "$GEN/argument.json"
        ],
        "commands": [
+        "ideate_tools.py id-texts",
         "ideate_tools.py list-papers",
         "ideate_tools.py trace",
         "ideate_tools.py list-methods",
         "ideate_tools.py power",
+        "ideate_tools.py env-probe",
+        "ideate_tools.py plan-status"
+       ],
+       "lookups": [
+        "ideate_tools.py id-texts",
+        "ideate_tools.py list-papers",
+        "ideate_tools.py list-methods",
         "ideate_tools.py env-probe",
         "ideate_tools.py plan-status"
        ]
@@ -67,25 +77,37 @@
      },
      {
       "write": {
-       "task": "P1 Gap2Hypo for generation $K: from p1_prefill.json and question.json write the RQ, hypotheses and rival explanations of $GEN/step8_hypothesis.md and argument.json's claims, derivation and rivals[].id. This is the round-2 revision entering at this step: read the decision $RD/_state/harness/decisions/gen_$K/B5.round2.json and the Round 2 entry of $GEN/reflection_log.md, and produce this step's part again from the revised design - never patch it.",
+       "task": "P1 Gap2Hypo for generation $K: from p1_prefill.json and question.json write the RQ, hypotheses and rival explanations of $GEN/step8_hypothesis.md and argument.json's claims, derivation and rivals[].id. step8_hypothesis.md's sections are `## Selected gap summary`, `## Research questions`, `## Hypotheses`, `## Rival explanations` (research-cycle section 4; P2 adds the rest). This is a revision entering at this step: the round-2 decision ($RD/_state/harness/decisions/gen_$K/B5.round2.json, the Round 2 entry of $GEN/reflection_log.md - its last rounds are in the lookups), or the forced revision after the coherence gate failed in round 3 - then the findings the check lookup reports now are what to fix, whatever an older round said. Produce this step's part again from the revised design - never patch it - and write the whole file even when the change is small.",
        "rules": [
         "references/planning/P1-gap2hypo.md"
        ],
        "reads": [
         "$GEN/question.json",
+        "$GEN/p1_prefill.json",
         "$GEN/step7b_problem.md",
-        "$RD/_state/harness/decisions/gen_$K/B5.round2.json",
-        "$GEN/reflection_log.md"
+        "$RD/lens.json",
+        "$RD/_state/harness/decisions/gen_$K/B5.round2.json"
        ],
        "writes": [
         "$GEN/step8_hypothesis.md",
         "$GEN/argument.json"
        ],
        "commands": [
+        "ideate_tools.py argument-check",
+        "ideate_tools.py reflection-tail",
+        "ideate_tools.py id-texts",
         "ideate_tools.py list-papers",
         "ideate_tools.py trace",
         "ideate_tools.py list-methods",
         "ideate_tools.py power",
+        "ideate_tools.py env-probe",
+        "ideate_tools.py plan-status"
+       ],
+       "lookups": [
+        "ideate_tools.py reflection-tail",
+        "ideate_tools.py argument-check",
+        "ideate_tools.py id-texts",
+        "ideate_tools.py list-methods",
         "ideate_tools.py env-probe",
         "ideate_tools.py plan-status"
        ]
@@ -109,22 +131,35 @@
     "main": [
      {
       "write": {
-       "task": "P2 design for generation $K: the rest of $GEN/step8_hypothesis.md and the design fields of argument.json (experiments, evidence, construction, controls aimed at named rivals, power, scope, external_check); the compute gate reads the probe.",
+       "task": "P2 design for generation $K: the rest of $GEN/step8_hypothesis.md and the design fields of argument.json (experiments, evidence, construction, controls aimed at named rivals, power, scope, external_check); the compute gate reads the probe. power.literature_effect is never (TBD) when question.json hands over magnitudes: write the reported effect (its row id, value and n) and compare the smallest detectable effect with it (C27) - the decision tree's prior floors read it (T09). step8_hypothesis.md keeps P1's sections word for word and adds, as `## ` headings in this order: Operational definitions, Scope, Conceptual framework, Risk assessment (table Risk | Likelihood | Impact | Mitigation), By-construction check, External check, Power, Traceability (table Element | Source | Evidence).",
        "rules": [
         "references/planning/P2-design.md",
-        "references/question-craft.md"
+        "references/research-cycle.md#b4-p2-part",
+        "references/question-craft.md#qc4-argument"
        ],
        "reads": [
-        "$GEN/step8_hypothesis.md"
+        "$GEN/step8_hypothesis.md",
+        "$GEN/argument.json",
+        "$GEN/question.json",
+        "$RD/lens.json"
        ],
        "writes": [
+        "$GEN/step8_hypothesis.md",
         "$GEN/argument.json"
        ],
        "commands": [
+        "ideate_tools.py id-texts",
         "ideate_tools.py list-papers",
         "ideate_tools.py trace",
         "ideate_tools.py list-methods",
         "ideate_tools.py power",
+        "ideate_tools.py env-probe",
+        "ideate_tools.py plan-status"
+       ],
+       "lookups": [
+        "ideate_tools.py id-texts",
+        "ideate_tools.py list-papers",
+        "ideate_tools.py list-methods",
         "ideate_tools.py env-probe",
         "ideate_tools.py plan-status"
        ]
@@ -138,26 +173,43 @@
     "revise": [
      {
       "write": {
-       "task": "P2 design for generation $K: the rest of $GEN/step8_hypothesis.md and the design fields of argument.json (experiments, evidence, construction, controls aimed at named rivals, power, scope, external_check); the compute gate reads the probe. This is the round-2 revision entering at this step: read the decision $RD/_state/harness/decisions/gen_$K/B5.round2.json and the Round 2 entry of $GEN/reflection_log.md, and produce this step's part again from the revised design - never patch it.",
+       "task": "P2 design for generation $K: the rest of $GEN/step8_hypothesis.md and the design fields of argument.json (experiments, evidence, construction, controls aimed at named rivals, power, scope, external_check); the compute gate reads the probe. power.literature_effect is never (TBD) when question.json hands over magnitudes: write the reported effect (its row id, value and n) and compare the smallest detectable effect with it (C27) - the decision tree's prior floors read it (T09). step8_hypothesis.md keeps P1's sections word for word and adds, as `## ` headings in this order: Operational definitions, Scope, Conceptual framework, Risk assessment (table Risk | Likelihood | Impact | Mitigation), By-construction check, External check, Power, Traceability (table Element | Source | Evidence). This is a revision entering at this step: the round-2 decision ($RD/_state/harness/decisions/gen_$K/B5.round2.json, the Round 2 entry of $GEN/reflection_log.md - its last rounds are in the lookups), or the forced revision after the coherence gate failed in round 3 - then the findings the check lookup reports now are what to fix, whatever an older round said. Produce this step's part again from the revised design - never patch it - and write the whole file even when the change is small.",
        "rules": [
         "references/planning/P2-design.md",
-        "references/question-craft.md"
+        "references/research-cycle.md#b4-p2-part",
+        "references/question-craft.md#qc4-argument"
        ],
        "reads": [
         "$GEN/step8_hypothesis.md",
-        "$RD/_state/harness/decisions/gen_$K/B5.round2.json",
-        "$GEN/reflection_log.md"
+        "$GEN/argument.json",
+        "$GEN/question.json",
+        "$RD/lens.json",
+        "$RD/_state/harness/decisions/gen_$K/B5.round2.json"
        ],
        "writes": [
         "$GEN/argument.json"
        ],
        "commands": [
+        "ideate_tools.py argument-check",
+        "ideate_tools.py reflection-tail",
+        "ideate_tools.py id-texts",
         "ideate_tools.py list-papers",
         "ideate_tools.py trace",
         "ideate_tools.py list-methods",
         "ideate_tools.py power",
         "ideate_tools.py env-probe",
         "ideate_tools.py plan-status"
+       ],
+       "lookups": [
+        "ideate_tools.py reflection-tail",
+        "ideate_tools.py argument-check",
+        "ideate_tools.py id-texts",
+        "ideate_tools.py list-methods",
+        "ideate_tools.py env-probe",
+        "ideate_tools.py plan-status"
+       ],
+       "may_write": [
+        "$GEN/step8_hypothesis.md"
        ]
       }
      },
@@ -186,7 +238,11 @@
        "rules": [
         "references/planning/P3-decision-tree.md"
        ],
-       "reads": [],
+       "reads": [
+        "$GEN/decision_tree.draft.json",
+        "$GEN/argument.json",
+        "$GEN/step8_hypothesis.md"
+       ],
        "writes": [
         "$GEN/decision_tree.json"
        ],
@@ -197,7 +253,8 @@
         "ideate_tools.py power",
         "ideate_tools.py env-probe",
         "ideate_tools.py plan-status"
-       ]
+       ],
+       "lookups": []
       }
      },
      {
@@ -211,24 +268,32 @@
      },
      {
       "write": {
-       "task": "P3 decision tree for generation $K: write $GEN/decision_tree.json from the prefill - a node per deciding experiment, typed leaves, prior floors only raised by evidence. This is the round-2 revision entering at this step: read the decision $RD/_state/harness/decisions/gen_$K/B5.round2.json and the Round 2 entry of $GEN/reflection_log.md, and produce this step's part again from the revised design - never patch it.",
+       "task": "P3 decision tree for generation $K: write $GEN/decision_tree.json from the prefill - a node per deciding experiment, typed leaves, prior floors only raised by evidence. This is a revision entering at this step: the round-2 decision ($RD/_state/harness/decisions/gen_$K/B5.round2.json, the Round 2 entry of $GEN/reflection_log.md - its last rounds are in the lookups), or the forced revision after the coherence gate failed in round 3 - then the findings the check lookup reports now are what to fix, whatever an older round said. Produce this step's part again from the revised design - never patch it - and write the whole file even when the change is small.",
        "rules": [
         "references/planning/P3-decision-tree.md"
        ],
        "reads": [
-        "$RD/_state/harness/decisions/gen_$K/B5.round2.json",
-        "$GEN/reflection_log.md"
+        "$GEN/decision_tree.draft.json",
+        "$GEN/argument.json",
+        "$GEN/step8_hypothesis.md",
+        "$RD/_state/harness/decisions/gen_$K/B5.round2.json"
        ],
        "writes": [
         "$GEN/decision_tree.json"
        ],
        "commands": [
+        "ideate_tools.py tree-check",
+        "ideate_tools.py reflection-tail",
         "ideate_tools.py list-papers",
         "ideate_tools.py trace",
         "ideate_tools.py list-methods",
         "ideate_tools.py power",
         "ideate_tools.py env-probe",
         "ideate_tools.py plan-status"
+       ],
+       "lookups": [
+        "ideate_tools.py reflection-tail",
+        "ideate_tools.py tree-check"
        ]
       }
      },
@@ -253,20 +318,32 @@
      },
      {
       "write": {
-       "task": "P4 attack-type Related Work for generation $K: write $GEN/attack_plan.json (target x weakness x weapon E-id x landing leaf x if_miss x concession) from the handover's targets.",
+       "task": "P4 attack-type Related Work for generation $K: write $GEN/attack_plan.json (target x weakness x weapon E-id x landing leaf x if_miss x concession) from the handover's targets. common_ground lists collision, unit or Line ids - the draft's _common_ground_candidates, or the units the lookups show - never paper keys (R07); its paragraph cites the papers by their citation keys.",
        "rules": [
         "references/planning/P4-attack.md"
        ],
-       "reads": [],
+       "reads": [
+        "$GEN/attack_plan.draft.json",
+        "$GEN/question.json",
+        "$GEN/argument.json",
+        "$GEN/decision_tree.json",
+        "$RD/fusion_caveats.json"
+       ],
        "writes": [
         "$GEN/attack_plan.json"
        ],
        "commands": [
+        "ideate_tools.py id-texts",
         "ideate_tools.py list-papers",
         "ideate_tools.py trace",
         "ideate_tools.py list-methods",
         "ideate_tools.py power",
         "ideate_tools.py env-probe",
+        "ideate_tools.py plan-status"
+       ],
+       "lookups": [
+        "ideate_tools.py id-texts",
+        "ideate_tools.py list-papers",
         "ideate_tools.py plan-status"
        ]
       }
@@ -295,19 +372,31 @@
        "task": "P5 packaging for generation $K: write $GEN/packaging.json (the abstract sentence by sentence with move and sources, titles per likely leaf, tree_gate), then compose Experiments and Risk Factors and Limitations from argument.json into $GEN/idea_draft.json as research-cycle section 6 says.",
        "rules": [
         "references/planning/P5-package.md",
-        "references/research-cycle.md"
+        "references/research-cycle.md#b6-finalize",
+        "references/question-craft.md#qc8-seven-fields"
        ],
-       "reads": [],
+       "reads": [
+        "$GEN/packaging.draft.json",
+        "$GEN/argument.json",
+        "$GEN/decision_tree.json",
+        "$GEN/attack_plan.json",
+        "$RD/lens.json"
+       ],
        "writes": [
         "$GEN/packaging.json",
         "$GEN/idea_draft.json"
        ],
        "commands": [
+        "ideate_tools.py id-texts",
         "ideate_tools.py list-papers",
         "ideate_tools.py trace",
         "ideate_tools.py list-methods",
         "ideate_tools.py power",
         "ideate_tools.py env-probe",
+        "ideate_tools.py plan-status"
+       ],
+       "lookups": [
+        "ideate_tools.py id-texts",
         "ideate_tools.py plan-status"
        ]
       }
@@ -329,14 +418,37 @@
    "phases": {
     "round1": [
      {
+      "run": "ideate_tools.py novelty-plan $GEN"
+     },
+     {
       "write": {
-       "task": "B5 round 1 for generation $K (research-cycle section 5, 'On the fusion block'): the round's lookups (shortlist and raw novelty checks, the excluded lookup), the checks argument-check --idea, tree-check, attack-check --idea and pack-check --idea on $GEN/idea_draft.json pasted into $GEN/reflection_log.md under '## Round 1/N'. Do not revise yet: the round's ERRORs are fixed in round 2.",
-       "rules": [
-        "references/research-cycle.md"
+       "task": "B5 round 1 novelty queries for generation $K: from $GEN/idea_draft.json write 2-4 queries that would find prior work already doing this idea - its intervention with the outcome, the measure or the angle that makes it new. Each query's `terms` (1-4, most important first) are searched in titles + abstracts: a single word matches at the start of a word, a term of several words as that phrase, and every term must occur (a query that finds nothing is run again with its last term dropped). At least one has scope excluded - the records screening left out, where a closest work missed by the screening would be - the others raw. `why` says what a hit would mean for the idea's novelty.",
+       "rules": [],
+       "reads": [
+        "$GEN/idea_draft.json"
        ],
-       "reads": [],
        "writes": [
-        "$GEN/reflection_log.md"
+        "$GEN/_work/novelty_queries.json"
+       ],
+       "schema": "$GEN/_work/novelty_queries.schema.json",
+       "lookups": []
+      }
+     },
+     {
+      "run": "ideate_tools.py novelty-lookup $GEN"
+     },
+     {
+      "write": {
+       "task": "B5 round 1 for generation $K (research-cycle section 5, 'On the fusion block'): the round's lookups (the shortlist, and the raw and excluded novelty checks the conductor ran for the round's queries - _work/novelty_lookups.md: each query with its hits, pasted), the checks argument-check --idea, tree-check, attack-check --idea and pack-check --idea on $GEN/idea_draft.json pasted into the round's '## Round 1/N' entry. Do not revise yet: the round's ERRORs are fixed in round 2. Write only this round's entry, starting with its heading, to $GEN/_work/reflection_round1.md: the conductor appends it to $GEN/reflection_log.md (the earlier rounds' last part is in the lookups) - never copy the log.",
+       "rules": [
+        "references/research-cycle.md#b5-reflection"
+       ],
+       "reads": [
+        "$GEN/idea_draft.json",
+        "$GEN/_work/novelty_lookups.md"
+       ],
+       "writes": [
+        "$GEN/_work/reflection_round1.md"
        ],
        "commands": [
         "ideate_tools.py list-papers",
@@ -353,6 +465,9 @@
       }
      },
      {
+      "run": "ideate_tools.py reflection-append $GEN $GEN/_work/reflection_round1.md"
+     },
+     {
       "freeze": [
        "$GEN/step7b_problem.md",
        "$GEN/step8_hypothesis.md",
@@ -365,7 +480,7 @@
       "write": {
        "task": "Restate this research idea as a blind reader, following the blind-restatement brief of the rules, and answer with the JSON it asks for.",
        "rules": [
-        "references/question-craft.md"
+        "references/question-craft.md#qc7-restatement"
        ],
        "reads": [
         "$GEN/idea_draft.json"
@@ -384,44 +499,61 @@
     "round2": [
      {
       "write": {
-       "task": "B5 round 2 for generation $K: the critique - the 12 skeptical-reader questions, the comparison with restatement_1.json, the four tree questions - appended to $GEN/reflection_log.md as '## Round 2/N'; then ONE decision, written to $RD/_state/harness/decisions/gen_$K/B5.round2.json as {\"decision\": \"finalize\"} or {\"decision\": \"revise\", \"enters\": \"P1\"|\"P2\"|\"P3\", \"reason\": \"...\", \"revision\": {...}} (the earliest step the revision changes). Every round-1 ERROR and every reader doubt needs an answer.",
+       "task": "B5 round 2 for generation $K: the critique - the 12 skeptical-reader questions, the comparison with restatement_1.json, the four tree questions - as the round's '## Round 2/N' entry; then ONE decision, written to $RD/_state/harness/decisions/gen_$K/B5.round2.json as {\"decision\": \"finalize\"} or {\"decision\": \"revise\", \"enters\": \"P1\"|\"P2\"|\"P3\", \"reason\": \"...\", \"revision\": {...}} (the earliest step the revision changes). Every round-1 ERROR and every reader doubt needs an answer. Write only this round's entry, starting with its heading, to $GEN/_work/reflection_round2.md: the conductor appends it to $GEN/reflection_log.md (the earlier rounds' last part is in the lookups) - never copy the log.",
        "rules": [
-        "references/research-cycle.md",
-        "references/question-craft.md"
+        "references/research-cycle.md#b5-reflection",
+        "references/question-craft.md#qc7-reader"
        ],
        "reads": [
         "$GEN/restatement_1.json",
         "$GEN/idea_draft.json"
        ],
        "writes": [
-        "$GEN/reflection_log.md",
+        "$GEN/_work/reflection_round2.md",
         "$RD/_state/harness/decisions/gen_$K/B5.round2.json"
        ],
        "commands": [
+        "ideate_tools.py reflection-tail",
         "ideate_tools.py list-papers",
         "ideate_tools.py trace",
         "ideate_tools.py list-methods",
         "ideate_tools.py power",
         "ideate_tools.py env-probe",
         "ideate_tools.py plan-status"
+       ],
+       "lookups": [
+        "ideate_tools.py reflection-tail",
+        "ideate_tools.py list-papers",
+        "ideate_tools.py list-methods",
+        "ideate_tools.py env-probe",
+        "ideate_tools.py plan-status"
        ]
       }
+     },
+     {
+      "run": "ideate_tools.py reflection-append $GEN $GEN/_work/reflection_round2.md"
      }
     ],
     "round3": [
      {
       "write": {
-       "task": "B5 round 3 for generation $K: rewrite $GEN/idea_draft.json on the current design (Experiments and Risk recomposed), the compute gate and the worth-it check, then argument-check --idea. If C22 says the primary claim changed since round 1, write {\"changed\": true} to $RD/_state/harness/decisions/gen_$K/restatement2.json. Log it as '## Round 3/N'.",
+       "task": "B5 round 3 for generation $K: rewrite $GEN/idea_draft.json on the current design (Experiments and Risk recomposed), the compute gate and the worth-it check, then argument-check --idea. If C22 says the primary claim changed since round 1, write {\"changed\": true} to $RD/_state/harness/decisions/gen_$K/restatement2.json. Log it as the round's '## Round 3/N' entry. You write only these files (and restatement2.json when C22 says so): the coherence gate after this round, and the forced ReviseHypothesis an ERROR in it calls for, are the conductor's steps, not yours - so do not refuse over an ERROR you cannot fix here: log each one still reported under the round with what would fix it, and write the draft. Write only this round's entry, starting with its heading, to $GEN/_work/reflection_round3.md: the conductor appends it to $GEN/reflection_log.md (the earlier rounds' last part is in the lookups) - never copy the log.",
        "rules": [
-        "references/research-cycle.md",
-        "references/question-craft.md"
+        "references/research-cycle.md#b5-reflection",
+        "references/research-cycle.md#b6-finalize",
+        "references/question-craft.md#qc5-gates",
+        "references/question-craft.md#qc8-seven-fields"
        ],
-       "reads": [],
+       "reads": [
+        "$GEN/argument.json",
+        "$GEN/decision_tree.json"
+       ],
        "writes": [
         "$GEN/idea_draft.json",
-        "$GEN/reflection_log.md"
+        "$GEN/_work/reflection_round3.md"
        ],
        "commands": [
+        "ideate_tools.py reflection-tail",
         "ideate_tools.py list-papers",
         "ideate_tools.py trace",
         "ideate_tools.py list-methods",
@@ -429,14 +561,23 @@
         "ideate_tools.py env-probe",
         "ideate_tools.py plan-status",
         "ideate_tools.py argument-check"
+       ],
+       "lookups": [
+        "ideate_tools.py reflection-tail",
+        "ideate_tools.py argument-check",
+        "ideate_tools.py env-probe",
+        "ideate_tools.py plan-status"
        ]
       }
+     },
+     {
+      "run": "ideate_tools.py reflection-append $GEN $GEN/_work/reflection_round3.md"
      },
      {
       "write": {
        "task": "Restate this research idea as a blind reader, following the blind-restatement brief of the rules, and answer with the JSON it asks for.",
        "rules": [
-        "references/question-craft.md"
+        "references/question-craft.md#qc7-restatement"
        ],
        "reads": [
         "$GEN/idea_draft.json"
@@ -456,17 +597,22 @@
     "finalize": [
      {
       "write": {
-       "task": "FinalizeIdea for generation $K: write $GEN/idea.json - exactly the 7 keys in order (Name, Title, Short Hypothesis, Related Work, Abstract, Experiments, Risk Factors and Limitations) - from idea_draft.json; every doubt the gates or the reader left goes into Risk Factors; close the log.",
+       "task": "FinalizeIdea for generation $K: write $GEN/idea.json - exactly the 7 keys in order (Name, Title, Short Hypothesis, Related Work, Abstract, Experiments, Risk Factors and Limitations) - from idea_draft.json; every doubt the gates or the reader left goes into Risk Factors; the doubts are in the log's last rounds (the lookups).",
        "rules": [
-        "references/research-cycle.md",
-        "references/ideation-reference.md"
+        "references/research-cycle.md#b6-finalize",
+        "references/ideation-reference.md#ir-finalize-schema"
        ],
        "reads": [
-        "$GEN/idea_draft.json",
-        "$GEN/reflection_log.md"
+        "$GEN/idea_draft.json"
        ],
        "writes": [
         "$GEN/idea.json"
+       ],
+       "lookups": [
+        "ideate_tools.py reflection-tail"
+       ],
+       "commands": [
+        "ideate_tools.py reflection-tail"
        ]
       }
      }
@@ -487,25 +633,35 @@
    "phases": {
     "main": [
      {
-      "run": "ideate_tools.py append-idea $IDEAS $GEN/idea.json"
+      "run": "ideate_tools.py append-idea $IDEAS $GEN/idea.json --if-absent"
+     },
+     {
+      "run": "ideate_tools.py consume $RD --from-gen $GEN"
      },
      {
       "write": {
-       "task": "B6 for generation $K: consume the question (`ideate-tool consume <RD> --question <Q_NNN> --idea <Name>`, noting any uncovered part of the angle), write the prescriptive Body $GEN/body/B_draft_<Name>.md and the journal recommendations $GEN/step8_journal_recommendations.md (with dataset licences; the only web lookup of Stage B).",
+       "task": "B6 for generation $K: the idea is in the archive and its question consumed. Write the prescriptive Body $GEN/body/B_draft_<Name>.md (<Name> is idea.json's Name; the template of the rules, based_on the descriptive Body) and the journal recommendations $GEN/step8_journal_recommendations.md (research-cycle section 7, with the dataset licences). Without web access recommend from the target venues and the shortlist's venues the lookup lists, and mark every fact you could not check (TBD - unverified). The journal file keeps the template's headings - `## Selection Criteria`, `## Recommended Journals` with a `### n. Venue` and its Field | Details table per venue, `## Journal Comparison` with the Rank | Journal | IF | Scope Fit | Review Time | OA Cost | Strategy table, `## Submission strategy`, `## Dataset licences`; the Body's `## Risks and alternative paths` is step8_hypothesis.md's Risk | Likelihood | Impact | Mitigation table, copied verbatim.",
        "rules": [
-        "references/research-cycle.md"
+        "references/research-cycle.md#b6-finalize",
+        "references/research-cycle.md#b6-journals",
+        "references/knowledge-templates.md#body-prescriptive"
        ],
        "reads": [
         "$GEN/idea.json",
-        "$GEN/question.json"
+        "$GEN/question.json",
+        "$GEN/step8_hypothesis.md",
+        "$RD/knowledge/body/$DESC_BODY"
        ],
        "writes": [
         "$GEN/step8_journal_recommendations.md"
        ],
        "commands": [
-        "ideate_tools.py consume",
+        "ideate_tools.py venues",
         "ideate_tools.py list-papers",
         "ideate_tools.py trace"
+       ],
+       "lookups": [
+        "ideate_tools.py venues"
        ],
        "tools": [
         "WebSearch",
@@ -516,21 +672,7 @@
     ],
     "abandon": [
      {
-      "write": {
-       "task": "The decision gate T09 still fails after the forced revision: abandon generation $K's question (`ideate-tool consume <RD> --question <Q_NNN> --abandoned \"<the gate's finding>\"`). Append nothing to the archive.",
-       "rules": [
-        "references/research-cycle.md",
-        "references/planning/P3-decision-tree.md"
-       ],
-       "reads": [
-        "$GEN/question.json",
-        "$GEN/reflection_log.md"
-       ],
-       "writes": [],
-       "commands": [
-        "ideate_tools.py consume"
-       ]
-      }
+      "run": "ideate_tools.py consume $RD --from-gen $GEN --abandoned-by-gate"
      }
     ]
    },

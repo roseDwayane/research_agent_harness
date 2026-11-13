@@ -18,7 +18,7 @@ topic.md ─▶ Stage A, once per topic                      Stage B, once per i
 |---|---|
 | `scripts/`, `references/`, `mcp/scholar_mcp`, `mcp/paper_pdf_mcp`, `SKILL.md` | The ideate skill. It implements every Unit: `ideate_tools.py`, `it_*.py`, the ledger, each Unit's checks, and the rules each Unit follows |
 | `contracts/` | The architecture as data: 17 steps, 38 Units, 15 gates, 12 loops, 66 artifacts and retry policies (`architecture.json`, `units/`). `legacy_snapshot.json` is pinned by hash to `scripts/ideate_units.json` |
-| `contracts/recipes/` | How each Unit is executed: `run` (a skill command), `write` (a Claude worker), `fanout` (one worker per batch). All 38 are still `draft` |
+| `contracts/recipes/` | How each Unit is executed: `run` (a skill command), `write` (a worker: the Claude, OpenAI or Gemini API, an Ollama server or another provider), `fanout` (one worker per batch). All 38 are still `draft` |
 | `ideate_v2/` | The referee: gate checks, loop bounds, retry ownership, error records, events and the three-level report (Unit → step → overall). Standard library only |
 | `harness/` | The conductor: `PipelineAgent` → `StepAgent` / `GenerationAgent` → `UnitAgent` |
 | `mcp/ideate_v2_mcp/` | Optional MCP server over `ideate_v2`, for a Claude session that inspects or conducts a run interactively (`references/orchestration.md`) |
@@ -37,9 +37,9 @@ A custom executor goes through the same shell, so swapping a Unit cannot bypass 
 ## Setup
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # Python >= 3.10
+python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # Python >= 3.10; includes the Anthropic SDK
 cp mcp/.env.example mcp/scholar_mcp/.env                    # then fill in the keys you have (gitignored)
-claude --version                                            # Claude Code CLI, logged in: the workers are `claude -p`
+export ANTHROPIC_API_KEY=...                                # the workers call the Claude API (or `ant auth login`)
 ```
 
 Sources without a key are skipped and the run records a caveat; OpenAlex, arXiv, Crossref and PubMed need no key.
@@ -74,7 +74,7 @@ mkdir -p /tmp/try && cp evals/datasets/fusion_ready/eeg_topic.md /tmp/try/
                                                                               # no network, no tokens
 ```
 
-The dry run replaces the skill's commands and the Claude workers with fixtures. ideate_v2 still evaluates the contract
+The dry run replaces the skill's commands and the model workers with fixtures. ideate_v2 still evaluates the contract
 half of every gate for real. Inject faults to see how they are handled:
 
 ```bash
@@ -88,11 +88,11 @@ half of every gate for real. Inject faults to see how they are handled:
 A real run (this costs tokens; start small):
 
 ```bash
-.venv/bin/ideate-harness run path/to/topic.md --smoke-cap 4 --generations 1 --budget 3
+.venv/bin/ideate-harness run path/to/topic.md --smoke-cap 4 --generations 1
 ```
 
-`--smoke-cap N` limits every database and snowball route to N papers. `--budget` caps each worker call in USD.
-Resume a run with the same command; Units that are already done are skipped.
+`--smoke-cap N` limits every database and snowball route to N papers. The tokens and cost of every Unit are in the
+run's summary. Resume a run with the same command; Units that are already done are skipped.
 
 Other options:
 
@@ -100,10 +100,85 @@ Other options:
 - `--depth quick` runs without full text and with weak evidence.
 - `--replay` returns recorded network answers instead of calling the services.
 
-## Without Claude Code: an Ollama server
+## The model Units: the Claude API
 
-The model Units can run on an Ollama server over its HTTP API instead of `claude -p`. Nothing else changes: the same
-recipes, shell, gates and reports. Put this in a `harness.toml`:
+By default (`worker = "claude"`) every write and fan-out step is one call of the Anthropic Messages API, through the
+official SDK (`harness/providers/claude.py`). It works as on an Ollama server (below): the conductor puts the files
+and the read-only lookups into the prompt, the model answers with one JSON object, and the conductor writes the files
+the step may write. A step that needs the worker to run a skill command itself is refused at once, and only B6 (each
+generation's last Unit: `consume`, and a journal lookup on the web) does: no built-in provider runs it, so each
+generation stops at B6. An agent of your own (`AgentProvider`, `harness/providers/agent.py`) could run it.
+
+```toml
+[harness]
+worker = "claude"                   # the default
+model = "claude-opus-5-5"           # the default
+
+[harness.provider_options.claude]   # all optional
+effort = "medium"                   # low | medium | high | xhigh | max (the default is Claude Opus 5.5's own);
+                                    # "" sends none, for a model without effort
+max_tokens = 64000                  # the answer, thinking included
+context_window = 1000000            # tokens: a file over half of it is cut, a longer prompt is not sent
+fallbacks = true                    # a request a safety classifier declines is answered by the model Anthropic
+                                    # names for that category (server-side fallback, beta)
+max_retries = 2                     # the SDK's own retries of a rate limit, an overload or a dropped connection
+# base_url = "https://gateway.example.org"   # a gateway in front of the API (or ANTHROPIC_BASE_URL)
+# price_per_mtok = [4.0, 20.0]      # USD per million input/output tokens, for a model the price table lacks
+```
+
+- Credentials are the SDK's: `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` or an `ant auth login` profile.
+- The answer is a structured output, decoded under the step's JSON schema. A schema with an open map (an object
+  without fixed keys) cannot be one: that answer is asked for in the prompt and read from the text. A request the API
+  refuses (400) for its schema or the fallback beta is sent once more without them.
+- The Unit's rules and the conversation are cached: a fan-out's batches share the rules, and a revision reads the
+  files of its first message back from the cache.
+- Thinking is the model's own (adaptive); `effort` sets how much. `temperature` and `think` are Ollama's settings
+  and are not sent.
+- Each call's tokens and cost (list prices, cache reads and writes included) go into the run's summary.
+
+## On the OpenAI or the Gemini API
+
+`worker = "gpt"` (the OpenAI Responses API, `harness/providers/gpt.py`) and `worker = "gemini"` (the Gemini API's
+generateContent, `harness/providers/gemini.py`) run the model Units the same way as the Claude API, each through its
+official SDK:
+
+```bash
+.venv/bin/pip install -e ".[gpt]"       # openai;       export OPENAI_API_KEY=...
+.venv/bin/pip install -e ".[gemini]"    # google-genai; export GEMINI_API_KEY=... (Vertex AI: the SDK's
+                                        # GOOGLE_GENAI_USE_VERTEXAI, GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_LOCATION)
+```
+
+```toml
+[harness]
+worker = "gpt"                      # or "gemini"
+model = "gpt-6-astra"               # the default; gemini's: "gemini-4-argon"
+
+[harness.provider_options.gpt]      # all optional
+effort = "high"                     # reasoning effort: none | low | medium | high | xhigh | max (default: the model's)
+max_tokens = 64000                  # the answer, reasoning included
+store = false                       # true lets OpenAI keep the responses
+
+[harness.provider_options.gemini]   # all optional
+effort = "high"                     # thinking level: minimal | low | medium | high (default: the model's)
+max_tokens = 65536                  # the answer, thinking included
+```
+
+Both also take `context_window`, `max_retries`, `base_url` and `price_per_mtok`, as the Claude provider does.
+
+| | GPT | Gemini |
+|---|---|---|
+| The answer's schema | A strict structured output: every object closed, every field required. A schema strict mode cannot take (an open map, an optional field) gets JSON mode | `response_json_schema` as it is, open maps too |
+| Cache | OpenAI's automatic prompt caching; reads and writes are in the cost | Gemini's implicit caching; reads are in the cost |
+| Not sent | `temperature` | `temperature`, `thinking_budget` |
+
+As on the Claude API, B6 cannot run, a request refused (400) for its schema is sent once more
+without it, and the cost is at list prices - for Gemini at the price in force on the day, as its announced changes
+(December 1, 2026 and January 1, 2027) take effect.
+
+## On an Ollama server
+
+The model Units can run on an Ollama server over its HTTP API instead of the Claude API. Nothing else changes: the
+same recipes, shell, gates and reports. Put this in a `harness.toml`:
 
 ```toml
 [harness]
@@ -130,7 +205,8 @@ export OLLAMA_API_KEY=...        # only if the server sits behind an auth proxy;
 .venv/bin/ideate-harness run path/to/topic.md --config harness.toml --to F4
 ```
 
-The local model gets no tools, so the conductor does what Claude Code's tools did (`harness/ollama_worker.py`):
+The local model gets no tools, so the conductor does what an agent's tools would (`harness/providers/chat.py`, with
+Ollama's own HTTP handling in `harness/providers/ollama.py`):
 
 - It puts into the prompt the files the step may read, and the output of the read-only lookups the recipe allows
   and checks the recipe allows (`list-papers`, `list-methods`, `env-probe`, `plan-status`, and B5's
@@ -183,52 +259,39 @@ Limits to know:
   still finishes reading the prompt, and the call then starts writing at once - instead of a dropped call whose whole
   answer the server writes for nobody before the re-send.
 
-## Without Claude Code: an API provider (Gemini, OpenAI)
+## Another model provider
 
-`worker = "gemini"` (or `"openai"`) holds the same conversation as the Ollama worker - the files in the prompt, one
-JSON answer back, one correction turn, every check and gate unchanged - over the provider's API
-(`harness/api_worker.py`). Both providers speak the OpenAI Chat Completions format (Gemini through its
-OpenAI-compatible endpoint), so one transport serves them; the worker name picks the provider's endpoint and key
-variable:
+The Claude, OpenAI and Gemini APIs and an Ollama server are four providers behind one interface
+(`harness/providers/`). The executor gives every provider the same request (`WorkerRequest`: task, system prompt,
+folder, `FileScope`, the step's commands and tools, the session to resume) and gets the same result back
+(`WorkerResult`). It never asks which provider runs.
 
-| `worker` | endpoint (`api_base`) | key variable (`api_key_env`) | status |
+| Kind | Base class | Built in | The conductor's part |
 |---|---|---|---|
-| `gemini` | `https://generativelanguage.googleapis.com/v1beta/openai` | `GEMINI_API_KEY` | tested (gemini-3.5-flash) |
-| `openai` | `https://api.openai.com/v1` | `OPENAI_API_KEY` | same format, not run yet |
+| A chat model without tools | `ChatProvider` (`chat.py`) | `ClaudeProvider` (`claude.py`, worker `claude`), `GPTProvider` (`gpt.py`, worker `gpt`), `GeminiProvider` (`gemini.py`, worker `gemini`), `OllamaProvider` (`ollama.py`, worker `ollama`) | The files and the read-only lookups in the prompt, one JSON answer under a schema, the conductor writes the files the scope allows |
+| An agent with tools | `AgentProvider` (`agent.py`) | None (`claude -p` was one); the only kind that could run B6 | The shims on its PATH and the allowed commands; the agent opens and writes its files itself |
+
+To add one, subclass the base class that fits and set its `name`:
+
+- A chat API (OpenAI-compatible, vLLM) implements only `chat()`: one call that takes the conversation and the
+  answer's JSON schema, and returns the answer's text with its tokens and cost. The prompt, the conversation per
+  session, the correction turn and the write scope come from `ChatProvider`; `claude.py`, `gpt.py`, `gemini.py` and
+  `ollama.py` are four.
+- An agent (another coding-agent CLI, an API with tool use) implements `run()`.
+
+A provider can also override how long to wait before a dropped call is sent again (`retry_delay`; the default is the
+contract's RP-TRANSPORT), the fan-out width (`parallel`), the batch size (`batch_budget`), its context window
+(`window`), its model when none is set (`default_model`) and the checks on a config it cannot run with
+(`check_config`). Name it in `harness.toml` with no change to the harness:
 
 ```toml
 [harness]
-worker = "gemini"
-model = "gemini-3.5-flash"                  # a model your key may use (gemini-2.5-flash is closed to new users)
-max_context = 1000000                       # the model's context window: prompts and batches are sized from it
-num_predict = 32768                         # the longest answer, hidden reasoning included
-# api_base = "..."                          # another OpenAI-compatible endpoint than the provider's
-# api_key_env = "..."                       # the NAME of the variable that holds the key, never the key itself
-# api_max_tokens_field = "max_tokens"       # if the provider wants this field instead of max_completion_tokens
-# api_reasoning_effort = "low"              # thinking models: "none" | "low" | "medium" | "high" - the reasoning
-                                            # counts against num_predict and is billed, even where it is not shown
-# api_price_in = 2.0                        # USD per million input tokens  } each call's cost is counted
-# api_price_out = 8.0                       # USD per million output tokens } (the run summary shows it)
-# api_budget_usd = 20                       # no further call once the run has spent this much
-```
+worker = "my_pkg.providers:OpenAIProvider"   # or a name registered with harness.providers.register()
+model = "my-model"
 
-```bash
-# the key: in a file only you can read, loaded by the shell profile - never in harness.toml or the repo
-echo 'export GEMINI_API_KEY="..."' >> ~/.config/api_keys.env && chmod 600 ~/.config/api_keys.env
-echo '[ -f ~/.config/api_keys.env ] && source ~/.config/api_keys.env' >> ~/.zshrc     # once; then a new terminal
-curl -s https://generativelanguage.googleapis.com/v1beta/openai/models \
-  -H "Authorization: Bearer $GEMINI_API_KEY" | head -c 300                             # the key works?
-.venv/bin/ideate-harness run path/to/topic.md --config harness.toml --to F4
+[harness.provider_options.openai]            # its own settings, under its `name`; read as self.options()
+base_url = "https://llm.example.org/v1"
 ```
-
-- The key is read from the environment and sent only as `Authorization: Bearer`; it is never logged or written.
-  In a key file, `=` takes no spaces around it (`export GEMINI_API_KEY="..."`).
-- The answer is asked for under `response_format` = the step's JSON schema (non-strict: the checks judge it). A
-  provider that refuses that form is asked once more in plain JSON mode, with the schema written into the prompt.
-- These APIs bill per token. Without `api_price_in` / `api_price_out` the cost shows as $0; set them, and
-  `api_budget_usd`, before a long run. 429 and 5xx answers are retried with the transport policy (RP-TRANSPORT).
-- Like the Ollama worker it has no tools: whatever a step needs must be in its rules, its files or its lookups. A
-  rule that lives only in a checker or a template the recipe does not attach is invisible to it.
 
 ## What a run leaves
 

@@ -12,6 +12,7 @@ Faults (``--inject KEY=TOKEN[,TOKEN...]``; the n-th token applies to the n-th at
   A3=check:C05                   the Unit's check reports ERROR C05 after attempt 1
   GATE-tree-check=fail           the legacy half of that gate fails (once per token)
   B5=revise:P2                   B5 round 2 decides ReviseHypothesis entering at P2 (default: finalize)
+  B5/round3=model_output         B5 round 3 fails (any of B5's other rounds: B5/<phase>)
   GATE-coherence=fail,fail       the coherence gate fails twice: after the forced revision too
 """
 from __future__ import annotations
@@ -102,7 +103,8 @@ class FakeSkill(Skill):
         token = self.faults.take(gate["id"])
         cmds = [self.expand(c, subs, quote=False) for c in _gate_cmds(gate)]
         if token == "fail":
-            return False, [CommandResult(c, [], 1, "", "(dry run: injected gate failure)") for c in cmds]
+            return False, [CommandResult(c, [], 1, "ERROR T09: (dry run) injected decision-gate failure\n",
+                                         "(dry run: injected gate failure)") for c in cmds]
         return True, [CommandResult(c, [], 0) for c in cmds]
 
 
@@ -123,7 +125,9 @@ class FakeExecutor:
     def execute(self, ctx: RunContext, unit: str, recipe: Recipe | None, phase: str, gen: int | None,
                 attempt: int) -> ExecResult:
         inst = instance_of(gen, phase)
-        token = self.faults.take(unit) if not (unit == "B5" and phase != "round2") else None
+        # B5=... is round 2's decision; B5/<phase>=... a fault of another of B5's rounds
+        token = self.faults.take(unit) if not (unit == "B5" and phase != "round2") else \
+            self.faults.take(f"B5/{phase}")
         if token in CATEGORIES:
             rec = ctx.error(CODE_FOR.get(token, "IDEATE.TOOL.FAILED"), f"dry run: injected {token} on attempt "
                             f"{attempt}", unit=unit, instance=inst, attempt=attempt, category=token)

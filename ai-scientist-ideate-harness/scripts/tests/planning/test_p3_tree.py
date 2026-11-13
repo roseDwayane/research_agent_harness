@@ -339,5 +339,36 @@ class Tree(unittest.TestCase):
                          f["code"] == "T06" and "supported or undecided" in f["text"]], fs)
 
 
+
+class Helpers(unittest.TestCase):
+    def test_a_subtree_listed_as_an_object_counts_by_its_root(self):
+        """The rules say a subtree's root "is listed in `subtrees`": an object naming it with a note counts too (a
+        model wrote [{"root": "S0", "note": ...}], and T05 called S0 unreachable)."""
+        t = {"subtrees": ["N3", {"root": "S0", "note": "read on every path"}, {"note": "no root"}, 7, "N3"]}
+        self.assertEqual(it_plan.subtree_roots(t), ["N3", "S0"])
+        self.assertEqual(it_plan.subtree_roots({}), [])
+
+    def test_a_round_entry_is_appended_and_a_rerun_replaces_it(self):
+        """B5 rounds write their own entry; the log is never copied back by the model."""
+        log = it_plan.reflection_append(None, "# Reflection Log\n\n## Round 1/3\n\nfirst", "gen_2")
+        self.assertTrue(log.startswith("# Reflection Log — Generation 2\n\n## Round 1/3"))
+        log = it_plan.reflection_append(log, "## Round 2/3\n\nsecond", "gen_2")
+        log = it_plan.reflection_append(log, "## Round 2/3\n\nsecond, run again", "gen_2")
+        self.assertEqual(log.count("## Round 2/3"), 1)
+        self.assertIn("second, run again", log)
+        self.assertIn("## Round 1/3\n\nfirst", log)
+        with self.assertRaises(ValueError):
+            it_plan.reflection_append(log, "no heading", "gen_2")
+
+    def test_the_reflection_tail_is_the_last_rounds_with_the_latest_whole(self):
+        log = "# Reflection Log\n\n" + "".join(f"## Round {i}/3\n\n" + f"round {i} text " * 300 + "\n" for i in (1, 2, 3))
+        out = it_plan.reflection_tail(log, rounds=2, max_chars=20000)
+        self.assertNotIn("## Round 1/3", out)
+        self.assertIn("## Round 2/3", out) and self.assertIn("## Round 3/3", out)
+        cut = it_plan.reflection_tail(log, rounds=2, max_chars=4000)
+        self.assertIn("characters of this round cut", cut)
+        r3 = cut[cut.index("## Round 3/3"):]
+        self.assertGreater(len(r3), len(cut) - len(r3))                     # the latest round has most room
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

@@ -2185,6 +2185,11 @@ class TestIdeaContractUnchanged(unittest.TestCase):
             good = dump(Path(tmp) / "good.json", base_idea())
             self.assertEqual(run("append-idea", archive, good)[0], 0)
             self.assertEqual(run("append-idea", archive, good)[0], 2)  # duplicate Name
+            code, out, _ = run("append-idea", archive, good, "--if-absent")  # B6 again: the same idea is there already
+            self.assertEqual(code, 0, out)
+            self.assertIn("nothing to append", out)
+            changed = dict(base_idea(), Title=base_idea()["Title"] + " (revised)")
+            self.assertEqual(run("append-idea", archive, dump(Path(tmp) / "changed.json", changed), "--if-absent")[0], 2)
             extra = dict(base_idea(), Name="with_argument", Argument={"claims": []})  # an 8th key stays illegal
             self.assertEqual(run("append-idea", archive, dump(Path(tmp) / "extra.json", extra))[0], 2)
             reordered = {k: base_idea()[k] for k in reversed(list(base_idea()))}

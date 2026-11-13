@@ -106,6 +106,11 @@ class Attack(unittest.TestCase):
         self.assertIn("smithetal2020#L1", sk["targets"][0]["concede_candidates"], "its own limitation units")
         self.assertEqual(sk["targets"][0]["lands_on"], ["L2"])
         self.assertEqual(sk["targets"][0]["if_miss"]["leaf"], "L3")
+        # common_ground cites collision, unit or Line ids (R07): the agree collisions on the targets' papers, with gists
+        cands = sk["_common_ground_candidates"]
+        self.assertIsInstance(cands, list)
+        self.assertTrue(all(c["id"].startswith("X") and "gist" in c for c in cands), cands)
+        self.assertEqual(sk["common_ground"], [])
 
     def test_staleness(self):
         a = json.loads((self.gd / "argument.json").read_text())

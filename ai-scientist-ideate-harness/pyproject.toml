@@ -8,16 +8,19 @@ version = "2.1.0"
 description = "The ai-scientist ideate stage (slides 3-5) as a testable harness: the ideate skill's Units, the v2 contracts and core, and a code conductor that runs every Unit as an agent."
 requires-python = ">=3.10"
 license = { text = "MIT" }
-# The Unit implementation (scripts/) and the MCP servers need these; the v2 core (ideate_v2) and the conductor
-# (harness) need nothing beyond the standard library.
+# The Unit implementation (scripts/) and the MCP servers need these; the v2 core (ideate_v2) needs nothing beyond the
+# standard library, and the conductor (harness) nothing but the Anthropic SDK, which only worker = "claude" imports.
 dependencies = [
     "mcp>=1.27,<2",          # scholar_mcp, paper_pdf_mcp, mcp_bridge.py and the ideate_v2 MCP server; tested with 1.30.0
     "httpx>=0.27",
     "pydantic>=2.6",
+    "anthropic>=2.8,<3",     # worker = "claude" (the default): harness/providers/claude.py; tested with 2.8.0
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff"]
+gpt = ["openai>=3.49,<4"]              # worker = "gpt": harness/providers/gpt.py; tested with 3.49.0
+gemini = ["google-genai>=3.2,<4"]      # worker = "gemini": harness/providers/gemini.py; tested with 3.2.0
 specter2 = ["torch", "transformers"]   # A2.m semantic similarity (dense D1); without it the signal is skipped
 yaml = ["pyyaml"]                      # front matter of older topic files
 

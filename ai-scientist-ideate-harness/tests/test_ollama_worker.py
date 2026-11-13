@@ -1,4 +1,5 @@
-"""The Ollama worker (harness/ollama_worker.py) against a fake Ollama server: no network, no model."""
+"""The Ollama provider (harness/providers/ollama.py, the chat flow of chat.py) against a fake Ollama server: no
+network, no model."""
 from __future__ import annotations
 
 import json
@@ -8,9 +9,11 @@ from pathlib import Path
 
 import pytest
 
-from harness import ollama_worker as ow
-from harness.config import HarnessConfig
+from harness.config import MODULE_ROOT, HarnessConfig
 from harness.context import RunContext
+from harness.providers import FileScope, WorkerRequest, WorkerResult, chat
+from harness.providers import ollama as ow
+from harness.providers.base import SCRATCH
 from harness.executors import RecipeExecutor
 from harness.recipes import parse
 from harness.skill import CommandResult, Skill
@@ -86,39 +89,30 @@ def ctx_for(tmp_path: Path, cfg: HarnessConfig) -> RunContext:
     return RunContext(Registry.load(), cfg, Skill(cfg), rd, tmp_path / "t.md", say=lambda s: None)
 
 
+def run_worker(cfg: HarnessConfig, **kw) -> WorkerResult:
+    """One call through the provider interface, as the executor makes it."""
+    return ow.OllamaProvider(cfg).run(WorkerRequest(**kw))
+
+
 # ------------------------------------------------------------------------------------------------- the worker
 def test_request_shape_auth_and_write(tmp_path, fake, monkeypatch):
     s = fake(lambda body, n: answer([("out/x.md", "# hello")]))
     monkeypatch.setenv("OLLAMA_API_KEY", "k-123")
-    scope = ow.FileScope(base=tmp_path, writes=[tmp_path / "out" / "x.md"])
-    r = ow.run_worker(cfg_for(s.url), task="Write x.md", system=ow.cw.SHELL_RULES + "\n# Unit X\n", cwd=tmp_path,
-                      scope=scope)
+    cfg = cfg_for(s.url)
+    system = ow.OllamaProvider(cfg).system_prompt(MODULE_ROOT, {"id": "X", "name": "x"}, None, [],
+                                                  ["ideate_tools.py list-papers"])
+    scope = FileScope(base=tmp_path, writes=[tmp_path / "out" / "x.md"])
+    r = run_worker(cfg, task="Write x.md", system=system, cwd=tmp_path, scope=scope)
     assert r.ok and r.session_id and r.tokens_in == 100 and r.tokens_out == 20 and r.cost_usd == 0
     assert (tmp_path / "out" / "x.md").read_text() == "# hello\n"
     body = s.requests[0]
     assert body["model"] == "m" and body["stream"] is True and body["options"]["num_ctx"] == 8192
-    assert body["format"] == ow.RESPONSE_SCHEMA and "think" not in body
-    assert body["messages"][0]["role"] == "system" and "cannot open files or run commands" in body["messages"][0]["content"]
+    assert body["format"] == chat.TYPED_RESPONSE_SCHEMA and "think" not in body
+    sys_msg = body["messages"][0]
+    assert sys_msg["role"] == "system" and "cannot open files or run commands" in sys_msg["content"]
+    assert "# Unit X - x" in sys_msg["content"] and "Commands you may run" not in sys_msg["content"]
     assert s.headers[0].get("Authorization") == "Bearer k-123"
     assert s.headers[0].get("User-Agent", "").startswith("ideate-harness/")      # not Python-urllib (Cloudflare 1010)
-
-
-def test_every_turn_logs_the_whole_request_untruncated(tmp_path, fake):
-    def responder(body, n):
-        return answer([("y.json", "{bad")]) if n == 1 else answer([("y.json", '{"fine": true}')])
-    s = fake(responder)
-    log = tmp_path / "log"
-    task = "T" * 11000             # longer than the head (6000) + tail (4000) the old log kept; short of WARM_CHARS
-    scope = ow.FileScope(base=tmp_path, writes=[tmp_path / "y.json"])
-    r = ow.run_worker(cfg_for(s.url), task=task, system="S", cwd=tmp_path, scope=scope, log_dir=log, label="w")
-    assert r.ok and len(s.requests) == 2
-    for turn in (1, 2):
-        rec = json.loads((log / f"w.ollama.{turn}.messages.json").read_text())
-        assert rec["messages"] == s.requests[turn - 1]["messages"]          # exactly what was sent, every message
-        assert rec["format"] == s.requests[turn - 1]["format"] and rec["model"] == "m"
-        assert rec["session_id"] == r.session_id and rec["tokens_in"] == 100
-    first = json.loads((log / "w.ollama.1.messages.json").read_text())
-    assert task in first["messages"][-1]["content"] and first["answer"] == answer([("y.json", "{bad")])[1]["message"]["content"]
 
 
 def test_only_allowed_paths_are_written_and_a_bad_answer_is_corrected_once(tmp_path, fake):
@@ -128,8 +122,8 @@ def test_only_allowed_paths_are_written_and_a_bad_answer_is_corrected_once(tmp_p
         return answer([("y.json", '{"fine": true}'), ("_work/notes.md", "scratch")])
     s = fake(responder)
     (tmp_path / "_state").mkdir()
-    scope = ow.FileScope(base=tmp_path, writes=[tmp_path / "x.md", tmp_path / "y.json"], globs=list(ow.SCRATCH))
-    r = ow.run_worker(cfg_for(s.url), task="t", system="s", cwd=tmp_path, scope=scope)
+    scope = FileScope(base=tmp_path, writes=[tmp_path / "x.md", tmp_path / "y.json"], globs=list(SCRATCH))
+    r = run_worker(cfg_for(s.url), task="t", system="s", cwd=tmp_path, scope=scope)
     assert r.ok and len(s.requests) == 2
     fix = s.user(1)
     assert "../evil.md: not a file you may write" in fix and "_state/ledger.jsonl" in fix and "not valid JSON" in fix
@@ -138,10 +132,91 @@ def test_only_allowed_paths_are_written_and_a_bad_answer_is_corrected_once(tmp_p
     assert (tmp_path / "_work" / "notes.md").is_file()
 
 
+def test_a_json_file_is_written_from_its_json_value(tmp_path, fake):
+    """Under Ollama's grammar a .json file's content is its object (no JSON text escaped in a string); a .md file's
+    content stays text, and an object for it is sent back."""
+    def responder(body, n):
+        files = [{"path": "a.json", "content": {"claims": [{"id": "C1", "n": 2}]}},
+                 {"path": "b.jsonl", "content": [{"k": 1}, {"k": 2}]}, {"path": "c.md", "content": "# c"}]
+        if n == 1:
+            files.append({"path": "d.md", "content": {"not": "text"}})
+        content = json.dumps({"files": files, "note": "ok"})
+        return 200, {"model": "m", "message": {"role": "assistant", "content": content}, "done": True,
+                     "done_reason": "stop", "prompt_eval_count": 10, "eval_count": 5}
+    s = fake(responder)
+    names = ("a.json", "b.jsonl", "c.md", "d.md")
+    scope = FileScope(base=tmp_path, writes=[tmp_path / x for x in names])
+    r = run_worker(cfg_for(s.url), task="t", system="s", cwd=tmp_path, scope=scope)
+    assert "its JSON object itself, not a string" in s.user(0)
+    assert s.requests[0]["format"]["properties"]["files"]["items"]["properties"]["content"]["anyOf"][1] == {"type": "object"}
+    assert "d.md: its content must be the file's text" in s.user(1)
+    assert json.loads((tmp_path / "a.json").read_text()) == {"claims": [{"id": "C1", "n": 2}]}
+    assert [json.loads(x) for x in (tmp_path / "b.jsonl").read_text().splitlines()] == [{"k": 1}, {"k": 2}]
+    assert r.ok and len(s.requests) == 2 and (tmp_path / "c.md").read_text() == "# c\n"
+
+
+def test_optional_fields_are_sent_in_place_and_their_nulls_dropped(tmp_path, fake):
+    """A grammar writes required properties first and optional ones after the last of them (live: {"a", "c", "b"});
+    sent required-but-nullable, an optional field comes in its place, and a null one is taken out of the file."""
+    gap = {"type": "object", "additionalProperties": False,
+           "properties": {"id": {"type": "string"}, "move": {"enum": ["add-evidence", "kind"]},
+                          "move_reason": {"type": "string"}, "not_done": {"type": "array", "items": {"type": "string"}},
+                          "source_check": {"anyOf": [
+                              {"type": "object", "properties": {"key": {"type": "string"}, "where": {"type": "string"}},
+                               "required": ["key"]},
+                              {"type": "array", "items": {"type": "object", "properties": {
+                                  "key": {"type": "string"}, "where": {"type": "string"}}, "required": ["key"]}}]}},
+           "required": ["id", "move"]}
+    schema = {"type": "object", "properties": {"gaps": {"type": "array", "items": gap}}, "required": ["gaps"]}
+
+    def responder(body, n):
+        ans = {"answer": {"gaps": [
+            {"id": "GAP_001", "move": "kind", "move_reason": "the collision is a kind contrast", "not_done": None,
+             "source_check": {"key": "p1", "where": None}},
+            {"id": "GAP_002", "move": "add-evidence", "move_reason": None, "not_done": ["p2#N1"],
+             "source_check": [{"key": "p2", "where": "Results"}, {"key": "p3", "where": None}]}]}, "note": "ok"}
+        return 200, {"model": "m", "message": {"role": "assistant", "content": json.dumps(ans)}, "done": True,
+                     "done_reason": "stop", "prompt_eval_count": 10, "eval_count": 5}
+    s = fake(responder)
+    out = tmp_path / "gaps.json"
+    r = run_worker(cfg_for(s.url), task="t", system="s", cwd=tmp_path,
+                   scope=FileScope(base=tmp_path, writes=[out], schema=schema))
+    assert r.ok
+    sent = s.requests[0]["format"]["properties"]["answer"]["properties"]["gaps"]["items"]
+    assert sent["required"] == ["id", "move", "move_reason", "not_done", "source_check"]
+    assert sent["properties"]["move_reason"] == {"anyOf": [{"type": "string"}, {"type": "null"}]}
+    assert sent["properties"]["move"] == {"enum": ["add-evidence", "kind"]}                   # required: as it was
+    branch = sent["properties"]["source_check"]["anyOf"][0]["anyOf"][0]
+    assert branch["required"] == ["key", "where"] and branch["properties"]["where"]["anyOf"][1] == {"type": "null"}
+    g1, g2 = json.loads(out.read_text())["gaps"]
+    assert g1 == {"id": "GAP_001", "move": "kind", "move_reason": "the collision is a kind contrast",
+                  "source_check": {"key": "p1"}}
+    assert g2 == {"id": "GAP_002", "move": "add-evidence", "not_done": ["p2#N1"],
+                  "source_check": [{"key": "p2", "where": "Results"}, {"key": "p3"}]}
+
+
+def test_in_order_keeps_a_schema_without_optional_fields():
+    s = {"type": "object", "properties": {"a": {"type": "string"}}, "required": ["a"], "additionalProperties": False}
+    assert chat.in_order(s) == s and chat.in_order({"type": "string"}) == {"type": "string"}
+    m = {"type": "object", "additionalProperties": {"type": "object", "properties": {"x": {"type": "string"}}}}
+    assert chat.in_order(m)["additionalProperties"]["required"] == ["x"]
+    assert chat.drop_nulls({"k": {"x": None}}, m) == {"k": {}}
+
+
+def test_a_strict_api_keeps_the_text_envelope():
+    """Anthropic's and OpenAI's strict outputs cannot hold an open object: their envelope stays text-only."""
+    from harness.providers.claude import ClaudeProvider
+    from harness.providers.gpt import GPTProvider
+    scope = FileScope(base=Path("."), writes=[Path("x.json")])
+    assert not ClaudeProvider.grammar and not GPTProvider.grammar
+    assert chat.answer_format(scope) == chat.RESPONSE_SCHEMA
+    assert "its JSON object itself" not in chat.build_message("t", scope)
+
+
 def test_still_unusable_after_the_correction_is_a_model_output_failure(tmp_path, fake):
     s = fake(lambda body, n: answer([("y.json", "{bad")]))
-    scope = ow.FileScope(base=tmp_path, writes=[tmp_path / "y.json"])
-    r = ow.run_worker(cfg_for(s.url), task="t", system="s", cwd=tmp_path, scope=scope)
+    scope = FileScope(base=tmp_path, writes=[tmp_path / "y.json"])
+    r = run_worker(cfg_for(s.url), task="t", system="s", cwd=tmp_path, scope=scope)
     assert not r.ok and r.error_category == "model_output" and len(s.requests) == 2
 
 
@@ -152,11 +227,11 @@ def test_the_prompt_carries_the_files_and_lookups_but_not_forbidden_ones(tmp_pat
     (tmp_path / "dir" / "b.json").write_text('{"beta": 1}')
     (tmp_path / "secret.json").write_text("SECRET")
     (tmp_path / "draft.json").write_text('{"draft": "OLD"}')
-    scope = ow.FileScope(base=tmp_path, reads=[("a.md", tmp_path / "a.md"), ("dir", tmp_path / "dir"),
+    scope = FileScope(base=tmp_path, reads=[("a.md", tmp_path / "a.md"), ("dir", tmp_path / "dir"),
                                                ("secret.json", tmp_path / "secret.json")],
                          writes=[tmp_path / "draft.json"], forbid=[tmp_path / "secret.json"],
                          lookups=[("ideate_tools.py list-papers RD", "paper_001 A title")])
-    ow.run_worker(cfg_for(s.url), task="the task", system="s", cwd=tmp_path, scope=scope)
+    run_worker(cfg_for(s.url), task="the task", system="s", cwd=tmp_path, scope=scope)
     msg = s.user()
     assert msg.startswith("the task") and "=== FILE: a.md ===\nALPHA" in msg and '"beta": 1' in msg
     assert "SECRET" not in msg and "OLD" in msg and "left by an earlier run" in msg   # context, not an answer to keep
@@ -166,17 +241,17 @@ def test_the_prompt_carries_the_files_and_lookups_but_not_forbidden_ones(tmp_pat
 def test_a_prompt_too_long_for_the_context_is_refused_before_sending(tmp_path, fake):
     s = fake(lambda body, n: answer([]))
     (tmp_path / "big.md").write_text("x" * 50000)
-    scope = ow.FileScope(base=tmp_path, reads=[("big.md", tmp_path / "big.md")])
-    r = ow.run_worker(cfg_for(s.url, num_ctx=2000), task="t", system="s", cwd=tmp_path, scope=scope)
+    scope = FileScope(base=tmp_path, reads=[("big.md", tmp_path / "big.md")])
+    r = run_worker(cfg_for(s.url, num_ctx=2000), task="t", system="s", cwd=tmp_path, scope=scope)
     assert not r.ok and r.error_category == "budget" and "num_ctx" in r.error and not s.requests
 
 
 def test_a_silently_cut_prompt_or_answer_is_detected(tmp_path, fake):
     s = fake(lambda body, n: answer([("x.md", "ok")], tin=8192))
-    r = ow.run_worker(cfg_for(s.url), task="t", system="s", cwd=tmp_path, scope=ow.FileScope(base=tmp_path))
+    r = run_worker(cfg_for(s.url), task="t", system="s", cwd=tmp_path, scope=FileScope(base=tmp_path))
     assert not r.ok and r.error_category == "budget" and "filled the whole context" in r.error
     s2 = fake(lambda body, n: answer([("x.md", "ok")], done_reason="length"))
-    r2 = ow.run_worker(cfg_for(s2.url), task="t", system="s", cwd=tmp_path, scope=ow.FileScope(base=tmp_path))
+    r2 = run_worker(cfg_for(s2.url), task="t", system="s", cwd=tmp_path, scope=FileScope(base=tmp_path))
     assert not r2.ok and r2.error_category == "budget" and "num_predict" in r2.error
 
 
@@ -184,20 +259,20 @@ def test_a_silently_cut_prompt_or_answer_is_detected(tmp_path, fake):
                                              (429, "external_service"), (400, "tool_invocation")])
 def test_http_failures_are_classified(tmp_path, fake, status, category):
     s = fake(lambda body, n: (status, {"error": "nope"}))
-    r = ow.run_worker(cfg_for(s.url), task="t", system="s", cwd=tmp_path, scope=ow.FileScope(base=tmp_path))
+    r = run_worker(cfg_for(s.url), task="t", system="s", cwd=tmp_path, scope=FileScope(base=tmp_path))
     assert not r.ok and r.error_category == category
 
 
 def test_an_unreachable_server_is_external(tmp_path):
-    r = ow.run_worker(cfg_for("http://127.0.0.1:9"), task="t", system="s", cwd=tmp_path,
-                      scope=ow.FileScope(base=tmp_path), timeout=5)
+    r = run_worker(cfg_for("http://127.0.0.1:9"), task="t", system="s", cwd=tmp_path,
+                   scope=FileScope(base=tmp_path), timeout=5)
     assert not r.ok and r.error_category in ("external_service", "timeout")
 
 
 def test_a_step_that_needs_commands_run_by_the_worker_is_refused_at_once(tmp_path, fake):
     s = fake(lambda body, n: answer([]))
-    scope = ow.FileScope(base=tmp_path, unavailable=["ideate_tools.py questions-prefill"])
-    r = ow.run_worker(cfg_for(s.url), task="t", system="s", cwd=tmp_path, scope=scope)
+    scope = FileScope(base=tmp_path, unavailable=["ideate_tools.py questions-prefill"])
+    r = run_worker(cfg_for(s.url), task="t", system="s", cwd=tmp_path, scope=scope)
     assert not r.ok and r.error_category == "environment" and "questions-prefill" in r.error and not s.requests
 
 
@@ -283,7 +358,7 @@ def test_executor_runs_the_lookups_and_refuses_worker_commands(tmp_path, fake, m
         "task": "Write the review.", "rules": [], "writes": [str(ctx.rd / "r.md")],
         "commands": ["ideate_tools.py list-papers", "ideate_tools.py trace"]}}]}}]})[0]
     RecipeExecutor().execute(ctx, "B2", recipe, "main", None, 1)
-    assert ran == ["ideate_tools.py list-papers $RD --abstract-chars 300"]
+    assert ran == ["ideate_tools.py list-papers $RD --file shortlist --slice 0:80 --abstract-chars 160"]
     assert "paper_001 Label smoothing" in s.user(0)
     assert "You have not written" in s.user()                 # it wrote nothing: asked again in the same history
     n = len(s.requests)
@@ -293,6 +368,68 @@ def test_executor_runs_the_lookups_and_refuses_worker_commands(tmp_path, fake, m
     res = RecipeExecutor().execute(ctx, "B3.5", recipe2, "main", None, 1)
     assert not res.ok and len(s.requests) == n
     assert "questions-prefill" in res.errors[0].error_message
+
+
+def test_a_check_that_finds_errors_shows_its_findings(tmp_path, fake, monkeypatch):
+    """A check exits 1 exactly when it has findings: the worker gets all of them, not the last lines of the output
+    (B5 round 1 pasted `(exit 1) ], "notes": [] }` and round 2 never fixed what argument-check reported)."""
+    s = fake(lambda body, n: answer([]))
+    ctx = ctx_for(tmp_path, cfg_for(s.url))
+    findings = "".join(f"ERROR C{i} C1: finding number {i}\n" for i in range(1, 9)) + "argument-check: 8 error(s) - REVISE\n"
+    monkeypatch.setattr(ctx.skill, "run", lambda cmd, subs, timeout=None: CommandResult(cmd, [], 1, findings))
+    recipe = parse({"recipes": [{"unit": "B5", "scope": "generation", "phases": {"round1": [{"write": {
+        "task": "Paste the checks.", "rules": [], "writes": [str(ctx.rd / "log.md")],
+        "commands": ["ideate_tools.py argument-check"]}}]}}]})[0]
+    (ctx.rd / "gen_1").mkdir()
+    RecipeExecutor().execute(ctx, "B5", recipe, "round1", 1, 1)
+    prompt = s.user(0)
+    assert "(exit 1: it reports findings)" in prompt
+    assert "ERROR C1 C1: finding number 1" in prompt and "argument-check: 8 error(s) - REVISE" in prompt
+
+
+def test_a_may_write_file_is_allowed_but_not_required(tmp_path, fake):
+    """P2's revision may leave step8_hypothesis.md as it is (a design change alone): allowed, never asked for."""
+    s = fake(lambda body, n: answer([("arg.json", '{"a": 1}')]))
+    ctx = ctx_for(tmp_path, cfg_for(s.url))
+    recipe = parse({"recipes": [{"unit": "B2", "phases": {"main": [{"write": {
+        "task": "Revise.", "rules": [], "writes": ["$RD/arg.json"], "may_write": ["$RD/step8.md", "/etc/passwd"]}}]}}]})[0]
+    res = RecipeExecutor().execute(ctx, "B2", recipe, "main", None, 1)
+    assert res.ok and len(s.requests) == 1                          # step8.md not written: not asked for
+    assert f"{ctx.rd}/step8.md" in s.user(0) and "/etc/passwd" not in s.user(0)
+
+
+def test_an_independent_reader_that_wrote_nothing_is_asked_once_more_afresh(tmp_path, fake):
+    """An isolated reader has no session to resume: it is asked again in a new conversation, as blind as the first
+    time - once; a second empty answer fails the step."""
+    replies = iter([answer([]), answer([("restatement_2.json", '{"claim": "x"}')])])
+    s = fake(lambda body, n: next(replies))
+    ctx = ctx_for(tmp_path, cfg_for(s.url))
+    (ctx.rd / "gen_1").mkdir()
+    (ctx.rd / "gen_1" / "idea_draft.json").write_text('{"Name": "n"}')
+    recipe = parse({"recipes": [{"unit": "B5", "scope": "generation", "phases": {"round3": [{"write": {
+        "task": "Restate this idea as a blind reader.", "rules": [], "isolated": True,
+        "reads": ["$GEN/idea_draft.json"], "writes": ["$GEN/restatement_2.json"]}}]}}]})[0]
+    res = RecipeExecutor().execute(ctx, "B5", recipe, "round3", 1, 1)
+    assert res.ok and len(s.requests) == 2
+    assert json.loads((ctx.rd / "gen_1" / "restatement_2.json").read_text()) == {"claim": "x"}
+    second = s.requests[1]["messages"]
+    assert [m["role"] for m in second] == ["system", "user"]            # a new conversation, not a resume
+    assert "wrote no file" in second[-1]["content"] and "./restatement_2.json now" in second[-1]["content"]
+    s2 = fake(lambda body, n: answer([]))
+    (tmp_path / "b").mkdir()
+    ctx2 = ctx_for(tmp_path / "b", cfg_for(s2.url))
+    (ctx2.rd / "gen_1").mkdir()
+    (ctx2.rd / "gen_1" / "idea_draft.json").write_text('{"Name": "n"}')
+    res2 = RecipeExecutor().execute(ctx2, "B5", recipe, "round3", 1, 1)
+    assert not res2.ok and len(s2.requests) == 2
+
+
+def test_a_long_lookup_keeps_its_head_and_its_tail():
+    from harness.executors import _clip
+    text = "HEADER\n" + "x" * 50000 + "\nSUMMARY"
+    out = _clip(text, 1000)
+    assert out.startswith("HEADER") and out.endswith("SUMMARY") and "characters cut" in out and len(out) < 1100
+    assert _clip("short", 1000) == "short"
 
 
 # ------------------------------------------------------------------------------------------------- schema answers
@@ -306,8 +443,8 @@ def test_a_step_with_a_schema_is_decoded_as_that_object(tmp_path, fake):
     schema = {"type": "object", "properties": {"flat": {"type": "object"}}, "required": ["flat"]}
     s = fake(lambda body, n: reply({"answer": {"flat": {"Q1": ["a", "b", "c"]}}, "note": "filled"}))
     target = tmp_path / "_state" / "A1" / "strategy_fill.json"
-    scope = ow.FileScope(base=tmp_path, writes=[target], schema=schema)
-    r = ow.run_worker(cfg_for(s.url), task="Fill it", system="s", cwd=tmp_path, scope=scope)
+    scope = FileScope(base=tmp_path, writes=[target], schema=schema)
+    r = run_worker(cfg_for(s.url), task="Fill it", system="s", cwd=tmp_path, scope=scope)
     assert r.ok and r.text == "filled"
     assert s.requests[0]["format"]["properties"]["answer"] == schema
     assert '{"answer": <the content of' in s.user(0) and '"files"' not in s.user(0)
@@ -349,8 +486,8 @@ def test_one_file_keyed_by_its_name_is_unwrapped(tmp_path, fake):
     """A batch schema keyed by its items (A7.D: one record per citation key) with one item: the record is the file."""
     s = fake(lambda body, n: reply({"answer": {"smith2020": {"summary": {"problem": "p"}}}, "note": "x"}))
     target = tmp_path / "answers" / "smith2020.json"
-    scope = ow.FileScope(base=tmp_path, writes=[target], schema={"type": "object"})
-    r = ow.run_worker(cfg_for(s.url), task="t", system="s", cwd=tmp_path, scope=scope)
+    scope = FileScope(base=tmp_path, writes=[target], schema={"type": "object"})
+    r = run_worker(cfg_for(s.url), task="t", system="s", cwd=tmp_path, scope=scope)
     assert r.ok and json.loads(target.read_text()) == {"summary": {"problem": "p"}}
 
 
@@ -358,30 +495,30 @@ def test_a_stream_cut_before_done_is_a_dropped_connection_not_an_answer(tmp_path
     """A proxy that closes a long answer leaves half a JSON object: it is retried as a transport failure, never parsed."""
     s = fake(lambda body, n: (200, {"model": "m", "message": {"role": "assistant", "content": '{"files": [{"pa'},
                                     "done": False}))
-    res, content = ow.chat(cfg_for(s.url), [{"role": "user", "content": "x"}], timeout=30)
+    res, content = ow.OllamaProvider(cfg_for(s.url)).chat([{"role": "user", "content": "x"}], timeout=30)
     assert not res.ok and res.error_category == "external_service" and "dropped" in res.error and content == ""
 
 
 def test_a_revision_shows_a_file_again_only_where_a_tool_changed_it(tmp_path, fake):
     s = fake(lambda body, n: answer([(str(tmp_path / "x.md"), "# mine")]))
-    scope = ow.FileScope(base=tmp_path, writes=[tmp_path / "x.md"])
-    r = ow.run_worker(cfg_for(s.url), task="Write x.md", system="s", cwd=tmp_path, scope=scope)
-    ow.run_worker(cfg_for(s.url), task="fix it", system="s", cwd=tmp_path, scope=scope, resume=r.session_id)
+    scope = FileScope(base=tmp_path, writes=[tmp_path / "x.md"])
+    r = run_worker(cfg_for(s.url), task="Write x.md", system="s", cwd=tmp_path, scope=scope)
+    run_worker(cfg_for(s.url), task="fix it", system="s", cwd=tmp_path, scope=scope, resume=r.session_id)
     assert "as you wrote them" in s.user(1)
     (tmp_path / "x.md").write_text("# mine\nadded by a tool\n")
-    ow.run_worker(cfg_for(s.url), task="fix it", system="s", cwd=tmp_path, scope=scope, resume=r.session_id)
+    run_worker(cfg_for(s.url), task="fix it", system="s", cwd=tmp_path, scope=scope, resume=r.session_id)
     assert "added by a tool" in s.user(2)
 
 
 def test_a_revision_sends_only_the_latest_answer_in_full(tmp_path, fake):
     """Each answer writes the whole file again: the earlier ones are cut to a line, so revisions do not grow the prompt."""
     s = fake(lambda body, n: answer([(str(tmp_path / "x.md"), f"# version {n}")]))
-    scope = ow.FileScope(base=tmp_path, writes=[tmp_path / "x.md"])
-    r = ow.run_worker(cfg_for(s.url), task="Write x.md", system="s", cwd=tmp_path, scope=scope)
+    scope = FileScope(base=tmp_path, writes=[tmp_path / "x.md"])
+    r = run_worker(cfg_for(s.url), task="Write x.md", system="s", cwd=tmp_path, scope=scope)
     for _ in range(2):
-        ow.run_worker(cfg_for(s.url), task="fix it", system="s", cwd=tmp_path, scope=scope, resume=r.session_id)
+        run_worker(cfg_for(s.url), task="fix it", system="s", cwd=tmp_path, scope=scope, resume=r.session_id)
     said = [m["content"] for m in s.requests[-1]["messages"] if m["role"] == "assistant"]
-    assert said[:-1] == [ow.SUPERSEDED] and "version" in said[-1]
+    assert said[:-1] == [chat.SUPERSEDED] and "version" in said[-1]
     assert [m["content"] for m in s.requests[-1]["messages"] if m["role"] == "user"][0].startswith("Write x.md")
 
 
@@ -423,8 +560,8 @@ def test_a_long_prompt_is_read_into_the_cache_before_the_call(tmp_path, fake, mo
             time.sleep(1.0)                                  # reading the long prompt: the probe gives up first
         return answer([("x.md", "ok")])
     s = fake(responder)
-    r = ow.run_worker(cfg_for(s.url), task="Write x.md from this: " + "words " * 50, system="# Unit X\n", cwd=tmp_path,
-                      scope=ow.FileScope(base=tmp_path, writes=[tmp_path / "x.md"]), say=said.append)
+    r = run_worker(cfg_for(s.url), task="Write x.md from this: " + "words " * 50, system="# Unit X\n", cwd=tmp_path,
+                   scope=FileScope(base=tmp_path, writes=[tmp_path / "x.md"]), say=said.append)
     assert r.ok, r.error
     assert [q["options"]["num_predict"] for q in s.requests] == [1, 1, 16384]
     assert s.requests[0]["messages"] == s.requests[2]["messages"]       # the probe reads the call's own prompt
@@ -433,8 +570,8 @@ def test_a_long_prompt_is_read_into_the_cache_before_the_call(tmp_path, fake, mo
 
 def test_a_short_prompt_is_sent_at_once(tmp_path, fake):
     s = fake(lambda body, n: answer([("x.md", "ok")]))
-    r = ow.run_worker(cfg_for(s.url), task="Write x.md", system="# Unit X\n", cwd=tmp_path,
-                      scope=ow.FileScope(base=tmp_path, writes=[tmp_path / "x.md"]))
+    r = run_worker(cfg_for(s.url), task="Write x.md", system="# Unit X\n", cwd=tmp_path,
+                   scope=FileScope(base=tmp_path, writes=[tmp_path / "x.md"]))
     assert r.ok and [q["options"]["num_predict"] for q in s.requests] == [16384]
 
 
@@ -443,7 +580,7 @@ def test_a_silent_server_is_a_timeout_named_as_a_silence(tmp_path, fake, monkeyp
     import time
     monkeypatch.setattr(ow, "STREAM_IDLE_S", 0.3)
     s = fake(lambda body, n: (time.sleep(1.0), answer([("x.md", "x")]))[1])
-    res, _ = ow.chat(cfg_for(s.url), [{"role": "user", "content": "x"}], timeout=30)
+    res, _ = ow.OllamaProvider(cfg_for(s.url)).chat([{"role": "user", "content": "x"}], timeout=30)
     assert not res.ok and res.error_category == "timeout" and "silent for 0s" in res.error and "within 30" not in res.error
 
 
@@ -453,7 +590,7 @@ def test_a_worker_writes_only_the_scratch_its_unit_declares(tmp_path):
     ctx = ctx_for(tmp_path, cfg_for("http://localhost:1"))
     globs = RecipeExecutor._scratch(ctx, "B3.5")
     assert globs == ["knowledge/_work/B35/**", "_state/harness/decisions/**"]
-    scope = ow.FileScope(base=tmp_path, globs=globs)
+    scope = FileScope(base=tmp_path, globs=globs)
     assert scope.target("_work/B35/notes_Q_003.json") is None
     assert scope.target("knowledge/_work/B35/s9_Q_003.json") is not None
 

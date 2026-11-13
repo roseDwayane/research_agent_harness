@@ -191,8 +191,8 @@ def session_config(cfg: dict, rd: Path) -> dict:
         temperature = 1.0
     engine = old_engine if old_engine.get("llm_model") not in (None, "", "unrecorded") else {
         "version": _engine_version(),
-        # the model the harness ran the Units with (it exports IDEATE_LLM_MODEL); claude -p sets no temperature, so
-        # the API default applies (1.0, the only value extended thinking allows)
+        # the model the harness ran the Units with (it exports IDEATE_LLM_MODEL); the API workers set no
+        # temperature, so the API default applies (1.0, the only value extended thinking allows)
         "llm_model": model or "unrecorded", "llm_temperature": temperature}
     out.update({
         "session_id": session_id_of(cfg),
