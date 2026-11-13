@@ -632,3 +632,29 @@ def test_declared_data_roots_reach_the_skill_commands(tmp_path):
     assert HarnessConfig.load(toml).env()["IDEATE_DATA_ROOTS"] == os.pathsep.join([str(Path("~/a").expanduser()), "/b"])
     plain = HarnessConfig(worker="ollama", model="qwen3.8")
     assert plain.env().get("IDEATE_DATA_ROOTS") == os.environ.get("IDEATE_DATA_ROOTS")
+
+
+def test_a_file_that_is_not_there_is_said_and_every_message_is_logged_uncut(tmp_path, fake):
+    """A read that does not exist is named in the prompt (never skipped in silence), and the call's record keeps
+    every message as it was sent - what a model was shown is what a failure is traced to, on any API."""
+    s = fake(lambda body, n: answer([("out.md", "x")]))
+    long_text = "HEAD " + "middle " * 3000 + " TAIL"                    # longer than the summary's head + tail
+    (tmp_path / "big.md").write_text(long_text)
+    (tmp_path / "hidden.json").write_text("SECRET")
+    scope = FileScope(base=tmp_path, reads=[("big.md", tmp_path / "big.md"), ("gone.json", tmp_path / "gone.json"),
+                                               ("hidden.json", tmp_path / "hidden.json"),
+                                               ("blind.json", tmp_path / "blind.json")],
+                      forbid=[tmp_path / "hidden.json", tmp_path / "blind.json"], writes=[tmp_path / "out.md"])
+    said, log = [], tmp_path / "log"
+    r = run_worker(cfg_for(s.url, num_ctx=65536), task="the task", system="the rules", cwd=tmp_path, scope=scope,
+                   log_dir=log, label="main.00.write.a1", say=said.append)
+    assert r.ok
+    msg = s.user()
+    assert "=== FILE: gone.json - NOT THERE" in msg and "blind.json" not in msg and "SECRET" not in msg
+    assert any("gone.json" in x for x in said) and chat.missing_reads(scope) == ["gone.json"]
+    summary = json.loads((log / "main.00.write.a1.ollama.1.json").read_text())
+    full = json.loads((log / "main.00.write.a1.ollama.1.messages.json").read_text())
+    assert summary["missing_reads"] == ["gone.json"] and summary["messages"] == "main.00.write.a1.ollama.1.messages.json"
+    assert [m["role"] for m in full["messages"]] == ["system", "user"] and full["messages"][0]["content"] == "the rules"
+    assert full["messages"][1]["content"] == msg and long_text in msg          # the whole prompt, the middle included
+    assert len(summary["request_head"]) + len(summary["request_tail"]) < len(msg) and full["answer"]

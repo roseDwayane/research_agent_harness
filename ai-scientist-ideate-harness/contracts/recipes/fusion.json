@@ -317,7 +317,10 @@
       "run": "ideate_tools.py env-probe $RD --write"
      },
      {
-      "run": "ideate_tools.py lens-brief $RD"
+      "run": "ideate_tools.py lens-brief $RD",
+      "makes": [
+       "$RD/knowledge/_work/B1/brief.md"
+      ]
      },
      {
       "write": {
@@ -478,7 +481,10 @@
    "phases": {
     "main": [
      {
-      "run": "ideate_tools.py recon-digest $RD B3"
+      "run": "ideate_tools.py recon-digest $RD B3",
+      "makes": [
+       "$RD/knowledge/_work/digest/B3.md"
+      ]
      },
      {
       "write": {
@@ -562,7 +568,10 @@
    "phases": {
     "main": [
      {
-      "run": "ideate_tools.py recon-digest $RD A7.R2"
+      "run": "ideate_tools.py recon-digest $RD A7.R2",
+      "makes": [
+       "$RD/knowledge/_work/digest/A7.R2.md"
+      ]
      },
      {
       "run": "ideate_tools.py unit-begin $RD A7.R2"
@@ -615,7 +624,10 @@
    "phases": {
     "main": [
      {
-      "run": "ideate_tools.py recon-digest $RD A7.R3"
+      "run": "ideate_tools.py recon-digest $RD A7.R3",
+      "makes": [
+       "$RD/knowledge/_work/digest/A7.R3.md"
+      ]
      },
      {
       "run": "ideate_tools.py unit-begin $RD A7.R3"
@@ -653,7 +665,10 @@
    "phases": {
     "main": [
      {
-      "run": "ideate_tools.py recon-digest $RD B2"
+      "run": "ideate_tools.py recon-digest $RD B2",
+      "makes": [
+       "$RD/knowledge/_work/digest/B2.md"
+      ]
      },
      {
       "run": "ideate_tools.py unit-begin $RD B2"

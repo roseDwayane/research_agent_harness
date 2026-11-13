@@ -44,6 +44,19 @@ def test_recipe_validation_catches_kind_and_command_mistakes(reg):
     assert ("P1", "R-SCOPE") in codes and ("P1", "R-PLACEHOLDER") in codes
 
 
+def test_a_file_a_model_step_reads_has_a_declared_producer(reg):
+    """R-READS: a registry artifact, a write step's file or a command's `makes` - a path nothing makes is a typo or
+    a spec gap, and a chat model would work without it."""
+    def codes(read, run=None):
+        steps = ([run] if run else []) + [{"write": {"task": "t", "reads": [read], "writes": ["$RD/lens.json"]}}]
+        r = parse({"recipes": [{"unit": "B1", "scope": "topic", "phases": {"main": steps}}]})
+        return [f["message"] for f in rcp.validate({x.unit: x for x in r}, reg) if f["code"] == "R-READS"]
+    assert codes("$RD/step1_protocol.md") == [] and codes("$TOPIC") == []              # registry artifacts
+    assert len(codes("$RD/knowledge/_work/B1/breif.md")) == 1                           # a typo
+    made = {"run": "ideate_tools.py lens-brief $RD", "makes": ["$RD/knowledge/_work/B1/brief.md"]}
+    assert codes("$RD/knowledge/_work/B1/brief.md", made) == []
+
+
 def test_rules_sections_are_extracted():
     a1p = rules_text(MODULE, "references/search/A1-frame.md#a1p")
     assert a1p.startswith("## A1.p") and "## A1.q" not in a1p

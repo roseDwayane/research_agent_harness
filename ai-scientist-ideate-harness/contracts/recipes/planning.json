@@ -17,7 +17,10 @@
       }
      },
      {
-      "run": "ideate_tools.py question-take $RD $Q --gen $K"
+      "run": "ideate_tools.py question-take $RD $Q --gen $K",
+      "makes": [
+       "$GEN/step7b_problem.md"
+      ]
      }
     ]
    },
@@ -30,7 +33,10 @@
    "phases": {
     "main": [
      {
-      "run": "ideate_tools.py hypo-prefill $GEN"
+      "run": "ideate_tools.py hypo-prefill $GEN",
+      "makes": [
+       "$GEN/p1_prefill.json"
+      ]
      },
      {
       "write": {
@@ -73,7 +79,10 @@
     ],
     "revise": [
      {
-      "run": "ideate_tools.py hypo-prefill $GEN"
+      "run": "ideate_tools.py hypo-prefill $GEN",
+      "makes": [
+       "$GEN/p1_prefill.json"
+      ]
      },
      {
       "write": {
@@ -230,7 +239,10 @@
    "phases": {
     "main": [
      {
-      "run": "ideate_tools.py tree-prefill $GEN"
+      "run": "ideate_tools.py tree-prefill $GEN",
+      "makes": [
+       "$GEN/decision_tree.draft.json"
+      ]
      },
      {
       "write": {
@@ -264,7 +276,10 @@
     ],
     "revise": [
      {
-      "run": "ideate_tools.py tree-prefill $GEN"
+      "run": "ideate_tools.py tree-prefill $GEN",
+      "makes": [
+       "$GEN/decision_tree.draft.json"
+      ]
      },
      {
       "write": {
@@ -314,7 +329,10 @@
    "phases": {
     "main": [
      {
-      "run": "ideate_tools.py attack-prefill $GEN"
+      "run": "ideate_tools.py attack-prefill $GEN",
+      "makes": [
+       "$GEN/attack_plan.draft.json"
+      ]
      },
      {
       "write": {
@@ -365,7 +383,10 @@
    "phases": {
     "main": [
      {
-      "run": "ideate_tools.py pack-prefill $GEN"
+      "run": "ideate_tools.py pack-prefill $GEN",
+      "makes": [
+       "$GEN/packaging.draft.json"
+      ]
      },
      {
       "write": {
@@ -435,7 +456,10 @@
       }
      },
      {
-      "run": "ideate_tools.py novelty-lookup $GEN"
+      "run": "ideate_tools.py novelty-lookup $GEN",
+      "makes": [
+       "$GEN/_work/novelty_lookups.md"
+      ]
      },
      {
       "write": {

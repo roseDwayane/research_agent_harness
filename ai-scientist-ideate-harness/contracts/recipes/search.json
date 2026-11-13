@@ -71,7 +71,10 @@
    "phases": {
     "main": [
      {
-      "run": "ideate_tools.py frame strategy-brief $RD"
+      "run": "ideate_tools.py frame strategy-brief $RD",
+      "makes": [
+       "$RD/_state/A1/strategy_brief.md"
+      ]
      },
      {
       "write": {
@@ -103,7 +106,10 @@
     ],
     "revise": [
      {
-      "run": "ideate_tools.py frame strategy-brief $RD"
+      "run": "ideate_tools.py frame strategy-brief $RD",
+      "makes": [
+       "$RD/_state/A1/strategy_brief.md"
+      ]
      },
      {
       "write": {
@@ -150,7 +156,10 @@
       "capture": {
        "name": "N",
        "regex": "brief_r(\\d+)\\.md"
-      }
+      },
+      "makes": [
+       "$RD/_state/A1e/brief_r$N.md"
+      ]
      },
      {
       "write": {
@@ -172,7 +181,10 @@
      },
      {
       "run": "ideate_tools.py frame set-evaluation $RD $RD/_state/A1e/round_$N.json",
-      "submit": true
+      "submit": true,
+      "makes": [
+       "$RD/step1_protocol_evaluation.md"
+      ]
      }
     ]
    },
@@ -253,7 +265,10 @@
    "phases": {
     "main": [
      {
-      "run": "ideate_tools.py search-check $RD"
+      "run": "ideate_tools.py search-check $RD",
+      "makes": [
+       "$RD/_state/A2c/brief.md"
+      ]
      },
      {
       "write": {
@@ -286,7 +301,10 @@
     ],
     "replan": [
      {
-      "run": "ideate_tools.py frame replan-brief $RD"
+      "run": "ideate_tools.py frame replan-brief $RD",
+      "makes": [
+       "$RD/_state/A2c/replan_brief.md"
+      ]
      },
      {
       "write": {
