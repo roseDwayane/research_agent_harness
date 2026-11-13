@@ -2828,15 +2828,57 @@ def settle_shared_terms(arg: dict) -> list[str]:
     return notes
 
 
+def settle_rival_accounts(arg: dict, question: dict) -> list[str]:
+    """C26's mechanical half, done by code: a rival account is one the question hands over (question.json
+    rival_accounts) - an id that is not there names no account. Such a rival is the study's own (P1-gap2hypo.md:
+    "add them yourself (no `account`)"), so its `account` is taken off and the rival stays; a set_aside entry for an
+    account that does not exist sets nothing aside and is dropped. A model wrote RA3 and RA4 beside the handed-over
+    RA1 and RA2 (qwen3.8, EEG run gen_2), and the finding could only be fixed by guessing which file to edit. What
+    stays the claim's own (C26 still checks it): every handed-over account is a rival or set aside with a why.
+    -> what changed, one line per claim"""
+    known = {a.get("id") for a in (question or {}).get("rival_accounts") or [] if isinstance(a, dict)}
+    notes = []
+    if not known:
+        return notes
+    for c in arg.get("claims") or []:
+        if not isinstance(c, dict) or c.get("primary") is not True:
+            continue
+        off = []
+        for r in c.get("rivals") or []:
+            if isinstance(r, dict) and r.get("account") and r["account"] not in known:
+                off.append(f"{r.get('id')}: {r.pop('account')}")
+        d = c.get("derivation")
+        gone = []
+        if isinstance(d, dict) and isinstance(d.get("set_aside"), list):
+            keep = [x for x in d["set_aside"] if not (isinstance(x, dict) and x.get("account") and x["account"] not in known)]
+            gone = [x.get("account") for x in d["set_aside"] if x not in keep]
+            d["set_aside"] = keep
+        if off or gone:
+            notes.append(f"{c.get('id')}: " + "; ".join(
+                ([f"account taken off rival(s) {off} (the question hands over {sorted(known)}: these rivals are the "
+                  "study's own)"] if off else []) + ([f"set_aside {gone} dropped (no such account)"] if gone else [])))
+    return notes
+
+
 def cmd_argument_render(a):
     """argument.json -> argument.md, the tables a person reads. Generated: edit the JSON, not this file. The
-    mechanical part of the construction (settle_shared_terms) is settled in argument.json first."""
+    mechanical parts are settled in argument.json first: the construction's shared terms (settle_shared_terms) and
+    rival accounts the question does not hand over (settle_rival_accounts)."""
     gd = Path(a.gen_dir)
     arg = _load_argument(gd)
     settled = settle_shared_terms(arg)
     if settled:
         write_json(gd / "argument.json", arg)
         print("argument-render: " + "; ".join(settled) + " - settled from the formulas (C18)")
+    qf = gd / "question.json"
+    try:
+        question = read_json(qf) if qf.exists() else {}
+    except Exception:
+        question = {}                       # an unreadable hand-over is hypo-check's finding, not this command's
+    accounts = settle_rival_accounts(arg, question if isinstance(question, dict) else {})
+    if accounts:
+        write_json(gd / "argument.json", arg)
+        print("argument-render: " + "; ".join(accounts) + " - settled from question.json (C26)")
     d = lambda x: x if isinstance(x, dict) else {}
     ls = lambda x: x if isinstance(x, list) else []
     cell = lambda v, n=10_000: _cell(v, n)
