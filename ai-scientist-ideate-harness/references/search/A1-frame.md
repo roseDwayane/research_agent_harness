@@ -406,12 +406,14 @@ Write `$RD/_state/A1/context.json` with:
 - **`expert_domain`**: e.g. "EEG signal processing and BCI decoding" (the persona's specialisation).
 - **`local_environment`** — look before planning; ideas are only useful if their experiments can run *here*:
   `artefacts` (local code and data paths the topic file names — open them; a topic that points at its C source is a
-  different topic once you have read it), `cached_data` (`~/mne_data`, `~/.cache/torch`, `~/.cache/huggingface`,
-  `~/scikit_learn_data`), `packages_present` / `packages_missing` (a quick `$PY -c "import x"` for the two or three
-  libraries the experiments would lean on). Empty lists are fine — they say you looked.
+  different topic once you have read it), `cached_data` (only the data roots the run declares — harness.toml
+  `data_roots`, i.e. `IDEATE_DATA_ROOTS` — and `$RD/datasets`; never a guess at the home directory: a model cache
+  there is no dataset of the topic and differs from machine to machine), `packages_present` / `packages_missing` (a
+  quick `$PY -c "import x"` for the two or three libraries the experiments would lean on). Empty lists are fine — they
+  say you looked.
 - **or `packages`** instead of `local_environment` (the harness's worker, which cannot look): the import names of the
-  libraries this topic's experiments would need. `set-context` imports each one and lists every data root that exists,
-  and writes `local_environment` from what it found — the model names, the code looks.
+  libraries this topic's experiments would need. `set-context` imports each one and lists every declared data root
+  that exists, and writes `local_environment` from what it found — the model names, the code looks.
 
 ### Outputs
 step0 `target_venues`, `expert_domain`, `local_environment`.

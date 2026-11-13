@@ -617,3 +617,18 @@ def test_a_fanout_answer_that_writes_nothing_is_asked_again_in_its_conversation(
     assert res.ok, res.errors
     assert len(s.requests) == 2 and "You have not written" in s.user(1) and "(TBD)" in s.user(1)
     assert (ctx.rd / "questions" / "Q_001.md").read_text().startswith("# (TBD)")
+
+
+def test_declared_data_roots_reach_the_skill_commands(tmp_path):
+    """harness.toml data_roots -> IDEATE_DATA_ROOTS: the only folders env-probe and C23 look at besides <RD>/datasets
+    (one root written as a string is one root, not its letters); none declared: the variable is not set by the run."""
+    toml = tmp_path / "harness.toml"
+    toml.write_text('[harness]\nworker = "ollama"\nmodel = "qwen3.8"\ndata_roots = "~/eeg_data"\n', encoding="utf-8")
+    cfg = HarnessConfig.load(toml)
+    assert cfg.data_roots == ["~/eeg_data"]
+    assert cfg.env()["IDEATE_DATA_ROOTS"] == str(Path("~/eeg_data").expanduser())
+    toml.write_text('[harness]\nworker = "ollama"\nmodel = "qwen3.8"\ndata_roots = ["~/a", "/b"]\n', encoding="utf-8")
+    import os
+    assert HarnessConfig.load(toml).env()["IDEATE_DATA_ROOTS"] == os.pathsep.join([str(Path("~/a").expanduser()), "/b"])
+    plain = HarnessConfig(worker="ollama", model="qwen3.8")
+    assert plain.env().get("IDEATE_DATA_ROOTS") == os.environ.get("IDEATE_DATA_ROOTS")

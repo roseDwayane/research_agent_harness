@@ -99,6 +99,10 @@ Other options:
 - `--from F1 --to F4` runs part of Stage A.
 - `--depth quick` runs without full text and with weak evidence.
 - `--replay` returns recorded network answers instead of calling the services.
+- Local data is declared, never searched for: `data_roots = ["~/mne_data"]` under `[harness]` lists the folders the
+  experiments' data may be in, besides `<RD>/datasets`. Nothing else on the machine is looked at (A1.v, B1's probe,
+  C23's inventory), so a run does not depend on what happens to sit in a home directory, and no file names from it
+  reach a model behind an API. None declared: the ideas plan with no local data.
 
 ## The model Units: the Claude API
 

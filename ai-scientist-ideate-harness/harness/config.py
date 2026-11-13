@@ -87,6 +87,9 @@ class HarnessConfig:
     loop_bounds: dict[str, int] = field(default_factory=lambda: dict(DEFAULT_LOOP_BOUNDS))
     replay: bool = False                         # IDEATE_REPLAY=1: network answers from the recordings
     smoke_cap: int | None = None                 # IDEATE_SMOKE_CAP: every per-source / snowball limit (a smoke test)
+    data_roots: list[str] = field(default_factory=list)   # IDEATE_DATA_ROOTS: the folders the experiments' data may
+                                                 # be in, besides <RD>/datasets (A1.v, B1, C23). Nothing else on the
+                                                 # machine is looked at - none declared: no local data
     dry_run: bool = False                        # FakeSkill + FakeExecutor
     fixtures: Path | None = None                 # dry run: the research folder copied from (default: evals/datasets)
     inject: dict[str, list[str]] = field(default_factory=dict)   # dry run: faults to inject, see fake.py
@@ -98,6 +101,8 @@ class HarnessConfig:
             raise ValueError(f"depth must be one of {DEPTHS}, not {self.depth!r}")
         if self.max_parallel < 1:
             raise ValueError("max_parallel must be >= 1")
+        if isinstance(self.data_roots, str):            # data_roots = "~/mne_data": one root, not its letters
+            self.data_roots = [self.data_roots]
         provider = self.provider_class()              # an unknown worker raises here
         if not self.model:
             self.model = provider.default_model(self)
@@ -133,6 +138,8 @@ class HarnessConfig:
             env["IDEATE_REPLAY"] = "1"
         if self.smoke_cap:
             env["IDEATE_SMOKE_CAP"] = str(int(self.smoke_cap))
+        if self.data_roots:
+            env["IDEATE_DATA_ROOTS"] = os.pathsep.join(str(Path(p).expanduser()) for p in self.data_roots)
         if self.model:                           # recorded as step0 engine.llm_model (scripts/it_legacy.py)
             env.setdefault("IDEATE_LLM_MODEL", self.model)
         return env

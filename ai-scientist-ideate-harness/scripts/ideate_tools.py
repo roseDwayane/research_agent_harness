@@ -2740,8 +2740,10 @@ def _argument_context(gd: Path, idea: dict | None) -> dict:
             ctx["probe"] = isinstance(env, dict) and isinstance(env.get("probe"), dict) and bool(env["probe"])
             roots = env["probe"].get("data_roots") if ctx["probe"] else None
             own = (gd.parent / "datasets").resolve()  # covered file by file below
+            # only the roots this run declares: a stored probe may come from another machine or the older default
+            # roots (a home directory's model caches), which no inventory has to explain
             ctx["data_roots"] = [r for r, children in (roots.items() if isinstance(roots, dict) else [])
-                                 if children and Path(r).expanduser().resolve() != own]
+                                 if children and Path(r).expanduser().resolve() != own and is_declared(r, gd.parent)]
         except Exception:
             pass  # an unreadable config is another command's problem; here it only means "probe unknown"
     ds = gd.parent / "datasets"
@@ -2977,8 +2979,31 @@ def cmd_argument_render(a):
 
 
 # -------------------------------------------------------------------- env-probe
-PROBE_ROOTS = ("~/mne_data", "~/.cache/huggingface/hub", "~/.cache/torch", "~/scikit_learn_data")
+# Where the experiments' data may be: <RD>/datasets, and the roots the run declares (harness.toml `data_roots`, passed
+# on as IDEATE_DATA_ROOTS, os.pathsep-separated). Nothing else on the machine is looked at: what happens to sit in a
+# home directory (a Hugging Face model cache) is no dataset of the topic, differs from machine to machine, and its
+# file names must not be sent to a model behind an API. A run that has data on the disk says where.
+DATA_ROOTS_ENV = "IDEATE_DATA_ROOTS"
 PROBE_MAX_CHILDREN = 200
+
+
+def declared_roots(rd: Path) -> list[str]:
+    """The data roots of this run: the declared ones (IDEATE_DATA_ROOTS), then <RD>/datasets."""
+    said = [x.strip() for x in os.environ.get(DATA_ROOTS_ENV, "").split(os.pathsep) if x.strip()]
+    return list(dict.fromkeys(said + [str(Path(rd) / "datasets")]))
+
+
+def _root_key(root: str) -> str:
+    try:
+        return str(Path(root).expanduser().resolve()).rstrip("/").lower()
+    except (OSError, RuntimeError):
+        return str(root).rstrip("/").lower()
+
+
+def is_declared(root: str, rd: Path) -> bool:
+    """`root` is a declared root or lies below one (a probe from another machine or an older run lists others)."""
+    k = _root_key(root)
+    return any(k == d or k.startswith(d + "/") for d in map(_root_key, declared_roots(rd)))
 
 
 def _package_version(name: str):
@@ -3019,12 +3044,7 @@ def cmd_env_probe(a):
     listed = lambda k: [str(x) for x in (env.get(k) if isinstance(env.get(k), list) else [])]
     split = lambda text: [x.strip() for x in str(text or "").split(",") if x.strip()]
 
-    if split(a.roots):
-        roots = split(a.roots)
-    else:
-        roots = list(PROBE_ROOTS) + [str(rd / "datasets")]
-        # "~/mne_data/MNE-eegbci-data: 109 subjects" / "/tmp, scratch only": the path stops before the punctuation
-        roots += [e.split()[0].rstrip(":,;)") for e in listed("cached_data") if e.strip()[:1] in ("~", "/")]
+    roots = split(a.roots) or declared_roots(rd)   # never a guess at the home directory (declared_roots)
     data_roots, missing_roots = {}, []
     for root in dict.fromkeys(roots):
         path = Path(root).expanduser()
@@ -3256,7 +3276,8 @@ def main():
     add("env-probe", cmd_env_probe, rd,
         (("--packages",), {"default": "", "help": "comma-separated import or distribution names to look for, besides "
                                                    "those listed in local_environment"}),
-        (("--roots",), {"default": "", "help": "comma-separated data roots; replaces the default roots"}),
+        (("--roots",), {"default": "", "help": "comma-separated data roots; replaces the declared ones "
+                                               f"({DATA_ROOTS_ENV}, then <RD>/datasets)"}),
         (("--write",), {"action": "store_true", "help": "store the result as local_environment.probe in step0_session_config.json"}),
         (("--json",), {"action": "store_true"}))
     add("power", cmd_power,
