@@ -263,6 +263,50 @@ def test_only_the_decision_gate_counts_as_a_failed_tree():
     assert weak.tree_failed
 
 
+def test_what_the_conductor_decided_is_written_into_the_idea(tmp_path):
+    """A gate waived with its findings, a revision not made: decided after the model's last round, so code adds the
+    'Coherence unresolved: ...' entries to idea.json's Risk Factors (research-cycle section 5) - once."""
+    from types import SimpleNamespace
+
+    from harness.skill import COHERENCE, CommandResult
+    from harness.steps import GateResult, GenerationAgent, GenerationResult
+    r = CommandResult("ideate_tools.py attack-check gen_1", [], 1,
+                      "ERROR R07: the common-ground paragraph cites no paper\nWARN R09: x\nattack-check: 1 error(s)\n")
+    r.command_template = COHERENCE[2]
+    ok = CommandResult("ideate_tools.py tree-check gen_1", [], 0, "tree-check: 0 error(s)\n")
+    ok.command_template = COHERENCE[1]
+    g = GateResult("GATE-coherence", "gen_1", False, {"findings": []}, [ok, r])
+    assert g.error_lines() == ["R07: the common-ground paragraph cites no paper"]
+    gd = tmp_path / "gen_1"
+    gd.mkdir()
+    idea = {"Name": "n", "Risk Factors and Limitations": ["Single dataset: only one"]}
+    (gd / "idea.json").write_text(json.dumps(idea))
+    said = []
+    ctx = SimpleNamespace(rd=tmp_path, say=said.append)
+    res = GenerationResult(1, "failed", risk_entries=["Coherence unresolved: " + "; ".join(g.error_lines()),
+                                                      "Coherence unresolved: the revision of P2 was not made - why"])
+    GenerationAgent._disclose(ctx, 1, res)
+    risks = json.loads((gd / "idea.json").read_text())["Risk Factors and Limitations"]
+    assert risks == ["Single dataset: only one", "Coherence unresolved: R07: the common-ground paragraph cites no paper",
+                     "Coherence unresolved: the revision of P2 was not made - why"] and len(said) == 1
+    GenerationAgent._disclose(ctx, 1, res)                                      # a re-run adds nothing
+    assert json.loads((gd / "idea.json").read_text())["Risk Factors and Limitations"] == risks and len(said) == 1
+
+
+def test_planning_recipes_give_p1_its_schema_and_restore_the_idea_text_after_round_3():
+    """P1 creates argument.json: it is given the schema and the hypothesis template, and told the files are new
+    (qwen3.8 declined: 'the content of argument.json is not provided'). B5 round 3 rewrites the draft; pack-render
+    then puts back the text that packaging.json and attack_plan.json own (K08: the draft's Short Hypothesis drifted)."""
+    recipes = rcp.load()
+    p1 = next(s.spec["write"] for s in recipes["P1"].steps("main") if s.kind == "write")
+    assert "references/question-craft.md#qc4-argument" in p1["rules"] and "does not exist yet" in p1["task"]
+    assert "ai-scientist-argument/1" in rules_text(MODULE, "references/question-craft.md#qc4-argument")
+    part = rules_text(MODULE, "references/research-cycle.md#b4-p1-part")
+    assert "step8_hypothesis.md" in part and "Operational definitions** — from" not in part       # P1's part only
+    r3 = [s.command for s in recipes["B5"].steps("round3") if s.kind == "run"]
+    assert r3 == ["ideate_tools.py reflection-append $GEN $GEN/_work/reflection_round3.md", "ideate_tools.py pack-render $GEN"]
+
+
 def test_coherence_failure_gets_one_forced_revision(tmp_path):
     code, s, _ = _dry(tmp_path, "--inject", "GATE-coherence=fail")
     assert code == 0 and s["generations"][0]["status"] == "finalized"

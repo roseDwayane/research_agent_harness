@@ -386,7 +386,7 @@ round-1 copies.
 
 ## 4. B4 — hypothesis
 
-**On the fusion block** this section is two steps: **P1** (Selected gap summary, Research questions, Hypotheses, Rival
+<a id="b4-p1-part"></a>**On the fusion block** this section is two steps: **P1** (Selected gap summary, Research questions, Hypotheses, Rival
 explanations — with the form derived from the question's primary collision, rival ids and the field's accounts:
 [planning/P1-gap2hypo.md](planning/P1-gap2hypo.md)) and **P2** (everything from Operational definitions on:
 [planning/P2-design.md](planning/P2-design.md)). `outcomes` are not written here: the decision tree

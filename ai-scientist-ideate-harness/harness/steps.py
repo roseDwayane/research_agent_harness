@@ -125,6 +125,17 @@ class GateResult:
                 if f["level"] == "ERROR" and f["code"] in RULE_STEP}
         return sorted(out)
 
+    def error_lines(self, limit: int = 8, width: int = 220) -> list[str]:
+        """The ERROR findings the gate's commands still report, as 'C20: text' (for the idea's Risk entry)."""
+        out = []
+        for r in self.legacy:
+            if r.ok:
+                continue
+            for m in re.finditer(r"^ERROR\s+([A-Z]+\d+)\b[^:\n]*:\s*(.+)$", (r.stdout or "") + "\n" + (r.stderr or ""), re.M):
+                line = f"{m.group(1)}: {' '.join(m.group(2).split())}"
+                out.append(line if len(line) <= width else line[: width - 1] + "…")
+        return list(dict.fromkeys(out))[:limit]
+
     @property
     def tree_failed(self) -> bool:
         """The decision gate failed - T09 among tree-check's findings, or the weak-mass rule: what abandons a question
@@ -343,6 +354,7 @@ class GenerationResult:
     steps: list[StepResult] = field(default_factory=list)
     question: str | None = None
     doubts: list[str] = field(default_factory=list)
+    risk_entries: list[str] = field(default_factory=list)   # what the conductor decided and the idea must say (_disclose)
 
 
 class GenerationAgent:
@@ -391,6 +403,8 @@ class GenerationAgent:
         ctx.emit("RECOVERY_COMPLETED", unit_id=unit, instance=instance_of(k), error_id=err.error_id,
                  message="the revision was declined: the earlier files stand, the doubt is disclosed")
         res.doubts.append(f"revision-declined ({unit})")
+        res.risk_entries.append(f"Coherence unresolved: the revision of {unit} was not made"
+                                + (f" - {' '.join(note.split())[:400]}" if note else ""))
         sr.status = "degraded"
 
     @staticmethod
@@ -507,6 +521,9 @@ class GenerationAgent:
                           instance=instance_of(k), severity="degraded", caveat=caveat, must_disclose=True,
                           parent=g.error.error_id if g.error else None)
                 res.doubts.append(caveat)
+                left = g.error_lines()
+                if left:
+                    res.risk_entries.append("Coherence unresolved: " + "; ".join(left))
                 ctx.gates_passed.add(("GATE-coherence", instance_of(k)))      # waived: the doubt is disclosed
                 g.waived = True
                 self._resolved(ctx, k, g, f"finalized with the doubt disclosed ({caveat})")
@@ -514,12 +531,41 @@ class GenerationAgent:
             if not self._b5(ctx, k, res, "finalize"):
                 return self._stop(res)
             prog.mark("finalized")
+        self._disclose(ctx, k, res)
         b6 = self.steps["STEP-B6"].run(ctx, k)
         res.steps.append(b6)
         if not b6.ok:
             return self._stop(res)
         res.status = "finalized-with-doubt" if res.doubts else "finalized"
         return res
+
+    @staticmethod
+    def _disclose(ctx: RunContext, k: int, res: GenerationResult) -> None:
+        """What the conductor decided after the model's last round goes into gen_k/idea.json itself: a gate waived with
+        its findings, a revision that was not made (research-cycle.md section 5: 'finalize anyway and add "Coherence
+        unresolved: {check ids and their text}" to Risk Factors and Limitations'). FinalizeIdea is written by a model
+        from the log's rounds, and these decisions are made after them - it cannot know them, so code adds them.
+        An entry already there (the same text) is not added twice: a re-run changes nothing."""
+        import json
+        p = ctx.rd / f"gen_{k}" / "idea.json"
+        if not res.risk_entries or not p.is_file():
+            return
+        try:
+            doc = json.loads(p.read_text(encoding="utf-8"))
+        except ValueError:
+            return                                   # an unreadable idea is B6's finding (validate), not this step's
+        idea = doc.get("idea", doc) if isinstance(doc, dict) else None
+        if not isinstance(idea, dict):
+            return
+        key = "Risk Factors and Limitations"
+        risks = idea.get(key)
+        risks = list(risks) if isinstance(risks, list) else ([str(risks)] if risks else [])
+        new = [e for e in dict.fromkeys(res.risk_entries) if e not in risks]
+        if not new:
+            return
+        idea[key] = risks + new
+        p.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+        ctx.say(f"    · {len(new)} doubt(s) the conductor decided written into idea.json's Risk Factors")
 
     @staticmethod
     def _stop(res: GenerationResult) -> GenerationResult:
