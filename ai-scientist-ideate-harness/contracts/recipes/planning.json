@@ -17,7 +17,10 @@
       }
      },
      {
-      "run": "ideate_tools.py question-take $RD $Q --gen $K"
+      "run": "ideate_tools.py question-take $RD $Q --gen $K",
+      "makes": [
+       "$GEN/step7b_problem.md"
+      ]
      }
     ]
    },
@@ -30,13 +33,18 @@
    "phases": {
     "main": [
      {
-      "run": "ideate_tools.py hypo-prefill $GEN"
+      "run": "ideate_tools.py hypo-prefill $GEN",
+      "makes": [
+       "$GEN/p1_prefill.json"
+      ]
      },
      {
       "write": {
-       "task": "P1 Gap2Hypo for generation $K: from p1_prefill.json and question.json write the RQ, hypotheses and rival explanations of $GEN/step8_hypothesis.md and argument.json's claims, derivation and rivals[].id. step8_hypothesis.md's sections are `## Selected gap summary`, `## Research questions`, `## Hypotheses`, `## Rival explanations` (research-cycle section 4; P2 adds the rest).",
+       "task": "P1 Gap2Hypo for generation $K: from p1_prefill.json and question.json write the RQ, hypotheses and rival explanations of $GEN/step8_hypothesis.md and argument.json's claims, derivation and rivals[].id. step8_hypothesis.md's sections are `## Selected gap summary`, `## Research questions`, `## Hypotheses`, `## Rival explanations` (research-cycle section 4; P2 adds the rest). $GEN/argument.json does not exist yet: this step creates it, in the schema `ai-scientist-argument/1` of the rules (question-craft section 4), with the top-level fields and the primary claim's P1 fields; the design fields are P2's and are left out. $GEN/step8_hypothesis.md is new too: its template is in the rules (research-cycle section 4).",
        "rules": [
-        "references/planning/P1-gap2hypo.md"
+        "references/planning/P1-gap2hypo.md",
+        "references/research-cycle.md#b4-p1-part",
+        "references/question-craft.md#qc4-argument"
        ],
        "reads": [
         "$GEN/question.json",
@@ -69,17 +77,27 @@
      {
       "run": "ideate_tools.py argument-render $GEN",
       "submit": true
+     },
+     {
+      "run": "ideate_tools.py hypo-check $GEN",
+      "submit": true,
+      "advise": true
      }
     ],
     "revise": [
      {
-      "run": "ideate_tools.py hypo-prefill $GEN"
+      "run": "ideate_tools.py hypo-prefill $GEN",
+      "makes": [
+       "$GEN/p1_prefill.json"
+      ]
      },
      {
       "write": {
        "task": "P1 Gap2Hypo for generation $K: from p1_prefill.json and question.json write the RQ, hypotheses and rival explanations of $GEN/step8_hypothesis.md and argument.json's claims, derivation and rivals[].id. step8_hypothesis.md's sections are `## Selected gap summary`, `## Research questions`, `## Hypotheses`, `## Rival explanations` (research-cycle section 4; P2 adds the rest). This is a revision entering at this step: the round-2 decision ($RD/_state/harness/decisions/gen_$K/B5.round2.json, the Round 2 entry of $GEN/reflection_log.md - its last rounds are in the lookups), or the forced revision after the coherence gate failed in round 3 - then the findings the check lookup reports now are what to fix, whatever an older round said. Produce this step's part again from the revised design - never patch it - and write the whole file even when the change is small.",
        "rules": [
-        "references/planning/P1-gap2hypo.md"
+        "references/planning/P1-gap2hypo.md",
+        "references/research-cycle.md#b4-p1-part",
+        "references/question-craft.md#qc4-argument"
        ],
        "reads": [
         "$GEN/question.json",
@@ -116,6 +134,11 @@
      {
       "run": "ideate_tools.py argument-render $GEN",
       "submit": true
+     },
+     {
+      "run": "ideate_tools.py hypo-check $GEN",
+      "submit": true,
+      "advise": true
      }
     ]
    },
@@ -168,6 +191,11 @@
      {
       "run": "ideate_tools.py argument-render $GEN",
       "submit": true
+     },
+     {
+      "run": "ideate_tools.py argument-check $GEN --no-idea",
+      "submit": true,
+      "advise": true
      }
     ],
     "revise": [
@@ -216,6 +244,11 @@
      {
       "run": "ideate_tools.py argument-render $GEN",
       "submit": true
+     },
+     {
+      "run": "ideate_tools.py argument-check $GEN --no-idea",
+      "submit": true,
+      "advise": true
      }
     ]
    },
@@ -230,7 +263,10 @@
    "phases": {
     "main": [
      {
-      "run": "ideate_tools.py tree-prefill $GEN"
+      "run": "ideate_tools.py tree-prefill $GEN",
+      "makes": [
+       "$GEN/decision_tree.draft.json"
+      ]
      },
      {
       "write": {
@@ -260,11 +296,19 @@
      {
       "run": "ideate_tools.py tree-render $GEN --project",
       "submit": true
+     },
+     {
+      "run": "ideate_tools.py tree-check $GEN",
+      "submit": true,
+      "advise": true
      }
     ],
     "revise": [
      {
-      "run": "ideate_tools.py tree-prefill $GEN"
+      "run": "ideate_tools.py tree-prefill $GEN",
+      "makes": [
+       "$GEN/decision_tree.draft.json"
+      ]
      },
      {
       "write": {
@@ -300,6 +344,11 @@
      {
       "run": "ideate_tools.py tree-render $GEN --project",
       "submit": true
+     },
+     {
+      "run": "ideate_tools.py tree-check $GEN",
+      "submit": true,
+      "advise": true
      }
     ]
    },
@@ -314,7 +363,10 @@
    "phases": {
     "main": [
      {
-      "run": "ideate_tools.py attack-prefill $GEN"
+      "run": "ideate_tools.py attack-prefill $GEN",
+      "makes": [
+       "$GEN/attack_plan.draft.json"
+      ]
      },
      {
       "write": {
@@ -351,6 +403,11 @@
      {
       "run": "ideate_tools.py attack-render $GEN",
       "submit": true
+     },
+     {
+      "run": "ideate_tools.py attack-check $GEN",
+      "submit": true,
+      "advise": true
      }
     ]
    },
@@ -365,7 +422,10 @@
    "phases": {
     "main": [
      {
-      "run": "ideate_tools.py pack-prefill $GEN"
+      "run": "ideate_tools.py pack-prefill $GEN",
+      "makes": [
+       "$GEN/packaging.draft.json"
+      ]
      },
      {
       "write": {
@@ -404,6 +464,11 @@
      {
       "run": "ideate_tools.py pack-render $GEN",
       "submit": true
+     },
+     {
+      "run": "ideate_tools.py pack-check $GEN",
+      "submit": true,
+      "advise": true
      }
     ]
    },
@@ -435,7 +500,10 @@
       }
      },
      {
-      "run": "ideate_tools.py novelty-lookup $GEN"
+      "run": "ideate_tools.py novelty-lookup $GEN",
+      "makes": [
+       "$GEN/_work/novelty_lookups.md"
+      ]
      },
      {
       "write": {
@@ -499,7 +567,7 @@
     "round2": [
      {
       "write": {
-       "task": "B5 round 2 for generation $K: the critique - the 12 skeptical-reader questions, the comparison with restatement_1.json, the four tree questions - as the round's '## Round 2/N' entry; then ONE decision, written to $RD/_state/harness/decisions/gen_$K/B5.round2.json as {\"decision\": \"finalize\"} or {\"decision\": \"revise\", \"enters\": \"P1\"|\"P2\"|\"P3\", \"reason\": \"...\", \"revision\": {...}} (the earliest step the revision changes). Every round-1 ERROR and every reader doubt needs an answer. Write only this round's entry, starting with its heading, to $GEN/_work/reflection_round2.md: the conductor appends it to $GEN/reflection_log.md (the earlier rounds' last part is in the lookups) - never copy the log.",
+       "task": "B5 round 2 for generation $K: the critique - the 12 skeptical-reader questions, the comparison with restatement_1.json, the four tree questions - as the round's '## Round 2/N' entry. Every round-1 ERROR and every reader doubt needs an answer. End the entry with a '### Decision' section: finalize, or revise entering at P1, P2 or P3 (the earliest step the revision changes), with the reason and the changes - the next step records it. Write only this round's entry to $GEN/_work/reflection_round2.md: the conductor appends it to $GEN/reflection_log.md (the earlier rounds' last part is in the lookups) - never copy the log.",
        "rules": [
         "references/research-cycle.md#b5-reflection",
         "references/question-craft.md#qc7-reader"
@@ -509,8 +577,7 @@
         "$GEN/idea_draft.json"
        ],
        "writes": [
-        "$GEN/_work/reflection_round2.md",
-        "$RD/_state/harness/decisions/gen_$K/B5.round2.json"
+        "$GEN/_work/reflection_round2.md"
        ],
        "commands": [
         "ideate_tools.py reflection-tail",
@@ -532,6 +599,20 @@
      },
      {
       "run": "ideate_tools.py reflection-append $GEN $GEN/_work/reflection_round2.md"
+     },
+     {
+      "write": {
+       "task": "B5 round 2 decision for generation $K: record the ONE decision the critique in $GEN/_work/reflection_round2.md reached in its '### Decision' section. decision: finalize or revise. enters: the earliest step the revision changes (P1, P2 or P3; when the decision is finalize it is not read - give P1). reason: why, in a few sentences. changes: what the revision changes, one item each (empty when finalize). Decide nothing new: take the critique's decision.",
+       "rules": [],
+       "reads": [
+        "$GEN/_work/reflection_round2.md"
+       ],
+       "writes": [
+        "$RD/_state/harness/decisions/gen_$K/B5.round2.json"
+       ],
+       "schema": "$SK/contracts/schemas/b5_round2_decision.json",
+       "lookups": []
+      }
      }
     ],
     "round3": [
@@ -572,6 +653,9 @@
      },
      {
       "run": "ideate_tools.py reflection-append $GEN $GEN/_work/reflection_round3.md"
+     },
+     {
+      "run": "ideate_tools.py pack-render $GEN"
      },
      {
       "write": {

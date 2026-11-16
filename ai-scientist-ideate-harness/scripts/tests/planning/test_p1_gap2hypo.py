@@ -210,6 +210,28 @@ class Forms(unittest.TestCase):
         self.assertEqual(f({"result": "convention-vs-lens"}), "non-inferiority")
         self.assertEqual(f(None), "estimate")
 
+    def test_an_account_the_question_does_not_hand_over_is_settled_by_code(self):
+        """C26's mechanical half (ideate_tools.settle_rival_accounts, run by argument-render): an id that is not in
+        question.json names no account - the rival is the study's own and keeps everything but `account`; a set_aside
+        entry for it is dropped. What needs a judgement stays a finding: a handed-over account nobody covers."""
+        import ideate_tools
+        question = {"rival_accounts": [{"id": "RA1", "account": "a"}, {"id": "RA2", "account": "b"}]}
+        arg = {"claims": [{"id": "C1", "primary": True,
+                           "rivals": [{"id": "R1", "account": "RA1", "main": True}, {"id": "R2", "account": "RA3"},
+                                      {"id": "R3"}],
+                           "derivation": {"set_aside": [{"account": "RA2", "why": "w"}, {"account": "RA4", "why": "x"}]}},
+                          {"id": "C2", "rivals": [{"id": "R9", "account": "RA7"}]}]}      # not the primary: not read
+        notes = ideate_tools.settle_rival_accounts(arg, question)
+        prim = arg["claims"][0]
+        self.assertEqual(prim["rivals"], [{"id": "R1", "account": "RA1", "main": True}, {"id": "R2"}, {"id": "R3"}])
+        self.assertEqual(prim["derivation"]["set_aside"], [{"account": "RA2", "why": "w"}])
+        self.assertEqual(arg["claims"][1]["rivals"][0]["account"], "RA7")
+        self.assertEqual(len(notes), 1)
+        self.assertIn("RA3", notes[0])
+        self.assertIn("RA4", notes[0])
+        self.assertEqual(ideate_tools.settle_rival_accounts(arg, question), [])            # nothing left to settle
+        self.assertEqual(ideate_tools.settle_rival_accounts(copy.deepcopy(arg), {}), [])   # no hand-over: not read
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)

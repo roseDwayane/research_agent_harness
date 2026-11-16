@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -20,6 +21,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SCRIPT = Path(__file__).resolve().parents[1] / "ideate_tools.py"
 # The copy taken before this change. Present in the working repo, absent elsewhere - those comparisons are skipped then.
@@ -1464,6 +1466,12 @@ class TestArgumentCheckDesign(ArgumentCase):
             "~/scikit_learn_data": [], str(self.gen.parent / "datasets"): ["nemar_screening.md"]}}}}
         a = self.synthetic(real_data="none: no dataset supplies a strength scale for real artifacts", inventory=["looked"])
         files = {"argument_r1.json": a, "../step0_session_config.json": config}
+        # the run declares these roots (harness.toml data_roots): only then does the inventory have to name them
+        declared = os.pathsep.join(["~/mne_data", "~/.cache/torch", "~/scikit_learn_data"])
+        with mock.patch.dict(os.environ, {"IDEATE_DATA_ROOTS": declared}):
+            self._c23_inventory(a, files)
+
+    def _c23_inventory(self, a, files):
         code, res = self.check(a, files=files)
         self.assertEqual({f["check"] for f in res["errors"]}, {"C23"})
         text = self.texts(res)
@@ -1478,6 +1486,33 @@ class TestArgumentCheckDesign(ArgumentCase):
         self.assertEqual(len(res["warnings"]), 1)
         b = self.synthetic(real_data="E4", inventory=["looked"])  # a route is named: the inventory is not audited
         self.assertEqual(self.check(b, files=files)[0], 0)
+
+    def test_c23_an_undeclared_root_of_a_stored_probe_is_not_asked_for(self):
+        """A probe from another machine or the old default roots (the EEG run: a Hugging Face model cache) is no data
+        root of the run: only harness.toml's data_roots and <RD>/datasets are."""
+        config = {"local_environment": {"probe": {"date": "2026-10-27T12:58:15-07:00", "packages": {}, "data_roots": {
+            "~/.cache/huggingface/hub": ["models--Qwen--Qwen3-4B-GGUF"]}}}}
+        a = self.synthetic(real_data="none: no dataset of the topic is on the disk",
+                           inventory=["$RD/datasets: none - nothing was downloaded"])
+        files = {"argument_r1.json": a, "../step0_session_config.json": config}
+        with mock.patch.dict(os.environ, {"IDEATE_DATA_ROOTS": ""}):
+            code, res = self.check(a, files=files)
+        self.assertNotIn("huggingface", self.texts(res))
+        self.assertFalse([f for f in res["errors"] if f["check"] == "C23"], res["errors"])
+
+    def test_env_probe_looks_only_at_the_declared_roots(self):
+        home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, home, True)
+        (home / ".cache" / "huggingface" / "hub" / "models--x").mkdir(parents=True)   # an undeclared cache
+        (home / "eeg" / "ds001").mkdir(parents=True)                                   # the declared data
+        dump(self.gen.parent / "step0_session_config.json", {"topic": "t", "local_environment": {}})
+        env = {"HOME": str(home), "IDEATE_DATA_ROOTS": str(home / "eeg")}
+        with mock.patch.dict(os.environ, env):
+            code, out, err = run("env-probe", self.gen.parent, "--json")
+        self.assertEqual(code, 0, err)
+        probe = json.loads(out)
+        self.assertEqual(list(probe["data_roots"]), [str(home / "eeg")])
+        self.assertNotIn("huggingface", out)
 
     def test_c23_synthetic_false_but_the_study_says_injection(self):
         a = base_argument()
@@ -1763,6 +1798,10 @@ class TestEnvProbe(unittest.TestCase):
         from ideate_tools import write_json
         write_json(self.rd / "step0_session_config.json", config)
         self.config = json.loads((self.rd / "step0_session_config.json").read_text(encoding="utf-8"))
+        # the run declares its data root (harness.toml data_roots): the probe looks there and in <RD>/datasets only
+        declared = mock.patch.dict(os.environ, {"IDEATE_DATA_ROOTS": str(self.cached)})
+        declared.start()
+        self.addCleanup(declared.stop)
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -1812,8 +1851,9 @@ class TestEnvProbe(unittest.TestCase):
         dump(gen / "idea.json", base_idea())
         self.assertEqual(run("argument-check", gen)[1].strip(), "argument-check: 0 error(s), 0 warning(s) [idea: idea.json] - OK")
 
-    def test_punctuation_after_a_path_or_a_package_name(self):
-        """The A1 prose is free text: "path: note", "path, note", "name>=1.3", "name==2.2", "name,", "name: note"."""
+    def test_punctuation_after_a_package_name_and_a_path_in_prose_is_no_root(self):
+        """The A1 prose is free text: "name>=1.3", "name==2.2", "name,", "name: note". A path written there is no
+        declaration: only the declared roots are probed (its sub-folder is not listed as a root of its own)."""
         self.config["local_environment"].update(
             cached_data=[f"{self.cached}: two folders", f"{self.cached}/MNE-eegbci-data, 109 subjects", f"({self.cached}) no path first"],
             packages_present=["json>=2.0", "os==1.0", "surely_not_a_module_qq~=1.0"],
@@ -1823,8 +1863,8 @@ class TestEnvProbe(unittest.TestCase):
         self.assertEqual(code, 0, err)
         res = json.loads(out)
         self.assertEqual(res["data_roots"][str(self.cached)], ["MNE-eegbci-data", "MNE-fsaverage-data"])
-        self.assertIn(f"{self.cached}/MNE-eegbci-data", res["data_roots"])
-        self.assertFalse([r for r in res["roots_not_found"] if str(self.cached) in r], res["roots_not_found"])
+        self.assertNotIn(f"{self.cached}/MNE-eegbci-data", res["data_roots"])     # named in prose only
+        self.assertEqual(sorted(res["data_roots"]), sorted([str(self.cached), str(self.rd / "datasets")]))
         self.assertEqual(sorted(res["packages"]), ["another_missing_module_qq", "json", "os", "surely_not_a_module_qq",
                                                    "tempfile", "unittest"])
         self.assertIsNotNone(res["packages"]["json"])
@@ -1986,7 +2026,8 @@ class TestValidationReplay(unittest.TestCase):
         if not config.exists() or not (Path.home() / "mne_data" / "MNE-eegbci-data").is_dir():
             self.skipTest("the session config or ~/mne_data/MNE-eegbci-data is not on this machine")
         shutil.copy(config, self.gen.parent / "step0_session_config.json")
-        code, out, err = run("env-probe", self.gen.parent)
+        with mock.patch.dict(os.environ, {"IDEATE_DATA_ROOTS": "~/mne_data"}):   # declared, as harness.toml would
+            code, out, err = run("env-probe", self.gen.parent)
         self.assertEqual(code, 0, err)
         block = out.split("data root ~/mne_data:")[1].split("data root ")[0]
         self.assertIn("\n  MNE-eegbci-data\n", block)  # the A1 prose says "no ... EEGBCI dataset cached yet"

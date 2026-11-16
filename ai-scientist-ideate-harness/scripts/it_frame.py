@@ -1110,14 +1110,15 @@ def _cmd_schemas(a):
 
 def probe_environment(rd: Path, packages: list) -> dict:
     """local_environment from what is on this machine now: each named package imported (env-probe's test), every
-    data root that exists. The model names the packages the topic needs; it never says what is installed."""
-    from ideate_tools import PROBE_MAX_CHILDREN, PROBE_ROOTS, _package_version
+    declared data root that exists (ideate_tools.declared_roots: harness.toml data_roots and <RD>/datasets - never a
+    guess at the home directory). The model names the packages the topic needs; it never says what is installed."""
+    from ideate_tools import PROBE_MAX_CHILDREN, _package_version, declared_roots
     present, missing = [], []
     for name in dict.fromkeys(str(x).strip() for x in packages or [] if str(x).strip()):
         ok, version = _package_version(name)
         (present if ok else missing).append(f"{name} {version}".strip() if ok and version else name)
     cached = []
-    for root in list(PROBE_ROOTS) + [str(Path(rd) / "datasets")]:
+    for root in declared_roots(rd):
         path = Path(root).expanduser()
         if path.is_dir():
             kids = sorted(c.name for c in path.iterdir())[:PROBE_MAX_CHILDREN]

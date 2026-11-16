@@ -130,6 +130,15 @@ class RecipeExecutor:
                               context={"command": r.command})
                     i += 1
                     continue
+                if s.spec.get("advise") and ("Traceback" in (r.stdout or "") + (r.stderr or "")
+                                             or (r.stderr or "").lstrip().startswith("usage:")):
+                    # the check itself could not run (a crash, a bad command line): nothing a worker can answer
+                    res.notes.append(f"advising check did not run: {_short(r.command)}: {r.tail()}")
+                    ctx.error(f"{unit}:ADVISE", f"advising check did not run: {r.tail()}", unit=unit, instance=inst,
+                              attempt=attempt, category="tool_invocation", severity="warning",
+                              context={"command": r.command})
+                    i += 1
+                    continue
                 if s.spec.get("submit") and last_write is not None:
                     err = {"error_category": "model_output", "severity": "error", "retryable": True,
                            "error_id": f"{unit}:{label}"}
@@ -148,6 +157,15 @@ class RecipeExecutor:
                         if ok:
                             i = last_write + 1
                             continue
+                    if s.spec.get("advise"):
+                        # a check that advises: its findings went back to the worker while they were its own to fix
+                        # (the revisions above); what is left is recorded by the step's gate and read by the next
+                        # round - it does not fail the Unit
+                        res.notes.append(f"{_short(r.command)}: findings left after {feedback_rounds - 1} revision(s)")
+                        ctx.say(f"      · {unit}: the check still reports findings after {feedback_rounds - 1} "
+                                "revision(s) - left to the gate and the next round")
+                        i += 1
+                        continue
                     rec = ctx.error("IDEATE.WORKER.OUTPUT", f"`{_short(r.command)}` refused the worker's files after "
                                     f"{feedback_rounds - 1} revision(s): {r.tail()}", unit=unit, instance=inst,
                                     attempt=attempt, context={"command": r.command, "stdout": r.stdout[-2000:]})
@@ -381,9 +399,14 @@ class RecipeExecutor:
             # (restatement 2 answered "the conductor runs the blind reader, not me" and wrote nothing)
             again = body.get("isolated") and rounds == 1
             if d["action"] != "retry" or not (wr.session_id or again) or (body.get("isolated") and not again):
-                return False, metrics, ctx.error("IDEATE.WORKER.OUTPUT", "the worker did not write: " +
-                                                 ", ".join(str(m) for m in missing), unit=unit, instance=inst,
-                                                 attempt=attempt, context={"step": label})
+                # `declined`: it answered, and wrote none of its files - with its reason, when it gave one. A revision
+                # goes on from the files as they were (steps.py); a first writing has nothing to go on from
+                said = (wr.text or "").strip()
+                said = "" if said == "no file written" else said
+                return False, metrics, ctx.error(
+                    "IDEATE.WORKER.OUTPUT", "the worker did not write: " + ", ".join(str(m) for m in missing)
+                    + (f" - it said: {said[:600]}" if said else ""), unit=unit, instance=inst, attempt=attempt,
+                    context={"step": label, "declined": True, "note": said[:4000]})
             if again:
                 msg = (req.task + "\n\nAn earlier answer to this wrote no file. You are the independent reader this "
                        "asks for - nobody else will write it: write " + ", ".join(f"./{w.name}" for w in missing)
@@ -394,7 +417,13 @@ class RecipeExecutor:
                         w.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copy2(cwd / w.name, w)
             else:
-                msg = "You have not written: " + ", ".join(str(m) for m in missing) + ". Write them now, then stop."
+                said = (wr.text or "").strip()
+                msg = ("You have not written: " + ", ".join(str(m) for m in missing) + "."
+                       + (f" Your note gave this reason: \"{said[:1500]}\"" if said and said != "no file written" else "")
+                       + " This step's files are written whole even when little or nothing of them changes: do what "
+                       "is this step's to do, keep the rest as it is, and name in `note` what belongs to another "
+                       "step or to a file you may not write - the conductor reads the note. Answering with no file "
+                       "leaves the step undone. Write them now, then stop.")
                 wr = self._call(ctx, unit, f"{label}.fix{rounds}", replace(req, task=msg, resume=wr.session_id))
             _add(metrics, wr.metrics)
             rounds += 1
@@ -414,7 +443,9 @@ class RecipeExecutor:
         out = (r.stdout or "")[-3500:]
         msg = (f"The conductor ran `{_short(r.command)}` on your files and it refused them (exit {r.returncode}):\n\n"
                f"```\n{out}\n{(r.stderr or '')[-800:]}\n```\n\nFix what it reports in the same files - answer each "
-               "finding, do not reword until it is silent - then stop.")
+               "finding, do not reword until it is silent - then stop. A finding this step cannot fix (it reads "
+               "another step's fields, or a file you may not write): fix the others, write your files, and name that "
+               "finding and the reason in `note` - never answer with no file because one finding is not yours.")
         req = self._request(ctx, unit, body, subs, log, task=msg, system=system)
         wr = self._call(ctx, unit, f"{label}.feedback", replace(req, resume=session))
         if wr.session_id:

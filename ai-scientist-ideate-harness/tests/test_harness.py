@@ -44,6 +44,19 @@ def test_recipe_validation_catches_kind_and_command_mistakes(reg):
     assert ("P1", "R-SCOPE") in codes and ("P1", "R-PLACEHOLDER") in codes
 
 
+def test_a_file_a_model_step_reads_has_a_declared_producer(reg):
+    """R-READS: a registry artifact, a write step's file or a command's `makes` - a path nothing makes is a typo or
+    a spec gap, and a chat model would work without it."""
+    def codes(read, run=None):
+        steps = ([run] if run else []) + [{"write": {"task": "t", "reads": [read], "writes": ["$RD/lens.json"]}}]
+        r = parse({"recipes": [{"unit": "B1", "scope": "topic", "phases": {"main": steps}}]})
+        return [f["message"] for f in rcp.validate({x.unit: x for x in r}, reg) if f["code"] == "R-READS"]
+    assert codes("$RD/step1_protocol.md") == [] and codes("$TOPIC") == []              # registry artifacts
+    assert len(codes("$RD/knowledge/_work/B1/breif.md")) == 1                           # a typo
+    made = {"run": "ideate_tools.py lens-brief $RD", "makes": ["$RD/knowledge/_work/B1/brief.md"]}
+    assert codes("$RD/knowledge/_work/B1/brief.md", made) == []
+
+
 def test_rules_sections_are_extracted():
     a1p = rules_text(MODULE, "references/search/A1-frame.md#a1p")
     assert a1p.startswith("## A1.p") and "## A1.q" not in a1p
@@ -235,9 +248,63 @@ def test_only_the_decision_gate_counts_as_a_failed_tree():
     assert gate("ERROR T09: decision gate: the likeliest outcome is a weak one\n").tree_failed
     t14 = gate("ERROR T14: publishable leaves ['L2'] of the round-1 tree are gone\n")
     assert not t14.tree_failed and t14.failing_steps() == ["P3"]
+    # argument-check's findings are routed by their code: the step that owns the fields, the earliest first
+    def arg(out):
+        r = CommandResult("ideate_tools.py argument-check gen_1", [], 1, out)
+        r.command_template = COHERENCE[0]
+        return GateResult("GATE-coherence", "gen_1", False, {"findings": []}, [r]).failing_steps()
+    assert arg("ERROR C17 C1: controls.negative_can_move is no\nWARN C20: angle part\n") == ["P2"]
+    assert arg("ERROR C17 C1: x\nERROR C20: the question includes 'y', which no claim covers\n") == ["P1", "P2"]
+    assert arg("ERROR C26 C1: rival / set_aside accounts ['RA3'] are not in question.json\n") == ["P1"]
+    assert arg("ERROR C28: decision_tree.json was built on another argument\n") == ["P3"]
+    assert arg("argument-check: 2 error(s)\n") == ["P2"]                 # no code read: the command's own step
     weak = GateResult("GATE-coherence", "gen_1", False, {"findings": [
         {"level": "ERROR", "code": "GATE.RULE.decision_tree_weak_mass", "message": "x"}]}, [])
     assert weak.tree_failed
+
+
+def test_what_the_conductor_decided_is_written_into_the_idea(tmp_path):
+    """A gate waived with its findings, a revision not made: decided after the model's last round, so code adds the
+    'Coherence unresolved: ...' entries to idea.json's Risk Factors (research-cycle section 5) - once."""
+    from types import SimpleNamespace
+
+    from harness.skill import COHERENCE, CommandResult
+    from harness.steps import GateResult, GenerationAgent, GenerationResult
+    r = CommandResult("ideate_tools.py attack-check gen_1", [], 1,
+                      "ERROR R07: the common-ground paragraph cites no paper\nWARN R09: x\nattack-check: 1 error(s)\n")
+    r.command_template = COHERENCE[2]
+    ok = CommandResult("ideate_tools.py tree-check gen_1", [], 0, "tree-check: 0 error(s)\n")
+    ok.command_template = COHERENCE[1]
+    g = GateResult("GATE-coherence", "gen_1", False, {"findings": []}, [ok, r])
+    assert g.error_lines() == ["R07: the common-ground paragraph cites no paper"]
+    gd = tmp_path / "gen_1"
+    gd.mkdir()
+    idea = {"Name": "n", "Risk Factors and Limitations": ["Single dataset: only one"]}
+    (gd / "idea.json").write_text(json.dumps(idea))
+    said = []
+    ctx = SimpleNamespace(rd=tmp_path, say=said.append)
+    res = GenerationResult(1, "failed", risk_entries=["Coherence unresolved: " + "; ".join(g.error_lines()),
+                                                      "Coherence unresolved: the revision of P2 was not made - why"])
+    GenerationAgent._disclose(ctx, 1, res)
+    risks = json.loads((gd / "idea.json").read_text())["Risk Factors and Limitations"]
+    assert risks == ["Single dataset: only one", "Coherence unresolved: R07: the common-ground paragraph cites no paper",
+                     "Coherence unresolved: the revision of P2 was not made - why"] and len(said) == 1
+    GenerationAgent._disclose(ctx, 1, res)                                      # a re-run adds nothing
+    assert json.loads((gd / "idea.json").read_text())["Risk Factors and Limitations"] == risks and len(said) == 1
+
+
+def test_planning_recipes_give_p1_its_schema_and_restore_the_idea_text_after_round_3():
+    """P1 creates argument.json: it is given the schema and the hypothesis template, and told the files are new
+    (qwen3.8 declined: 'the content of argument.json is not provided'). B5 round 3 rewrites the draft; pack-render
+    then puts back the text that packaging.json and attack_plan.json own (K08: the draft's Short Hypothesis drifted)."""
+    recipes = rcp.load()
+    p1 = next(s.spec["write"] for s in recipes["P1"].steps("main") if s.kind == "write")
+    assert "references/question-craft.md#qc4-argument" in p1["rules"] and "does not exist yet" in p1["task"]
+    assert "ai-scientist-argument/1" in rules_text(MODULE, "references/question-craft.md#qc4-argument")
+    part = rules_text(MODULE, "references/research-cycle.md#b4-p1-part")
+    assert "step8_hypothesis.md" in part and "Operational definitions** — from" not in part       # P1's part only
+    r3 = [s.command for s in recipes["B5"].steps("round3") if s.kind == "run"]
+    assert r3 == ["ideate_tools.py reflection-append $GEN $GEN/_work/reflection_round3.md", "ideate_tools.py pack-render $GEN"]
 
 
 def test_coherence_failure_gets_one_forced_revision(tmp_path):

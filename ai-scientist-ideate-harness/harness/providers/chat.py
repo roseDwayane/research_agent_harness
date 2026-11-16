@@ -134,6 +134,10 @@ def _files_block(scope: FileScope, writes_only: bool = False) -> str:
         if path.is_dir():
             for f in sorted(path.iterdir())[:40]:
                 add(f"{label.rstrip('/')}/{f.name}", f)
+        elif not path.exists() and path.resolve() not in forbid:
+            # said, not skipped: a model that is not told works on as if nothing were missing (it cannot go and look)
+            out.append(f"=== FILE: {label} - NOT THERE: nothing has written this file. Do not assume what it would "
+                       "say; if the task cannot be done without it, say so in `note`. ===")
         else:
             add(label, path)
     # a revision (writes_only: the conversation goes on) starts from what is there; on a first call the file was left
@@ -143,6 +147,30 @@ def _files_block(scope: FileScope, writes_only: bool = False) -> str:
     for w in scope.writes:
         add(str(w), w, note)
     return "\n\n".join(out)
+
+
+def missing_reads(scope: FileScope) -> list[str]:
+    """The files the step reads that are not there (the prompt says so for each: _files_block)."""
+    forbid = {f.resolve() for f in scope.forbid}
+    return [label for label, path in scope.reads if not path.exists() and path.resolve() not in forbid]
+
+
+def _log_turn(req: WorkerRequest, name: str, turn: int, model: str, history: list[dict], content: str,
+              res: WorkerResult, missing: list[str]) -> None:
+    """One call's record, next to the Unit's other logs: <label>.<provider>.<turn>.json - a summary with the head and
+    tail of the last message - and <label>.<provider>.<turn>.messages.json: every message exactly as it was sent, and
+    the answer. What a model was shown is the first thing a failure is traced to, whichever API ran it: never cut."""
+    if req.log_dir is None:
+        return
+    req.log_dir.mkdir(parents=True, exist_ok=True)
+    base = req.log_dir / f"{req.label}.{name}.{turn}"
+    meta = {"model": model, "error": res.error, "tokens_in": res.tokens_in, "tokens_out": res.tokens_out,
+            "duration_ms": res.duration_ms, "missing_reads": missing}
+    base.with_name(base.name + ".json").write_text(json.dumps(
+        {**meta, "request_head": history[-1]["content"][:6000], "request_tail": history[-1]["content"][-4000:],
+         "answer": content, "messages": base.name + ".messages.json"}, ensure_ascii=False, indent=1), encoding="utf-8")
+    base.with_name(base.name + ".messages.json").write_text(json.dumps(
+        {**meta, "messages": history, "answer": content}, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
 def build_message(task: str, scope: FileScope, grammar: bool = False) -> str:
@@ -458,6 +486,7 @@ class ChatProvider(Provider):
                                 + ", ".join(scope.unavailable) + f"); the {self.name} worker cannot run commands - "
                                 "run this Unit with an agent of your own (AgentProvider, providers/agent.py), or "
                                 "make them steps of the recipe", error_category="environment")
+        missing: list[str] = []
         if req.resume:  # the history has the model's own answer: show a file again only where a tool changed it since
             wrote = _WROTE.get(req.resume, {})            # (re-reading its own answer made a revision the longest
             changed = [w for w in scope.writes if wrote.get(str(w.resolve())) != _sha(w)]    # prompt a Unit sends)
@@ -466,6 +495,9 @@ class ChatProvider(Provider):
                                   "\n\n(The files are as you wrote them.)" if scope.writes else "")
         else:
             message = build_message(req.task, scope, grammar=self.grammar)
+            missing = missing_reads(scope)
+            if missing and req.say:
+                req.say("not there, and said so in the prompt: " + ", ".join(Path(m).name for m in missing))
         history = _latest_answer_only(_SESSIONS.get(req.resume, [])) if req.resume else \
             [{"role": "system", "content": req.system}]
         history.append({"role": "user", "content": message})
@@ -483,13 +515,7 @@ class ChatProvider(Provider):
             total.cost_usd += res.cost_usd
             total.duration_ms += res.duration_ms
             total.turns += 1
-            if req.log_dir is not None:
-                req.log_dir.mkdir(parents=True, exist_ok=True)
-                (req.log_dir / f"{req.label}.{self.name}.{turn}.json").write_text(json.dumps(
-                    {"model": model, "request_head": history[-1]["content"][:6000],
-                     "request_tail": history[-1]["content"][-4000:], "answer": content, "error": res.error,
-                     "tokens_in": res.tokens_in, "tokens_out": res.tokens_out, "duration_ms": res.duration_ms},
-                    ensure_ascii=False, indent=1), encoding="utf-8")
+            _log_turn(req, self.name, turn, model, history, content, res, missing)
             if not res.ok:
                 total.ok, total.error, total.error_category = False, res.error, res.error_category
                 break

@@ -617,3 +617,106 @@ def test_a_fanout_answer_that_writes_nothing_is_asked_again_in_its_conversation(
     assert res.ok, res.errors
     assert len(s.requests) == 2 and "You have not written" in s.user(1) and "(TBD)" in s.user(1)
     assert (ctx.rd / "questions" / "Q_001.md").read_text().startswith("# (TBD)")
+
+
+def test_declared_data_roots_reach_the_skill_commands(tmp_path):
+    """harness.toml data_roots -> IDEATE_DATA_ROOTS: the only folders env-probe and C23 look at besides <RD>/datasets
+    (one root written as a string is one root, not its letters); none declared: the variable is not set by the run."""
+    toml = tmp_path / "harness.toml"
+    toml.write_text('[harness]\nworker = "ollama"\nmodel = "qwen3.8"\ndata_roots = "~/eeg_data"\n', encoding="utf-8")
+    cfg = HarnessConfig.load(toml)
+    assert cfg.data_roots == ["~/eeg_data"]
+    assert cfg.env()["IDEATE_DATA_ROOTS"] == str(Path("~/eeg_data").expanduser())
+    toml.write_text('[harness]\nworker = "ollama"\nmodel = "qwen3.8"\ndata_roots = ["~/a", "/b"]\n', encoding="utf-8")
+    import os
+    assert HarnessConfig.load(toml).env()["IDEATE_DATA_ROOTS"] == os.pathsep.join([str(Path("~/a").expanduser()), "/b"])
+    plain = HarnessConfig(worker="ollama", model="qwen3.8")
+    assert plain.env().get("IDEATE_DATA_ROOTS") == os.environ.get("IDEATE_DATA_ROOTS")
+
+
+def test_a_file_that_is_not_there_is_said_and_every_message_is_logged_uncut(tmp_path, fake):
+    """A read that does not exist is named in the prompt (never skipped in silence), and the call's record keeps
+    every message as it was sent - what a model was shown is what a failure is traced to, on any API."""
+    s = fake(lambda body, n: answer([("out.md", "x")]))
+    long_text = "HEAD " + "middle " * 3000 + " TAIL"                    # longer than the summary's head + tail
+    (tmp_path / "big.md").write_text(long_text)
+    (tmp_path / "hidden.json").write_text("SECRET")
+    scope = FileScope(base=tmp_path, reads=[("big.md", tmp_path / "big.md"), ("gone.json", tmp_path / "gone.json"),
+                                               ("hidden.json", tmp_path / "hidden.json"),
+                                               ("blind.json", tmp_path / "blind.json")],
+                      forbid=[tmp_path / "hidden.json", tmp_path / "blind.json"], writes=[tmp_path / "out.md"])
+    said, log = [], tmp_path / "log"
+    r = run_worker(cfg_for(s.url, num_ctx=65536), task="the task", system="the rules", cwd=tmp_path, scope=scope,
+                   log_dir=log, label="main.00.write.a1", say=said.append)
+    assert r.ok
+    msg = s.user()
+    assert "=== FILE: gone.json - NOT THERE" in msg and "blind.json" not in msg and "SECRET" not in msg
+    assert any("gone.json" in x for x in said) and chat.missing_reads(scope) == ["gone.json"]
+    summary = json.loads((log / "main.00.write.a1.ollama.1.json").read_text())
+    full = json.loads((log / "main.00.write.a1.ollama.1.messages.json").read_text())
+    assert summary["missing_reads"] == ["gone.json"] and summary["messages"] == "main.00.write.a1.ollama.1.messages.json"
+    assert [m["role"] for m in full["messages"]] == ["system", "user"] and full["messages"][0]["content"] == "the rules"
+    assert full["messages"][1]["content"] == msg and long_text in msg          # the whole prompt, the middle included
+    assert len(summary["request_head"]) + len(summary["request_tail"]) < len(msg) and full["answer"]
+
+
+def test_an_advising_check_goes_back_to_the_worker_and_never_fails_the_unit(tmp_path, fake):
+    """A check step with advise: its findings go into the same conversation while they are the worker's to fix; what
+    is left after the revisions is left to the gate and the next round - the Unit goes on. A check that could not run
+    at all (a crash) is nothing a worker can answer: no call is spent on it."""
+    target = tmp_path / "ideas.json"
+    s = fake(lambda body, n: answer([(str(target), json.dumps([{"Name": "Bad Name"}]))]))     # never fixed
+    ctx = ctx_for(tmp_path, cfg_for(s.url))
+    recipe = parse({"recipes": [{"unit": "B6", "scope": "generation", "phases": {"main": [
+        {"write": {"task": "Write the ideas list", "writes": [str(target)], "rules": []}},
+        {"run": f"ideate_tools.py validate {target}", "submit": True, "advise": True}]}}]})[0]
+    res = RecipeExecutor().execute(ctx, "B6", recipe, "main", 1, 1)
+    assert res.ok, res.errors
+    assert len(s.requests) == 2 and "refused them" in s.user(1) and "name that finding and the reason" in s.user(1)
+    assert any("findings left after 1 revision" in n for n in res.notes)
+    crash = parse({"recipes": [{"unit": "B6", "scope": "generation", "phases": {"main": [
+        {"write": {"task": "Write the ideas list", "writes": [str(target)], "rules": []}},
+        {"run": "ideate_tools.py validate /nonexistent/dir/ideas.json --no-such-flag", "submit": True, "advise": True}]}}]})[0]
+    before = len(s.requests)
+    res = RecipeExecutor().execute(ctx, "B6", crash, "main", 1, 2)
+    assert res.ok and len(s.requests) == before + 1 and any("did not run" in n for n in res.notes)
+
+
+def test_a_worker_that_wrote_nothing_is_answered_and_a_declined_revision_goes_on(tmp_path, fake):
+    """The reminder answers the reason the worker gave; a decline is recorded as one, with the reason. In a revision
+    the generation goes on from the files as they were, the doubt disclosed; in a first writing it fails."""
+    from harness.shell import UnitResult
+    from harness.steps import PLANNING_STEPS, GenerationAgent, GenerationResult, StepResult
+    target = tmp_path / "t_research" / "gen_1" / "argument.json"
+    s = fake(lambda body, n: answer([], note="C20 needs the question narrowed: that is P1's, not mine"))
+    ctx = ctx_for(tmp_path, cfg_for(s.url))
+    target.parent.mkdir(parents=True)
+    target.write_text("{}")
+    recipe = parse({"recipes": [{"unit": "P2", "scope": "generation", "phases": {"revise": [
+        {"write": {"task": "P2 again", "writes": [str(target)], "rules": []}}]}}]})[0]
+    res = RecipeExecutor().execute(ctx, "P2", recipe, "revise", 1, 1)
+    assert not res.ok and len(s.requests) == 2
+    assert "Your note gave this reason" in s.user(1) and "that is P1's, not mine" in s.user(1)
+    assert "name in `note` what belongs to another step" in s.user(1)
+    err = res.errors[-1]
+    assert err.context["declined"] and "P1's, not mine" in err.context["note"] and "it said:" in err.error_message
+
+    class Stub:                                              # P2 declines, every other step is done
+        def __init__(self, step):
+            self.step, self.ran = step, 0
+
+        def run(self, ctx, k, **kw):
+            self.ran += 1
+            bad = self.step == "STEP-P2"
+            unit = UnitResult(self.step.split("-")[1], "gen_1", "failed" if bad else "done", errors=[err] if bad else [])
+            return StepResult(self.step, "gen_1", unit.status, [unit])
+    gen = GenerationAgent({})
+    gen.steps = {st: Stub(st) for st in PLANNING_STEPS}
+    out = GenerationResult(1, "failed")
+    assert gen._planning(ctx, 1, out, "P1", "P5", force=True, phase="revise", revision=True)
+    assert [st.ran for st in gen.steps.values()] == [1, 1, 1, 1, 1]                 # the steps after it still ran
+    assert out.doubts == ["revision-declined (P2)"] and out.steps[1].status == "degraded"
+    disclosed = [e for e in ctx.errors if e.caveat == "revision-declined"]
+    assert len(disclosed) == 1 and disclosed[0].must_disclose and "P1's, not mine" in disclosed[0].error_message
+    first = GenerationResult(1, "failed")                    # round 1: nothing to go on from
+    assert not gen._planning(ctx, 1, first, "P1", "P5", force=False) and not first.doubts

@@ -145,6 +145,30 @@ def _texts(r: Recipe) -> list[str]:
                 body = s.spec[s.kind] or {}
                 out += [str(body.get("task", ""))] + [str(x) for k in ("reads", "writes", "forbid") for x in body.get(k) or []]
                 out += [str(body["schema"])] if body.get("schema") else []
+            elif s.kind == "run":
+                out += [str(x) for x in s.spec.get("makes") or []]
+    return out
+
+
+def _artifact_path(path: str) -> str:
+    """A registry artifact's path as a recipe writes it: gen_k/x -> $GEN/x, <topic>.md -> $TOPIC, x -> $RD/x."""
+    p = str(path)
+    return "$TOPIC" if p == "<topic>.md" else "$GEN/" + p[len("gen_k/"):] if p.startswith("gen_k/") else "$RD/" + p
+
+
+def produced(recipes: dict[str, Recipe], reg) -> set[str]:
+    """Every path something is declared to produce: a registry artifact, a model step's writes / may_write, and what
+    a command step says it makes for a later model step (`makes`: a brief, a prefill, a digest)."""
+    out = {_artifact_path(a.get("path")) for a in (getattr(reg, "arch", None) or {}).get("artifacts") or []
+           if a.get("path")} | {"$TOPIC"}
+    for r in recipes.values():
+        for steps in r.phases.values():
+            for s in steps:
+                if s.kind == "run":
+                    out |= {str(x) for x in s.spec.get("makes") or []}
+                elif s.kind in ("write", "fanout"):
+                    body = s.spec[s.kind] or {}
+                    out |= {str(x) for k in ("writes", "may_write") for x in body.get(k) or []}
     return out
 
 
@@ -160,6 +184,7 @@ def validate(recipes: dict[str, Recipe], reg, root: Path | None = None) -> list[
     for u in reg.units:
         if u not in recipes:
             f("ERROR", "R-MISSING", u, "no recipe")
+    made = produced(recipes, reg)
     for u, r in recipes.items():
         if u not in reg.units:
             f("ERROR", "R-UNKNOWN", u, "recipe for a Unit the contracts do not have")
@@ -210,6 +235,12 @@ def validate(recipes: dict[str, Recipe], reg, root: Path | None = None) -> list[
                     if body.get("out") and not re.match(r"^((rd)?field:\w+|items:\w+\.\w+|suffix:.+>.+)$", body["out"]):
                         f("ERROR", "R-FANOUT", u, f"out {body['out']!r}: field:<key>, rdfield:<key>, items:<list>.<key> "
                           "or suffix:<in>><out>")
+                # a file a model step reads is produced by something declared: a path nothing makes is a typo or a
+                # spec gap, and a chat model would be asked to work without it (it cannot go and look)
+                for x in ((s.spec.get(s.kind) or {}).get("reads") or []) if s.kind in ("write", "fanout") else []:
+                    if u in reg.units and str(x) not in made:
+                        f("ERROR", "R-READS", u, f"reads {x}, which no artifact, write step or command (`makes`) "
+                                                 "is declared to produce")
                 for anchor in ((s.spec.get(s.kind) or {}).get("rules") or []) if s.kind in ("write", "fanout") else []:
                     path = anchor.split("#")[0]
                     if not (root / path).is_file():
