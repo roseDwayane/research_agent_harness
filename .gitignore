@@ -221,3 +221,20 @@ benchmarks/
 benchmarks/litsearch/raw/
 benchmarks/litsearch/corpus.jsonl.gz
 eval_runs/
+
+# E1/E2 test-set material: never commit before the ideate final freeze
+# (answers, seeds, leak lists, full texts, audit notes, selection records)
+track_V/
+validation/
+**/E2/
+**/formal/
+**/_audit/
+**/_v1_*/
+FROZEN.json
+answers.json
+leaks.json
+*.jats.xml
+*.fulltext.txt
+P_clean.txt
+S1_clean.txt
+both_clean.txt
